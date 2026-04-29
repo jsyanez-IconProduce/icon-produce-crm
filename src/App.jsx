@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   CheckCircle2, PhoneOff, Clock, DollarSign, XCircle, StickyNote,
   Settings, ArrowLeft, Plus, Trash2, Phone, MessageSquare,
@@ -6,6 +7,20 @@ import {
   Lock, LogOut, Eye, EyeOff, UserPlus, Inbox, Check, X, ClipboardList, Database, FileText, Users,
   MessageSquareText, ListTodo, Tag, Target, History, Calendar, Zap,
 } from "lucide-react";
+
+// ---------- SUPABASE CLIENT ----------
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error("Missing Supabase env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file");
+}
+
+const supabase = createClient(
+  SUPABASE_URL || "https://placeholder.supabase.co",
+  SUPABASE_ANON_KEY || "placeholder"
+);
+
 
 // ---------- BRAND ----------
 const LOGO_DATA_URL = "data:image/png;base64,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";
@@ -1039,6 +1054,36 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Restore session on page load + listen for auth changes
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+        if (profile) {
+          if (profile.status === "pending_approval") {
+            setCurrentUser({ role: "pending", id: profile.id, name: profile.full_name, email: profile.email });
+          } else if (profile.status === "active") {
+            const role = profile.role === "manager" ? "admin" : profile.role;
+            setCurrentUser({ role, id: profile.id, name: profile.full_name, email: profile.email });
+            if (role === "admin") setAdminView("home");
+          }
+        }
+      }
+    })();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        setCurrentUser(null);
+      }
+    });
+    return () => subscription?.unsubscribe();
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -1134,25 +1179,61 @@ export default function App() {
     const pwd = passwordInput || "";
     setLoginError("");
     if (!email || !pwd) return false;
-    if (email === adminCreds.email.toLowerCase() && pwd === adminCreds.password) {
-      setCurrentUser({ role: "admin", email: adminCreds.email });
-      setAdminView("home");
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+      if (error) {
+        if (error.message.toLowerCase().includes("email not confirmed")) {
+          setLoginError("Please confirm your email — check your inbox for the confirmation link");
+        } else {
+          setLoginError(t.invalidCredentials);
+        }
+        return false;
+      }
+
+      // Fetch the user's profile (role, status)
+      const { data: profile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.user.id)
+        .single();
+
+      if (profileErr || !profile) {
+        setLoginError("Profile not found. Please contact your manager.");
+        await supabase.auth.signOut();
+        return false;
+      }
+
+      if (profile.status === "rejected") {
+        setLoginError(`Your account was rejected. ${profile.rejection_note ? `Reason: ${profile.rejection_note}` : "Contact your manager."}`);
+        await supabase.auth.signOut();
+        return false;
+      }
+
+      if (profile.status === "pending_approval") {
+        setCurrentUser({ role: "pending", id: profile.id, name: profile.full_name, email: profile.email });
+        return true;
+      }
+
+      // Active user — set role from profile
+      const role = profile.role === "manager" ? "admin" : profile.role;
+      setCurrentUser({
+        role,
+        id: profile.id,
+        name: profile.full_name,
+        email: profile.email,
+      });
+      if (role === "admin") setAdminView("home");
       return true;
+    } catch (e) {
+      console.error("Login failed:", e);
+      setLoginError(t.invalidCredentials);
+      return false;
     }
-    const dataEntryUser = dataEntryUsers.find((d) => d.email && d.email.toLowerCase() === email && d.password === pwd);
-    if (dataEntryUser) {
-      setCurrentUser({ role: "data_entry", id: dataEntryUser.id, name: dataEntryUser.name, email: dataEntryUser.email });
-      return true;
-    }
-    const vendor = vendors.find((v) => v.email && v.email.toLowerCase() === email && v.password === pwd);
-    if (vendor) {
-      setCurrentUser({ role: "vendor", id: vendor.id, name: vendor.name, email: vendor.email });
-      return true;
-    }
-    setLoginError(t.invalidCredentials);
-    return false;
   }
-  function handleLogout() {
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
     setCurrentUser(null);
     setAdminView("home");
     setAuthView("login");
@@ -1164,62 +1245,91 @@ export default function App() {
     if (!name?.trim()) return { success: false, error: t.nameRequired };
     if (!cleanEmail) return { success: false, error: t.emailRequired };
     if (!password || password.length < 6) return { success: false, error: t.passwordTooShort };
-    if (cleanEmail === adminCreds.email.toLowerCase()) {
-      return { success: false, error: t.emailAlreadyTaken };
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: {
+          data: {
+            full_name: name.trim(),
+            phone: (phone || "").trim(),
+          },
+        },
+      });
+
+      if (error) {
+        if (error.message.toLowerCase().includes("already registered") || error.message.toLowerCase().includes("already exists")) {
+          return { success: false, error: t.emailAlreadyTaken };
+        }
+        return { success: false, error: error.message };
+      }
+
+      // Show "check your email" screen
+      setAuthView("checkEmail");
+      return { success: true, needsEmailConfirmation: true };
+    } catch (e) {
+      console.error("Signup failed:", e);
+      return { success: false, error: e.message || "Sign up failed" };
     }
-    if (vendors.some((v) => v.email && v.email.toLowerCase() === cleanEmail)) {
-      return { success: false, error: t.emailAlreadyTaken };
-    }
-    const newVendor = {
-      id: `v_${Date.now()}`,
-      name: name.trim(),
-      phone: (phone || "").trim(),
-      email: cleanEmail,
-      password,
-    };
-    const next = [...vendors, newVendor];
-    setVendors(next);
-    await saveKey(KEYS.vendors, next);
-    setCurrentUser({ role: "vendor", id: newVendor.id, name: newVendor.name, email: newVendor.email });
-    setAuthView("login");
-    return { success: true };
   }
 
   async function resetPassword(email, newPassword) {
     const cleanEmail = (email || "").trim().toLowerCase();
     if (!cleanEmail) return { success: false, error: t.emailRequired };
-    if (!newPassword || newPassword.length < 6) {
-      return { success: false, error: t.passwordTooShort };
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: window.location.origin,
+      });
+      if (error) return { success: false, error: error.message };
+      return { success: true, emailSent: true };
+    } catch (e) {
+      return { success: false, error: e.message || "Reset failed" };
     }
-    if (cleanEmail === adminCreds.email.toLowerCase()) {
-      const newCreds = { ...adminCreds, password: newPassword };
-      await changeAdminCreds(newCreds);
-      setCurrentUser({ role: "admin", email: newCreds.email });
-      setAuthView("login");
-      return { success: true };
-    }
-    const idx = vendors.findIndex((v) => v.email && v.email.toLowerCase() === cleanEmail);
-    if (idx === -1) return { success: false, error: t.emailNotFound };
-    const next = [...vendors];
-    next[idx] = { ...next[idx], password: newPassword };
-    setVendors(next);
-    await saveKey(KEYS.vendors, next);
-    setCurrentUser({ role: "vendor", id: next[idx].id, name: next[idx].name, email: next[idx].email });
-    setAuthView("login");
-    return { success: true };
   }
 
   function lookupEmail(searchTerm) {
-    const term = (searchTerm || "").trim().toLowerCase();
-    if (!term) return [];
-    const phoneDigits = term.replace(/\D/g, "");
-    const matches = vendors.filter((v) => {
-      const nameMatch = v.name && v.name.toLowerCase().includes(term);
-      const phoneMatch = phoneDigits.length >= 4 && v.phone && v.phone.replace(/\D/g, "").includes(phoneDigits);
-      return nameMatch || phoneMatch;
-    }).map((v) => ({ id: v.id, name: v.name, email: v.email }));
-    return matches;
+    // Disabled in Supabase mode — would expose user data publicly. Recommend "forgot password" instead.
+    return [];
   }
+
+  // ----- ACCOUNT APPROVAL (Manager only) -----
+  const [pendingProfiles, setPendingProfiles] = useState([]);
+  async function loadPendingProfiles() {
+    if (currentUser?.role !== "admin") return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("status", "pending_approval")
+      .order("created_at", { ascending: false });
+    if (!error && data) setPendingProfiles(data);
+  }
+  useEffect(() => { loadPendingProfiles(); }, [currentUser]);
+
+  async function approveProfile(profileId) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        status: "active",
+        approved_by: currentUser.id,
+        approved_at: new Date().toISOString(),
+      })
+      .eq("id", profileId);
+    if (!error) await loadPendingProfiles();
+  }
+
+  async function rejectProfile(profileId, note) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        status: "rejected",
+        rejection_note: note || null,
+      })
+      .eq("id", profileId);
+    if (!error) await loadPendingProfiles();
+  }
+
 
   async function logInteraction(payload) {
     const entry = {
@@ -1435,6 +1545,14 @@ export default function App() {
         />
       )}
 
+      {!currentUser && authView === "checkEmail" && (
+        <CheckEmailScreen t={t} onBackToLogin={() => setAuthView("login")} />
+      )}
+
+      {currentUser?.role === "pending" && (
+        <PendingApprovalScreen t={t} userName={currentUser.name} onLogout={handleLogout} />
+      )}
+
       {currentUser?.role === "vendor" && (
         <VendorView
           t={t}
@@ -1471,7 +1589,16 @@ export default function App() {
       )}
 
       {currentUser?.role === "admin" && adminView === "home" && (
-        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} onPick={setAdminView} />
+        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} onPick={setAdminView} />
+      )}
+      {currentUser?.role === "admin" && adminView === "approvals" && (
+        <ApprovalsView
+          t={t}
+          pendingProfiles={pendingProfiles}
+          onApprove={approveProfile}
+          onReject={rejectProfile}
+          onBack={() => setAdminView("home")}
+        />
       )}
       {currentUser?.role === "admin" && adminView === "admin" && (
         <AdminView t={t} vendors={vendors} clients={clients} leads={leads} interactions={interactions} quotas={quotas} onBack={() => setAdminView("home")} />
@@ -1623,13 +1750,69 @@ function TopBar({ t, lang, onChangeLang, currentUser, onLogout }) {
   );
 }
 
+// ---------- CHECK EMAIL SCREEN (after signup) ----------
+function CheckEmailScreen({ t, onBackToLogin }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center px-5 pt-20 pb-12" style={{ background: "#F5F1EA" }}>
+      <div className="w-full max-w-sm">
+        <div className="bg-white rounded-3xl p-7 card-shadow text-center">
+          <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: BRAND_PURPLE + "15" }}>
+            <Mail size={26} style={{ color: BRAND_PURPLE }} />
+          </div>
+          <h1 className="display text-2xl mb-2">Check your email</h1>
+          <p className="text-sm text-stone-600 mb-6 leading-relaxed">
+            We sent you a confirmation link. Click it to verify your account, then come back to sign in.
+          </p>
+          <div className="text-xs text-stone-500 mb-5 italic">
+            After confirming, your account will be reviewed by the manager before you can access the app.
+          </div>
+          <button
+            onClick={onBackToLogin}
+            className="w-full py-3 rounded-lg text-sm font-semibold text-white"
+            style={{ background: BRAND_PURPLE }}
+          >
+            Back to login
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- PENDING APPROVAL SCREEN ----------
+function PendingApprovalScreen({ t, userName, onLogout }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center px-5 pt-20 pb-12" style={{ background: "#F5F1EA" }}>
+      <div className="w-full max-w-sm">
+        <div className="bg-white rounded-3xl p-7 card-shadow text-center">
+          <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: "#FFF5D6" }}>
+            <Clock size={26} style={{ color: "#8B6F1A" }} />
+          </div>
+          <h1 className="display text-2xl mb-1">Hi {userName}</h1>
+          <div className="text-xs uppercase tracking-widest font-semibold mb-3" style={{ color: "#8B6F1A" }}>
+            Pending approval
+          </div>
+          <p className="text-sm text-stone-600 mb-6 leading-relaxed">
+            Your account was created successfully. The manager will review and approve it soon. You'll be able to sign in once it's approved.
+          </p>
+          <button
+            onClick={onLogout}
+            className="w-full py-2.5 rounded-lg bg-stone-100 text-sm font-medium text-stone-700"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- LOGIN ----------
 function Login({ t, onLogin, loginError, clearError, vendors, adminCreds, onGoSignup, onGoForgot }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
 
   async function submit(e) {
     if (e) e.preventDefault();
@@ -1733,22 +1916,6 @@ function Login({ t, onLogin, loginError, clearError, vendors, adminCreds, onGoSi
             </button>
           </div>
         </div>
-
-        <button
-          onClick={() => setShowDemo(!showDemo)}
-          className="w-full mt-5 text-xs text-stone-500 hover:text-stone-700 flex items-center justify-center gap-1"
-        >
-          {t.demoAccounts}
-          <ChevronRight size={11} className={`transition-transform ${showDemo ? "rotate-90" : ""}`} />
-        </button>
-        {showDemo && (
-          <div className="mt-3 space-y-1.5">
-            <DemoCredRow label={t.admin + " (" + t.managerDashboard + ")"} email={adminCreds.email} password={adminCreds.password} onClick={fillCreds} accent="#1C1B1A" />
-            {vendors.map((v) => (
-              <DemoCredRow key={v.id} label={v.name} email={v.email} password={v.password} onClick={fillCreds} accent={BRAND_PURPLE} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -2158,8 +2325,9 @@ function FindEmailPanel({ t, onLookupEmail }) {
 }
 
 // ---------- ADMIN HOME ----------
-function AdminHome({ t, currentUser, leads, tasks, onPick }) {
+function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, onPick }) {
   const pendingCount = (leads || []).filter((l) => l.status === "pending").length;
+  const pendingUsersCount = (pendingProfiles || []).length;
   const todayKeyStr = todayKey();
   const overdueTasks = (tasks || []).filter((tk) => !tk.completed && tk.dueDate && tk.dueDate < todayKeyStr).length;
   const todayTasksCount = (tasks || []).filter((tk) => !tk.completed && tk.dueDate === todayKeyStr).length;
@@ -2171,6 +2339,29 @@ function AdminHome({ t, currentUser, leads, tasks, onPick }) {
         <p className="text-stone-600 text-sm font-mono">{currentUser.email}</p>
         <p className="text-stone-500 text-sm mt-3">{t.pickArea}</p>
       </div>
+
+      {pendingUsersCount > 0 && (
+        <button
+          onClick={() => onPick("approvals")}
+          className="w-full text-left rounded-2xl p-4 mb-3 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: BRAND_PURPLE + "15", border: `1px solid ${BRAND_PURPLE}40` }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: BRAND_PURPLE + "30" }}>
+              <UserPlus size={16} style={{ color: BRAND_PURPLE }} />
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest font-semibold" style={{ color: BRAND_PURPLE }}>
+                Pending users
+              </div>
+              <div className="text-sm" style={{ color: "#3D2160" }}>
+                {pendingUsersCount} {pendingUsersCount === 1 ? "user" : "users"} waiting for approval
+              </div>
+            </div>
+          </div>
+          <ChevronRight size={16} style={{ color: BRAND_PURPLE }} />
+        </button>
+      )}
 
       {pendingCount > 0 && (
         <button
@@ -2291,6 +2482,101 @@ function AdminHome({ t, currentUser, leads, tasks, onPick }) {
           <ChevronRight size={18} className="text-stone-400" />
         </button>
       </div>
+    </div>
+  );
+}
+
+// ---------- APPROVALS VIEW (Manager — pending user accounts) ----------
+function ApprovalsView({ t, pendingProfiles, onApprove, onReject, onBack }) {
+  return (
+    <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={16} /> {t.back}
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
+        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+          <UserPlus size={22} /> Pending users
+        </h1>
+        <p className="text-stone-500 text-sm mt-2">Approve or reject user signups.</p>
+      </div>
+
+      {pendingProfiles.length === 0 ? (
+        <div className="text-center py-12 text-stone-400 text-sm italic">No pending users.</div>
+      ) : (
+        <div className="space-y-3">
+          {pendingProfiles.map((p) => (
+            <PendingUserCard key={p.id} profile={p} onApprove={onApprove} onReject={onReject} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PendingUserCard({ profile, onApprove, onReject }) {
+  const [mode, setMode] = useState(null); // null | "reject"
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="bg-white rounded-2xl p-4 card-shadow" style={{ borderLeft: `3px solid ${BRAND_PURPLE}` }}>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold truncate">{profile.full_name}</div>
+          <div className="text-xs text-stone-500 truncate font-mono mt-0.5">{profile.email}</div>
+          {profile.phone && <div className="text-xs text-stone-500 mt-0.5">{profile.phone}</div>}
+          <div className="text-[10px] text-stone-400 mt-1">
+            Signed up {new Date(profile.created_at).toLocaleDateString()}
+          </div>
+        </div>
+      </div>
+
+      {!mode && (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onApprove(profile.id)}
+            className="rounded-xl py-2 px-3 flex items-center justify-center gap-1.5 text-xs font-semibold transition-all hover:scale-[1.02]"
+            style={{ background: "#E8F0E9", color: "#2D5A3D" }}
+          >
+            <Check size={13} /> Approve
+          </button>
+          <button
+            onClick={() => setMode("reject")}
+            className="rounded-xl py-2 px-3 flex items-center justify-center gap-1.5 text-xs font-semibold transition-all hover:scale-[1.02]"
+            style={{ background: "#F2E2E2", color: "#9C5757" }}
+          >
+            <X size={13} /> Reject
+          </button>
+        </div>
+      )}
+
+      {mode === "reject" && (
+        <div className="rounded-xl p-3 space-y-2" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+          <div className="text-xs font-semibold uppercase tracking-wide">Reject account</div>
+          <input
+            type="text"
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason (visible to user)"
+            className="w-full bg-white/70 rounded-lg px-3 py-2 text-sm outline-none"
+            style={{ color: "#1C1B1A" }}
+          />
+          <div className="flex gap-2 pt-1">
+            <button onClick={() => setMode(null)} className="flex-1 py-2 rounded-lg bg-white/70 text-xs font-medium" style={{ color: "#1C1B1A" }}>
+              Cancel
+            </button>
+            <button
+              onClick={async () => { await onReject(profile.id, reason); setMode(null); }}
+              className="flex-1 py-2 rounded-lg text-xs font-medium text-white"
+              style={{ background: "#9C5757" }}
+            >
+              Confirm reject
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
