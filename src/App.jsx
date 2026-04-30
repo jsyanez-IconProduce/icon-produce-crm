@@ -146,6 +146,24 @@ const T = {
     noActivityYet: "No activity yet",
     scheduledFor: "Scheduled",
 
+    // Removal requests
+    requestRemoval: "Request removal",
+    requestRemovalConfirm: "Request manager to remove this client?",
+    removalPendingApproval: "Removal pending manager approval",
+    cancelRequest: "Cancel",
+    removalRequests: "Removal requests",
+    removalRequestsSub: "Vendors asking to remove clients from their list",
+    noRemovalRequests: "No removal requests pending",
+    requestedBy: "Requested by",
+    assignedTo: "Assigned to",
+    interaction: "interaction",
+    interactions: "interactions",
+    onRecord: "on record",
+    reject: "Reject",
+    approveRemoval: "Approve & archive",
+    requestPending: "request pending",
+    requestsPending: "requests pending",
+
     // not interested reasons
     whyNotInterested: "Why not interested?",
     reasonHasVendor: "We already have a vendor",
@@ -559,6 +577,24 @@ const T = {
     unknownClient: "Cliente desconocido",
     noActivityYet: "Sin actividad",
     scheduledFor: "Programado",
+
+    // Removal requests
+    requestRemoval: "Pedir remoción",
+    requestRemovalConfirm: "¿Pedir al manager remover este cliente?",
+    removalPendingApproval: "Remoción pendiente de aprobación",
+    cancelRequest: "Cancelar",
+    removalRequests: "Solicitudes de remoción",
+    removalRequestsSub: "Vendedores pidiendo remover clientes de su lista",
+    noRemovalRequests: "Sin solicitudes pendientes",
+    requestedBy: "Solicitado por",
+    assignedTo: "Asignado a",
+    interaction: "interacción",
+    interactions: "interacciones",
+    onRecord: "en registro",
+    reject: "Rechazar",
+    approveRemoval: "Aprobar y archivar",
+    requestPending: "solicitud pendiente",
+    requestsPending: "solicitudes pendientes",
 
     whyNotInterested: "¿Por qué no le interesa?",
     reasonHasVendor: "Ya tenemos proveedor",
@@ -1000,6 +1036,9 @@ function clientFromDb(row) {
     archived: row.archived || false,
     archivedAt: row.archived_at ? new Date(row.archived_at).getTime() : null,
     archiveReason: row.archive_reason || null,
+    removalRequested: row.removal_requested || false,
+    removalRequestedAt: row.removal_requested_at ? new Date(row.removal_requested_at).getTime() : null,
+    removalRequestedBy: row.removal_requested_by || null,
   };
 }
 function clientToDb(c) {
@@ -1014,6 +1053,9 @@ function clientToDb(c) {
   if (c.archived !== undefined) out.archived = c.archived;
   if (c.archivedAt !== undefined) out.archived_at = c.archivedAt ? new Date(c.archivedAt).toISOString() : null;
   if (c.archiveReason !== undefined) out.archive_reason = c.archiveReason;
+  if (c.removalRequested !== undefined) out.removal_requested = c.removalRequested;
+  if (c.removalRequestedAt !== undefined) out.removal_requested_at = c.removalRequestedAt ? new Date(c.removalRequestedAt).toISOString() : null;
+  if (c.removalRequestedBy !== undefined) out.removal_requested_by = c.removalRequestedBy;
   return out;
 }
 
@@ -1839,6 +1881,95 @@ export default function App() {
     ));
   }
 
+  // Vendor requests removal of a client
+  async function requestClientRemoval(clientId) {
+    if (!currentUser) return;
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        removal_requested: true,
+        removal_requested_at: new Date().toISOString(),
+        removal_requested_by: currentUser.id,
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to request removal:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, removalRequested: true, removalRequestedAt: Date.now(), removalRequestedBy: currentUser.id }
+        : c
+    ));
+  }
+
+  // Vendor cancels their own removal request
+  async function cancelClientRemovalRequest(clientId) {
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        removal_requested: false,
+        removal_requested_at: null,
+        removal_requested_by: null,
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to cancel removal request:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, removalRequested: false, removalRequestedAt: null, removalRequestedBy: null }
+        : c
+    ));
+  }
+
+  // Manager approves a removal request (archives the client)
+  async function approveRemovalRequest(clientId) {
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        archived: true,
+        archived_at: new Date().toISOString(),
+        archive_reason: "vendor request",
+        removal_requested: false,
+        removal_requested_at: null,
+        removal_requested_by: null,
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to approve removal:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, archived: true, archivedAt: Date.now(), archiveReason: "vendor request",
+            removalRequested: false, removalRequestedAt: null, removalRequestedBy: null }
+        : c
+    ));
+  }
+
+  // Manager rejects a removal request (clears the request flag, client stays active)
+  async function rejectRemovalRequest(clientId) {
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        removal_requested: false,
+        removal_requested_at: null,
+        removal_requested_by: null,
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to reject removal:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, removalRequested: false, removalRequestedAt: null, removalRequestedBy: null }
+        : c
+    ));
+  }
+
   async function convertLeadToCustomer(lead) {
     // Insert client (using lead's id so existing interactions continue to match)
     const { error: cErr } = await supabase.from("clients").insert({
@@ -2158,6 +2289,8 @@ export default function App() {
           onUpdateTask={updateTask}
           onDeleteTask={deleteTask}
           onUpdateClient={(id, updates) => updateClients(clients.map((c) => c.id === id ? { ...c, ...updates } : c))}
+          onRequestRemoval={requestClientRemoval}
+          onCancelRemovalRequest={cancelClientRemovalRequest}
           onBack={handleLogout}
         />
       )}
@@ -2235,6 +2368,17 @@ export default function App() {
           vendors={vendors}
           interactions={interactions}
           onUnarchive={(clientId) => setClientArchived(clientId, false)}
+          onBack={() => setAdminView("home")}
+        />
+      )}
+      {currentUser?.role === "admin" && adminView === "removal-requests" && (
+        <RemovalRequestsView
+          t={t}
+          clients={clients}
+          vendors={vendors}
+          interactions={interactions}
+          onApprove={approveRemovalRequest}
+          onReject={rejectRemovalRequest}
           onBack={() => setAdminView("home")}
         />
       )}
@@ -2941,6 +3085,7 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
   const overdueTasks = (tasks || []).filter((tk) => !tk.completed && tk.dueDate && tk.dueDate < todayKeyStr).length;
   const todayTasksCount = (tasks || []).filter((tk) => !tk.completed && tk.dueDate === todayKeyStr).length;
   const archivedCount = (clients || []).filter((c) => c.archived).length;
+  const removalRequestsCount = (clients || []).filter((c) => c.removalRequested && !c.archived).length;
 
   // Reminders due now (overdue + pending)
   const now = new Date();
@@ -2975,6 +3120,29 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             </div>
           </div>
           <ChevronRight size={16} style={{ color: BRAND_PURPLE }} />
+        </button>
+      )}
+
+      {removalRequestsCount > 0 && (
+        <button
+          onClick={() => onPick("removal-requests")}
+          className="w-full text-left rounded-2xl p-4 mb-3 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "#F2E2E2", border: "1px solid #D8A0A0" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "#D8A0A0" }}>
+              <Trash2 size={16} style={{ color: "#7A3D3D" }} />
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#7A3D3D" }}>
+                {t.removalRequests}
+              </div>
+              <div className="text-sm" style={{ color: "#5C2929" }}>
+                {removalRequestsCount} {removalRequestsCount === 1 ? (t.requestPending || "request pending") : (t.requestsPending || "requests pending")}
+              </div>
+            </div>
+          </div>
+          <ChevronRight size={16} style={{ color: "#7A3D3D" }} />
         </button>
       )}
 
@@ -3631,6 +3799,80 @@ function VendorPhoneCard({ t, currentPhone, onUpdate }) {
   );
 }
 
+// ---------- REMOVAL REQUESTS VIEW (Manager — approve/reject vendor removal requests) ----------
+function RemovalRequestsView({ t, clients, vendors, interactions, onApprove, onReject, onBack }) {
+  const requestedClients = (clients || [])
+    .filter((c) => c.removalRequested && !c.archived)
+    .sort((a, b) => (b.removalRequestedAt || 0) - (a.removalRequestedAt || 0));
+
+  return (
+    <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={16} /> {t.back}
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
+        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+          <Trash2 size={22} /> {t.removalRequests}
+        </h1>
+        <p className="text-stone-500 text-sm mt-2">{t.removalRequestsSub}</p>
+      </div>
+
+      {requestedClients.length === 0 ? (
+        <div className="text-center py-12 text-stone-400 text-sm italic">{t.noRemovalRequests}</div>
+      ) : (
+        <div className="space-y-2">
+          {requestedClients.map((c) => {
+            const vendor = vendors.find((v) => v.id === c.vendorId);
+            const requester = vendors.find((v) => v.id === c.removalRequestedBy);
+            const requestDate = c.removalRequestedAt ? new Date(c.removalRequestedAt).toLocaleString() : "";
+            const interactionCount = (interactions || []).filter((i) => i.clientId === c.id).length;
+            return (
+              <div key={c.id} className="bg-white rounded-2xl p-3 card-shadow" style={{ borderLeft: "3px solid #9C5757" }}>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{c.name}</div>
+                    <div className="text-xs text-stone-500 mt-0.5 truncate">
+                      {c.phone}{vendor ? ` · ${t.assignedTo || "Assigned to"}: ${vendor.name}` : ""}
+                    </div>
+                    <div className="text-[11px] text-stone-400 mt-1 flex items-center gap-1.5">
+                      <AlertCircle size={10} />
+                      {t.requestedBy || "Requested by"}: <span className="font-medium">{requester?.name || t.unknownVendor}</span>
+                      {requestDate && ` · ${requestDate}`}
+                    </div>
+                    {interactionCount > 0 && (
+                      <div className="text-[10px] text-stone-400 mt-0.5">
+                        {interactionCount} {interactionCount === 1 ? (t.interaction || "interaction") : (t.interactions || "interactions")} {t.onRecord || "on record"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onReject(c.id)}
+                    className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1"
+                    style={{ background: "#F0EAE0", color: "#8B7355" }}
+                  >
+                    <X size={11} /> {t.reject || "Reject"}
+                  </button>
+                  <button
+                    onClick={() => onApprove(c.id)}
+                    className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1 text-white"
+                    style={{ background: "#9C5757" }}
+                  >
+                    <Check size={11} /> {t.approveRemoval || "Approve & archive"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- ARCHIVED CLIENTS VIEW (Manager — see and restore archived clients) ----------
 function ArchivedClientsView({ t, clients, vendors, interactions, onUnarchive, onBack }) {
   const archivedClients = (clients || []).filter((c) => c.archived);
@@ -4192,7 +4434,7 @@ function Home({ t, onPick, vendors }) {
 }
 
 // ---------- VENDOR VIEW ----------
-function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onBack }) {
+function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onBack }) {
   const vendor = vendors.find((v) => v.id === vendorId);
   const myClients = clients.filter((c) => c.vendorId === vendorId && !c.archived);
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
@@ -4397,117 +4639,44 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       )}
 
-      {/* Pending */}
-      {pending.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3 mt-2">
-            <div className="text-xs uppercase tracking-widest text-stone-500">{t.toContact}</div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#F2E2E2", color: "#9C5757" }}>{pending.length}</div>
-          </div>
-          <div className="space-y-3 mb-8">
-            {pending.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
-            ))}
-          </div>
-        </>
-      )}
+      {/* Pending — clients not yet called today */}
+      <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={pending}
+        renderClient={(client) => (
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+        )}
+      />
 
-      {/* Contacted — grouped by most recent call status */}
-      {contactedOrdered.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#73A626" }}>
-              <CheckCircle2 size={11} /> {t.statusOrdered}
-            </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#E8F2D5", color: "#73A626" }}>{contactedOrdered.length}</div>
-          </div>
-          <div className="space-y-3 mb-6">
-            {contactedOrdered.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {contactedCallback.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#5A6B85" }}>
-              <Clock size={11} /> {t.statusCallback}
-            </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#E5EAF2", color: "#5A6B85" }}>{contactedCallback.length}</div>
-          </div>
-          <div className="space-y-3 mb-6">
-            {contactedCallback.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {contactedNoAnswer.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#8B7355" }}>
-              <PhoneOff size={11} /> {t.statusNoAnswer}
-            </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#F0EAE0", color: "#8B7355" }}>{contactedNoAnswer.length}</div>
-          </div>
-          <div className="space-y-3 mb-6">
-            {contactedNoAnswer.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {contactedPriceIssue.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#B8860B" }}>
-              <DollarSign size={11} /> {t.statusPriceIssue}
-            </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#B8860B" }}>{contactedPriceIssue.length}</div>
-          </div>
-          <div className="space-y-3 mb-6">
-            {contactedPriceIssue.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {contactedNotInterested.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#9C5757" }}>
-              <XCircle size={11} /> {t.statusNotInterested}
-            </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#F2E2E2", color: "#9C5757" }}>{contactedNotInterested.length}</div>
-          </div>
-          <div className="space-y-3 mb-6">
-            {contactedNotInterested.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {contactedOther.length > 0 && (
-        <>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#5A4A6B" }}>
-              <X size={11} /> {t.statusOther || "Other"}
-            </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#EAE3F0", color: "#5A4A6B" }}>{contactedOther.length}</div>
-          </div>
-          <div className="space-y-3 mb-6">
-            {contactedOther.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
-            ))}
-          </div>
-        </>
-      )}
+      {/* Contacted — grouped by most recent call status, visually distinctive */}
+      <VendorStatusSection t={t} title={t.statusOrdered} icon={CheckCircle2} color="#73A626" bg="#E8F2D5" lightBg="#F4F9E8" clientList={contactedOrdered}
+        renderClient={(client) => (
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+        )}
+      />
+      <VendorStatusSection t={t} title={t.statusCallback} icon={Clock} color="#5A6B85" bg="#E5EAF2" lightBg="#F2F5F9" clientList={contactedCallback}
+        renderClient={(client) => (
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+        )}
+      />
+      <VendorStatusSection t={t} title={t.statusNoAnswer} icon={PhoneOff} color="#8B7355" bg="#F0EAE0" lightBg="#FAF6EE" clientList={contactedNoAnswer}
+        renderClient={(client) => (
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+        )}
+      />
+      <VendorStatusSection t={t} title={t.statusPriceIssue} icon={DollarSign} color="#B8860B" bg="#FFF5D6" lightBg="#FFFBEC" clientList={contactedPriceIssue}
+        renderClient={(client) => (
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+        )}
+      />
+      <VendorStatusSection t={t} title={t.statusNotInterested} icon={XCircle} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={contactedNotInterested}
+        renderClient={(client) => (
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+        )}
+      />
+      <VendorStatusSection t={t} title={t.statusOther || "Other"} icon={X} color="#5A4A6B" bg="#EAE3F0" lightBg="#F4EFF7" clientList={contactedOther}
+        renderClient={(client) => (
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+        )}
+      />
 
       {pending.length === 0 && contacted.length === 0 && myLeads.length === 0 && (
         <div className="text-center py-12 text-stone-500 text-sm">{t.noClients}</div>
@@ -4663,7 +4832,34 @@ function MiniStat({ icon: Icon, label, value, color }) {
 }
 
 // ---------- CLIENT CARD ----------
-function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient }) {
+// Visually distinctive section header for vendor's grouped client lists.
+// Each section has a colored header bar with icon, title and count.
+// Renders nothing if clientList is empty so sections collapse cleanly.
+function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientList, renderClient }) {
+  if (!clientList || clientList.length === 0) return null;
+  return (
+    <div className="mb-6 rounded-2xl overflow-hidden" style={{ background: lightBg, border: `1px solid ${bg}` }}>
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-4 py-2.5" style={{ background: bg }}>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.6)" }}>
+            <Icon size={14} style={{ color }} />
+          </div>
+          <div className="font-bold text-sm uppercase tracking-wide truncate" style={{ color }}>{title}</div>
+        </div>
+        <div className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: color, color: "#fff" }}>
+          {clientList.length}
+        </div>
+      </div>
+      {/* Client list */}
+      <div className="p-3 space-y-2.5">
+        {clientList.map((client) => renderClient(client))}
+      </div>
+    </div>
+  );
+}
+
+function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient, onRequestRemoval, onCancelRemovalRequest }) {
   const callInt = interactions.find((i) => chOf(i) === "call");
   const textInt = interactions.find((i) => chOf(i) === "text");
   const emailInt = interactions.find((i) => chOf(i) === "email");
@@ -4716,6 +4912,20 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
                 <History size={12} />
               </button>
             )}
+            {/* Request removal button — only for vendors who have onRequestRemoval handler */}
+            {onRequestRemoval && !client.removalRequested && (
+              <button
+                onClick={() => {
+                  if (confirm(t.requestRemovalConfirm || "Request manager to remove this client?")) {
+                    onRequestRemoval(client.id);
+                  }
+                }}
+                className="text-stone-400 hover:text-red-600 p-1"
+                title={t.requestRemoval || "Request removal"}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
         </div>
         <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5">
@@ -4730,6 +4940,23 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
           <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
             <AlertCircle size={10} />
             {t.notInterestedWarning || "2 of 3 'not interested' — will auto-archive next time"}
+          </div>
+        )}
+        {client.removalRequested && (
+          <div className="mt-1.5 flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-[11px]" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+            <div className="flex items-center gap-1 font-semibold flex-1 min-w-0">
+              <AlertCircle size={11} className="flex-shrink-0" />
+              <span className="truncate">{t.removalPendingApproval || "Removal pending manager approval"}</span>
+            </div>
+            {onCancelRemovalRequest && (
+              <button
+                onClick={() => onCancelRemovalRequest(client.id)}
+                className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
+                style={{ background: "rgba(255,255,255,0.7)", color: "#9C5757" }}
+              >
+                {t.cancelRequest || "Cancel"}
+              </button>
+            )}
           </div>
         )}
       </div>
