@@ -142,6 +142,9 @@ const T = {
     closeAsNotInterestedHelp: "Client is no longer interested",
     closeAsCancel: "Cancel callback",
     closeAsCancelHelp: "Not contacted yet — just close it",
+    unknownClient: "Unknown client",
+    noActivityYet: "No activity yet",
+    scheduledFor: "Scheduled",
 
     // not interested reasons
     whyNotInterested: "Why not interested?",
@@ -553,6 +556,9 @@ const T = {
     closeAsNotInterestedHelp: "El cliente ya no está interesado",
     closeAsCancel: "Cancelar callback",
     closeAsCancelHelp: "No se ha contactado — solo cerrarlo",
+    unknownClient: "Cliente desconocido",
+    noActivityYet: "Sin actividad",
+    scheduledFor: "Programado",
 
     whyNotInterested: "¿Por qué no le interesa?",
     reasonHasVendor: "Ya tenemos proveedor",
@@ -4210,6 +4216,26 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const contacted = myClients.filter((c) => calledIds.has(c.id));
   const orderedCount = callInts.filter((i) => i.status === "ordered").length;
 
+  // Group contacted clients by their MOST RECENT call status (today)
+  // This lets us split the "Already called" section into buckets like Orders, Callbacks, etc.
+  const lastStatusByClient = new Map();
+  // callInts is sorted oldest to newest (or unspecified order). Use timestamp to find most recent.
+  callInts.forEach((i) => {
+    const prev = lastStatusByClient.get(i.clientId);
+    if (!prev || (i.timestamp || 0) > (prev.timestamp || 0)) {
+      lastStatusByClient.set(i.clientId, i);
+    }
+  });
+  const contactedOrdered = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "ordered");
+  const contactedCallback = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "callback");
+  const contactedNoAnswer = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "no_answer");
+  const contactedNotInterested = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "not_interested");
+  const contactedPriceIssue = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "price_issue");
+  const contactedOther = contacted.filter((c) => {
+    const s = lastStatusByClient.get(c.id)?.status;
+    return s === "other" || (s && !["ordered", "callback", "no_answer", "not_interested", "price_issue"].includes(s));
+  });
+
   const callbacks = callInts
     .filter((i) => i.status === "callback" && i.scheduledTime)
     .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
@@ -4386,15 +4412,97 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </>
       )}
 
-      {/* Contacted */}
-      {contacted.length > 0 && (
+      {/* Contacted — grouped by most recent call status */}
+      {contactedOrdered.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest text-stone-500">{t.alreadyContacted}</div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#E8F2D5", color: "#73A626" }}>{contacted.length}</div>
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#73A626" }}>
+              <CheckCircle2 size={11} /> {t.statusOrdered}
+            </div>
+            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#E8F2D5", color: "#73A626" }}>{contactedOrdered.length}</div>
           </div>
-          <div className="space-y-3">
-            {contacted.map((client) => (
+          <div className="space-y-3 mb-6">
+            {contactedOrdered.map((client) => (
+              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {contactedCallback.length > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#5A6B85" }}>
+              <Clock size={11} /> {t.statusCallback}
+            </div>
+            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#E5EAF2", color: "#5A6B85" }}>{contactedCallback.length}</div>
+          </div>
+          <div className="space-y-3 mb-6">
+            {contactedCallback.map((client) => (
+              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {contactedNoAnswer.length > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#8B7355" }}>
+              <PhoneOff size={11} /> {t.statusNoAnswer}
+            </div>
+            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#F0EAE0", color: "#8B7355" }}>{contactedNoAnswer.length}</div>
+          </div>
+          <div className="space-y-3 mb-6">
+            {contactedNoAnswer.map((client) => (
+              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {contactedPriceIssue.length > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#B8860B" }}>
+              <DollarSign size={11} /> {t.statusPriceIssue}
+            </div>
+            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#B8860B" }}>{contactedPriceIssue.length}</div>
+          </div>
+          <div className="space-y-3 mb-6">
+            {contactedPriceIssue.map((client) => (
+              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {contactedNotInterested.length > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#9C5757" }}>
+              <XCircle size={11} /> {t.statusNotInterested}
+            </div>
+            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#F2E2E2", color: "#9C5757" }}>{contactedNotInterested.length}</div>
+          </div>
+          <div className="space-y-3 mb-6">
+            {contactedNotInterested.map((client) => (
+              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {contactedOther.length > 0 && (
+        <>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#5A4A6B" }}>
+              <X size={11} /> {t.statusOther || "Other"}
+            </div>
+            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#EAE3F0", color: "#5A4A6B" }}>{contactedOther.length}</div>
+          </div>
+          <div className="space-y-3 mb-6">
+            {contactedOther.map((client) => (
               <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
             ))}
           </div>
@@ -4998,6 +5106,7 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
   const [periodInts, setPeriodInts] = useState(interactions);
   const [loadingPeriod, setLoadingPeriod] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [outcomeModal, setOutcomeModal] = useState(null);
 
   useEffect(() => {
     if (period === "today") { setPeriodInts(interactions); return; }
@@ -5160,7 +5269,7 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
 
           <div className="text-xs uppercase tracking-widest text-stone-500 mb-3">{t.repsLive}</div>
           <div className="space-y-3 mb-8">
-            {liveRanking.map((s, idx) => (<VendorLiveCard key={s.vendor.id} t={t} stat={s} rank={idx + 1} />))}
+            {liveRanking.map((s, idx) => (<VendorLiveCard key={s.vendor.id} t={t} stat={s} rank={idx + 1} clients={clients} onPillClick={setOutcomeModal} />))}
           </div>
 
           <div className="text-xs uppercase tracking-widest text-stone-500 mb-3">{t.contactFrequency}</div>
@@ -5189,6 +5298,10 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
         <p className="text-xs text-stone-500 mb-4">{t.repBestWorstSub}</p>
         <ManagerConversionAnalytics t={t} vendors={vendors} clients={clients} leads={leads || []} interactions={interactions} />
       </div>
+
+      {outcomeModal && (
+        <VendorOutcomeModal t={t} data={outcomeModal} onClose={() => setOutcomeModal(null)} />
+      )}
     </div>
   );
 }
@@ -5303,13 +5416,20 @@ function CallOutcomesBreakdown({ t, totalCalls, orders, callbacks, noAnswers, pr
   );
 }
 
-function VendorLiveCard({ t, stat, rank }) {
-  const { vendor, contacted, myClients, orders, callbacks, noAnswers, priceIssues, notInterested, textedIds, emailedIds, rate } = stat;
+function VendorLiveCard({ t, stat, rank, clients, onPillClick }) {
+  const { vendor, contacted, myClients, orders, callbacks, noAnswers, priceIssues, notInterested, otherStatus, textInts, emailInts, textedIds, emailedIds, rate } = stat;
   const ordersCount = orders.length;
   const callbacksCount = callbacks ? callbacks.length : 0;
   const noAnswersCount = noAnswers ? noAnswers.length : 0;
   const priceIssuesCount = priceIssues ? priceIssues.length : 0;
   const notInterestedCount = notInterested ? notInterested.length : 0;
+  const otherCount = otherStatus ? otherStatus.length : 0;
+
+  function handlePillClick(category, items, label, color, bg) {
+    if (!onPillClick) return;
+    if (!items || items.length === 0) return; // nothing to show
+    onPillClick({ vendor, category, items, label, color, bg, clients });
+  }
 
   return (
     <div className="bg-white rounded-2xl p-4 card-shadow">
@@ -5330,32 +5450,133 @@ function VendorLiveCard({ t, stat, rank }) {
 
       {/* Row 1: Call results */}
       <div className="grid grid-cols-4 gap-1.5 mb-1.5">
-        <VendorStatPill icon={CheckCircle2} value={ordersCount} label={t.statusOrdered} color="#73A626" bg="#E8F2D5" />
-        <VendorStatPill icon={Clock} value={callbacksCount} label={t.statusCallback} color="#5A6B85" bg="#E5EAF2" />
-        <VendorStatPill icon={PhoneOff} value={noAnswersCount} label={t.statusNoAnswer} color="#8B7355" bg="#F0EAE0" />
-        <VendorStatPill icon={XCircle} value={notInterestedCount} label={t.statusNotInterested} color="#9C5757" bg="#F2E2E2" />
+        <VendorStatPill icon={CheckCircle2} value={ordersCount} label={t.statusOrdered} color="#73A626" bg="#E8F2D5"
+          onClick={() => handlePillClick("ordered", orders, t.statusOrdered, "#73A626", "#E8F2D5")} />
+        <VendorStatPill icon={Clock} value={callbacksCount} label={t.statusCallback} color="#5A6B85" bg="#E5EAF2"
+          onClick={() => handlePillClick("callback", callbacks, t.statusCallback, "#5A6B85", "#E5EAF2")} />
+        <VendorStatPill icon={PhoneOff} value={noAnswersCount} label={t.statusNoAnswer} color="#8B7355" bg="#F0EAE0"
+          onClick={() => handlePillClick("no_answer", noAnswers, t.statusNoAnswer, "#8B7355", "#F0EAE0")} />
+        <VendorStatPill icon={XCircle} value={notInterestedCount} label={t.statusNotInterested} color="#9C5757" bg="#F2E2E2"
+          onClick={() => handlePillClick("not_interested", notInterested, t.statusNotInterested, "#9C5757", "#F2E2E2")} />
       </div>
       {/* Row 2: Other contacts + edge cases */}
       <div className="grid grid-cols-3 gap-1.5">
-        <VendorStatPill icon={DollarSign} value={priceIssuesCount} label={t.statusPriceIssue} color="#B8860B" bg="#FFF5D6" />
-        <VendorStatPill icon={MessageCircle} value={textedIds.size} label={t.textChannel} color="#1C5E6E" bg="#D7EDF1" />
-        <VendorStatPill icon={Mail} value={emailedIds.size} label={t.emailChannel} color="#5A4A6B" bg="#EAE3F0" />
+        <VendorStatPill icon={DollarSign} value={priceIssuesCount} label={t.statusPriceIssue} color="#B8860B" bg="#FFF5D6"
+          onClick={() => handlePillClick("price_issue", priceIssues, t.statusPriceIssue, "#B8860B", "#FFF5D6")} />
+        <VendorStatPill icon={MessageCircle} value={textedIds.size} label={t.textChannel} color="#1C5E6E" bg="#D7EDF1"
+          onClick={() => handlePillClick("text", textInts || [], t.textChannel, "#1C5E6E", "#D7EDF1")} />
+        <VendorStatPill icon={Mail} value={emailedIds.size} label={t.emailChannel} color="#5A4A6B" bg="#EAE3F0"
+          onClick={() => handlePillClick("email", emailInts || [], t.emailChannel, "#5A4A6B", "#EAE3F0")} />
       </div>
     </div>
   );
 }
 
-function VendorStatPill({ icon: Icon, value, label, color, bg }) {
+function VendorStatPill({ icon: Icon, value, label, color, bg, onClick }) {
+  const isClickable = !!onClick && value > 0;
   return (
-    <div className="rounded-lg p-2 flex flex-col items-center justify-center text-center" style={{ background: bg }}>
+    <button
+      onClick={isClickable ? onClick : undefined}
+      disabled={!isClickable}
+      className={`rounded-lg p-2 flex flex-col items-center justify-center text-center transition-all ${isClickable ? "hover:scale-105 cursor-pointer" : "cursor-default"}`}
+      style={{ background: bg, opacity: value === 0 ? 0.5 : 1 }}
+    >
       <div className="flex items-center gap-1 mb-0.5">
         <Icon size={10} style={{ color }} />
         <span className="text-sm font-bold" style={{ color }}>{value}</span>
       </div>
       <div className="text-[9px] uppercase tracking-wide truncate w-full" style={{ color }}>{label}</div>
+    </button>
+  );
+}
+
+// Modal showing detailed list of clients for a specific call outcome category
+function VendorOutcomeModal({ t, data, onClose }) {
+  if (!data) return null;
+  const { vendor, category, items, label, color, bg, clients } = data;
+
+  // Sort by timestamp descending
+  const sortedItems = [...(items || [])].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  function getClientName(clientId) {
+    const c = (clients || []).find((cc) => cc.id === clientId);
+    return c?.name || t.unknownClient || "Unknown client";
+  }
+
+  function formatTime(ts) {
+    if (!ts) return "";
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ background: "rgba(0,0,0,0.5)" }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[85vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-2" style={{ borderBottom: "1px solid rgba(28,27,26,0.06)" }}>
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
+              <span className="text-sm font-bold" style={{ color }}>{items.length}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-sm" style={{ color }}>{label}</div>
+              <div className="text-xs text-stone-500 truncate">{vendor.name}</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1 flex-shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {sortedItems.length === 0 ? (
+            <div className="text-center py-8 text-stone-400 text-sm italic">{t.noActivityYet || "No activity yet"}</div>
+          ) : (
+            sortedItems.map((item, idx) => (
+              <div key={item.id || idx} className="rounded-lg p-3" style={{ background: bg }}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="font-medium text-sm" style={{ color }}>
+                    {getClientName(item.clientId)}
+                  </div>
+                  <div className="text-[11px] flex-shrink-0" style={{ color, opacity: 0.7 }}>
+                    {formatTime(item.timestamp)}
+                  </div>
+                </div>
+                {/* Scheduled time for callbacks */}
+                {item.scheduledTime && (
+                  <div className="text-[11px] flex items-center gap-1 mb-1" style={{ color, opacity: 0.85 }}>
+                    <Clock size={10} /> {t.scheduledFor || "Scheduled"}: {item.scheduledTime}
+                  </div>
+                )}
+                {/* Sub-reason for not_interested */}
+                {item.subReason && item.subReason !== "other_reason" && (
+                  <div className="text-[11px] mb-1" style={{ color, opacity: 0.85 }}>
+                    {reasonLabel(item.subReason, t)}
+                  </div>
+                )}
+                {/* Note */}
+                {item.note && (
+                  <div className="text-[11px] italic" style={{ color, opacity: 0.85 }}>
+                    "{item.note}"
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
+
 
 function ReportCard({ t, stat }) {
   const { vendor, contacted, pending, callInts, textedIds, emailedIds, orders } = stat;
@@ -7285,4 +7506,3 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
     </div>
   );
 }
-
