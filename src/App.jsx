@@ -69,6 +69,11 @@ const T = {
     statusCallback: "Call back",
     statusPriceIssue: "Price issue",
     statusNotInterested: "Not interested",
+    statusOther: "Other",
+    callOutcomes: "Call outcomes",
+    callOutcomesTotal: "total calls",
+    callbackPending: "pending callback",
+    callbacksPending: "pending callbacks",
     statusOther: "Other note",
 
     // not interested reasons
@@ -408,6 +413,11 @@ const T = {
     statusCallback: "Llamar después",
     statusPriceIssue: "Tema de precio",
     statusNotInterested: "No le interesa",
+    statusOther: "Otro",
+    callOutcomes: "Resultado de llamadas",
+    callOutcomesTotal: "llamadas totales",
+    callbackPending: "callback pendiente",
+    callbacksPending: "callbacks pendientes",
     statusOther: "Otra nota",
 
     whyNotInterested: "¿Por qué no le interesa?",
@@ -3906,6 +3916,11 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
     const contacted = myClients.filter((c) => calledIds.has(c.id));
     const pending = myClients.filter((c) => !calledIds.has(c.id));
     const orders = callInts.filter((i) => i.status === "ordered");
+    const callbacks = callInts.filter((i) => i.status === "callback");
+    const noAnswers = callInts.filter((i) => i.status === "no_answer");
+    const priceIssues = callInts.filter((i) => i.status === "price_issue");
+    const notInterested = callInts.filter((i) => i.status === "not_interested");
+    const otherStatus = callInts.filter((i) => i.status === "other");
 
     // Recurrent clients: those who placed 2+ orders in the period
     const ordersByClient = {};
@@ -3917,7 +3932,7 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
 
     return {
       vendor: v, myClients, contacted, pending, myInts, callInts, textInts, emailInts,
-      textedIds, emailedIds, orders,
+      textedIds, emailedIds, orders, callbacks, noAnswers, priceIssues, notInterested, otherStatus,
       recurrentCount: recurrentList.length,
       recurrentRate: myClients.length ? recurrentList.length / myClients.length : 0,
       recurrentList,
@@ -3928,6 +3943,12 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
   const totalContacted = stats.reduce((s, x) => s + x.contacted.length, 0);
   const totalClients = stats.reduce((s, x) => s + x.myClients.length, 0);
   const totalOrders = stats.reduce((s, x) => s + x.orders.length, 0);
+  const totalCallbacks = stats.reduce((s, x) => s + x.callbacks.length, 0);
+  const totalNoAnswers = stats.reduce((s, x) => s + x.noAnswers.length, 0);
+  const totalPriceIssues = stats.reduce((s, x) => s + x.priceIssues.length, 0);
+  const totalNotInterested = stats.reduce((s, x) => s + x.notInterested.length, 0);
+  const totalOtherStatus = stats.reduce((s, x) => s + x.otherStatus.length, 0);
+  const totalCalls = stats.reduce((s, x) => s + x.callInts.length, 0);
   const totalTexted = stats.reduce((s, x) => s + x.textedIds.size, 0);
   const totalEmailed = stats.reduce((s, x) => s + x.emailedIds.size, 0);
   const totalRecurrent = stats.reduce((s, x) => s + x.recurrentCount, 0);
@@ -3969,10 +3990,23 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
                 <StatCard label={t.contactedToday} value={`${totalContacted}/${totalClients}`} accent="#73A626" />
                 <StatCard label={t.orders} value={totalOrders} accent="#1C1B1A" />
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <StatCard label={t.textedStat} value={`${totalTexted}/${totalClients}`} accent="#1C5E6E" />
                 <StatCard label={t.emailedStat} value={`${totalEmailed}/${totalClients}`} accent="#5A4A6B" />
               </div>
+
+              {totalCalls > 0 && (
+                <CallOutcomesBreakdown
+                  t={t}
+                  totalCalls={totalCalls}
+                  orders={totalOrders}
+                  callbacks={totalCallbacks}
+                  noAnswers={totalNoAnswers}
+                  priceIssues={totalPriceIssues}
+                  notInterested={totalNotInterested}
+                  other={totalOtherStatus}
+                />
+              )}
 
               <button onClick={() => setShowReport(!showReport)} className="w-full rounded-2xl p-4 card-shadow mb-6 flex items-center justify-between" style={{ background: "#1C1B1A", color: "#F5F1EA" }}>
                 <div className="flex items-center gap-2"><MessageSquare size={16} /><span className="text-sm">{t.report4pmPreview}</span></div>
@@ -3986,10 +4020,23 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
                 <StatCard label={t.totalCalled} value={totalContacted} accent="#73A626" />
                 <StatCard label={t.orders} value={totalOrders} accent="#1C1B1A" />
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <StatCard label={t.recurrentClients} value={totalRecurrent} accent="#5F2F9D" />
                 <StatCard label={t.activeReps} value={`${stats.filter((s) => s.contacted.length > 0).length}/${vendors.length}`} accent="#5A6B85" />
               </div>
+
+              {totalCalls > 0 && (
+                <CallOutcomesBreakdown
+                  t={t}
+                  totalCalls={totalCalls}
+                  orders={totalOrders}
+                  callbacks={totalCallbacks}
+                  noAnswers={totalNoAnswers}
+                  priceIssues={totalPriceIssues}
+                  notInterested={totalNotInterested}
+                  other={totalOtherStatus}
+                />
+              )}
 
               <div className="text-xs uppercase tracking-widest text-stone-500 mb-3 flex items-center gap-1.5">
                 <Award size={11} /> {t.recurrentRanking}
@@ -4099,6 +4146,54 @@ function StatCard({ label, value, accent }) {
     <div className="bg-white rounded-2xl p-4 card-shadow">
       <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{label}</div>
       <div className="display text-3xl" style={{ color: accent }}>{value}</div>
+    </div>
+  );
+}
+
+// ---------- CALL OUTCOMES BREAKDOWN ----------
+// Shows the breakdown of call statuses (orders, callbacks, no-answers, etc.)
+// so the manager understands the QUALITY of activity, not just the quantity.
+function CallOutcomesBreakdown({ t, totalCalls, orders, callbacks, noAnswers, priceIssues, notInterested, other }) {
+  const rows = [
+    { key: "ordered", label: t.statusOrdered, count: orders, color: "#73A626", bg: "#E8F2D5" },
+    { key: "callback", label: t.statusCallback, count: callbacks, color: "#5A6B85", bg: "#E5EAF2" },
+    { key: "no_answer", label: t.statusNoAnswer, count: noAnswers, color: "#8B7355", bg: "#F0EAE0" },
+    { key: "price_issue", label: t.statusPriceIssue, count: priceIssues, color: "#B8860B", bg: "#FFF5D6" },
+    { key: "not_interested", label: t.statusNotInterested, count: notInterested, color: "#9C5757", bg: "#F2E2E2" },
+    { key: "other", label: t.statusOther || "Other", count: other, color: "#5A4A6B", bg: "#EAE3F0" },
+  ].filter((r) => r.count > 0);
+
+  return (
+    <div className="bg-white rounded-2xl p-4 card-shadow mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[10px] uppercase tracking-widest text-stone-500">{t.callOutcomes || "Call outcomes"}</div>
+        <div className="text-[11px] text-stone-400">{totalCalls} {t.callOutcomesTotal || "total calls"}</div>
+      </div>
+      <div className="space-y-2">
+        {rows.map((r) => {
+          const pct = totalCalls > 0 ? (r.count / totalCalls) * 100 : 0;
+          return (
+            <div key={r.key}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs font-medium" style={{ color: r.color }}>{r.label}</div>
+                <div className="text-[11px]">
+                  <span className="font-semibold" style={{ color: r.color }}>{r.count}</span>
+                  <span className="text-stone-400 ml-1">({Math.round(pct)}%)</span>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: r.bg }}>
+                <div className="h-full transition-all" style={{ width: `${pct}%`, background: r.color }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {callbacks > 0 && (
+        <div className="mt-3 pt-3 text-[11px] flex items-start gap-1.5" style={{ borderTop: "1px solid rgba(28,27,26,0.06)", color: "#5A6B85" }}>
+          <Clock size={11} className="mt-0.5 flex-shrink-0" />
+          <span>{callbacks === 1 ? `1 ${t.callbackPending || "pending callback"}` : `${callbacks} ${t.callbacksPending || "pending callbacks"}`}</span>
+        </div>
+      )}
     </div>
   );
 }
