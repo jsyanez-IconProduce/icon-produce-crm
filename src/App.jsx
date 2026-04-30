@@ -131,6 +131,18 @@ const T = {
     archiveBadge: "Archived",
     statusOther: "Other note",
 
+    // Close callback
+    closeCallback: "Close callback",
+    closeCallbackHelp: "What happened with this callback? The original is kept in history.",
+    closeAsOrdered: "Already ordered",
+    closeAsOrderedHelp: "Client placed the order through another channel",
+    closeAsPriceIssue: "Price issue",
+    closeAsPriceIssueHelp: "Client raised a price concern",
+    closeAsNotInterested: "Not interested anymore",
+    closeAsNotInterestedHelp: "Client is no longer interested",
+    closeAsCancel: "Cancel callback",
+    closeAsCancelHelp: "Not contacted yet — just close it",
+
     // not interested reasons
     whyNotInterested: "Why not interested?",
     reasonHasVendor: "We already have a vendor",
@@ -529,6 +541,18 @@ const T = {
     clientArchived: "Cliente auto-archivado",
     archiveBadge: "Archivado",
     statusOther: "Otra nota",
+
+    // Close callback
+    closeCallback: "Cerrar callback",
+    closeCallbackHelp: "¿Qué pasó con este callback? El original queda en el historial.",
+    closeAsOrdered: "Ya ordenó",
+    closeAsOrderedHelp: "El cliente ordenó por otro canal",
+    closeAsPriceIssue: "Tema de precio",
+    closeAsPriceIssueHelp: "El cliente expresó un problema con el precio",
+    closeAsNotInterested: "Ya no le interesa",
+    closeAsNotInterestedHelp: "El cliente ya no está interesado",
+    closeAsCancel: "Cancelar callback",
+    closeAsCancelHelp: "No se ha contactado — solo cerrarlo",
 
     whyNotInterested: "¿Por qué no le interesa?",
     reasonHasVendor: "Ya tenemos proveedor",
@@ -1855,6 +1879,24 @@ export default function App() {
     setInteractions((prev) => prev.map((i) => (i.id === id ? { ...i, ...updates } : i)));
   }
 
+  // Close a pending callback by logging a NEW interaction with the actual outcome.
+  // The original callback stays in history (full audit trail).
+  async function closeCallback({ originalCallbackId, newStatus, note }) {
+    const callbackInt = interactions.find((i) => i.id === originalCallbackId);
+    if (!callbackInt) {
+      console.error("Original callback not found");
+      return;
+    }
+    // Log the new interaction with the actual outcome
+    await logInteraction({
+      clientId: callbackInt.clientId,
+      vendorId: currentUser?.id || callbackInt.vendorId,
+      channel: "call",
+      status: newStatus,
+      note: note || null,
+    });
+  }
+
   // updateVendors — vendors are now profiles, this just updates local state for legacy code paths
   async function updateVendors(next) { setVendors(next); }
   async function updateDataEntryUsers(next) { setDataEntryUsers(next); await saveKey(KEYS.dataEntry, next); }
@@ -2104,6 +2146,7 @@ export default function App() {
           onLog={logInteraction}
           onUndo={deleteInteraction}
           onUpdate={updateInteraction}
+          onCloseCallback={closeCallback}
           onRequestLead={(payload) => createLead({ ...payload, createdBy: `vendor:${currentUser.id}`, status: "pending" })}
           onCreateTask={createTask}
           onUpdateTask={updateTask}
@@ -4143,7 +4186,7 @@ function Home({ t, onPick, vendors }) {
 }
 
 // ---------- VENDOR VIEW ----------
-function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onBack }) {
+function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onBack }) {
   const vendor = vendors.find((v) => v.id === vendorId);
   const myClients = clients.filter((c) => c.vendorId === vendorId && !c.archived);
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
@@ -4313,7 +4356,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
               const asClient = { id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead" };
               return (
                 <div key={lead.id} style={{ borderLeft: "3px solid #F5D785", borderRadius: "16px" }}>
-                  <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} />
+                  <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
                 </div>
               );
             })}
@@ -4337,7 +4380,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           </div>
           <div className="space-y-3 mb-8">
             {pending.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onUpdateClient={onUpdateClient} />
+              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
             ))}
           </div>
         </>
@@ -4352,7 +4395,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           </div>
           <div className="space-y-3">
             {contacted.map((client) => (
-              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onUpdateClient={onUpdateClient} />
+              <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} />
             ))}
           </div>
         </>
@@ -4512,7 +4555,7 @@ function MiniStat({ icon: Icon, label, value, color }) {
 }
 
 // ---------- CLIENT CARD ----------
-function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, allInteractions, templates, tags, onUpdateClient }) {
+function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient }) {
   const callInt = interactions.find((i) => chOf(i) === "call");
   const textInt = interactions.find((i) => chOf(i) === "text");
   const emailInt = interactions.find((i) => chOf(i) === "email");
@@ -4583,7 +4626,7 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, allInter
         )}
       </div>
 
-      <CallSection t={t} client={client} vendorId={vendorId} interaction={callInt} onLog={onLog} onUndo={onUndo} />
+      <CallSection t={t} client={client} vendorId={vendorId} interaction={callInt} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
 
       <div className="grid grid-cols-2 gap-2 mt-3">
         <ChannelToggle
@@ -4640,7 +4683,7 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, allInter
 }
 
 // ---------- CALL SECTION ----------
-function CallSection({ t, client, vendorId, interaction, onLog, onUndo }) {
+function CallSection({ t, client, vendorId, interaction, onLog, onUndo, onCloseCallback }) {
   const [flow, setFlow] = useState(null);
   // flow: null | "callback" | "price_issue" | "other" | "not_interested" | "not_interested_other"
   const [note, setNote] = useState("");
@@ -4650,7 +4693,7 @@ function CallSection({ t, client, vendorId, interaction, onLog, onUndo }) {
   function reset() { setFlow(null); setNote(""); setScheduledTime(""); setReasonText(""); }
 
   if (interaction) {
-    return <CallStatusDisplay t={t} interaction={interaction} onUndo={() => onUndo(interaction.id)} />;
+    return <CallStatusDisplay t={t} interaction={interaction} onUndo={() => onUndo(interaction.id)} onCloseCallback={onCloseCallback} />;
   }
 
   if (!flow) {
@@ -4769,9 +4812,10 @@ function CallSection({ t, client, vendorId, interaction, onLog, onUndo }) {
   return null;
 }
 
-function CallStatusDisplay({ t, interaction, onUndo }) {
+function CallStatusDisplay({ t, interaction, onUndo, onCloseCallback }) {
   const meta = STATUS_META[interaction.status];
   const Icon = meta.icon;
+  const [showCloseModal, setShowCloseModal] = useState(false);
   let detail = "";
   if (interaction.status === "callback" && interaction.scheduledTime) {
     detail = `${t.callbackAt} ${interaction.scheduledTime}`;
@@ -4781,20 +4825,141 @@ function CallStatusDisplay({ t, interaction, onUndo }) {
   } else if (interaction.note) {
     detail = interaction.note;
   }
+
+  const isCallback = interaction.status === "callback";
+  const showCloseButton = isCallback && onCloseCallback;
+
   return (
-    <div className="rounded-xl p-3 flex items-center justify-between" style={{ background: meta.bg, color: meta.color }}>
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.5)" }}>
-          <Icon size={14} />
+    <>
+      <div className="rounded-xl p-3" style={{ background: meta.bg, color: meta.color }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.5)" }}>
+              <Icon size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium leading-tight">{statusLabel(interaction.status, t)}</div>
+              {detail && <div className="text-[11px] opacity-80 truncate">{detail}</div>}
+            </div>
+          </div>
+          <button onClick={onUndo} className="ml-2 px-2 py-1 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide flex-shrink-0" style={{ background: "rgba(255,255,255,0.65)", color: meta.color }}>
+            <Pencil size={10} /> {t.change}
+          </button>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium leading-tight">{statusLabel(interaction.status, t)}</div>
-          {detail && <div className="text-[11px] opacity-80 truncate">{detail}</div>}
+        {showCloseButton && (
+          <button
+            onClick={() => setShowCloseModal(true)}
+            className="w-full mt-2.5 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1"
+            style={{ background: "rgba(255,255,255,0.85)", color: meta.color }}
+          >
+            <CheckCircle2 size={11} /> {t.closeCallback}
+          </button>
+        )}
+      </div>
+      {showCloseModal && (
+        <CloseCallbackModal
+          t={t}
+          callbackInteraction={interaction}
+          onClose={() => setShowCloseModal(false)}
+          onCloseCallback={onCloseCallback}
+        />
+      )}
+    </>
+  );
+}
+
+// Modal: when user wants to close a pending callback by reporting the actual outcome
+function CloseCallbackModal({ t, callbackInteraction, onClose, onCloseCallback }) {
+  const [submitting, setSubmitting] = useState(false);
+
+  async function pickOption(newStatus) {
+    setSubmitting(true);
+    let note = "";
+    if (newStatus === "ordered") note = `Closed callback (originally scheduled ${callbackInteraction.scheduledTime || "earlier"}): client ordered`;
+    else if (newStatus === "price_issue") note = `Closed callback: price issue`;
+    else if (newStatus === "not_interested") note = `Closed callback: client no longer interested`;
+    else if (newStatus === "other") note = `Callback cancelled (not contacted)`;
+
+    await onCloseCallback({ originalCallbackId: callbackInteraction.id, newStatus, note });
+    setSubmitting(false);
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5">
+              <CheckCircle2 size={12} /> {t.closeCallback}
+            </div>
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-600 p-1"><X size={16} /></button>
+          </div>
+          <p className="text-sm text-stone-600 mb-4">{t.closeCallbackHelp}</p>
+
+          <div className="space-y-2">
+            <button
+              disabled={submitting}
+              onClick={() => pickOption("ordered")}
+              className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-all hover:scale-[1.01] disabled:opacity-50"
+              style={{ background: STATUS_META.ordered.bg, color: STATUS_META.ordered.color }}
+            >
+              <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.5)" }}>
+                <CheckCircle2 size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold">{t.closeAsOrdered}</div>
+                <div className="text-[11px] opacity-80">{t.closeAsOrderedHelp}</div>
+              </div>
+            </button>
+
+            <button
+              disabled={submitting}
+              onClick={() => pickOption("price_issue")}
+              className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-all hover:scale-[1.01] disabled:opacity-50"
+              style={{ background: STATUS_META.price_issue.bg, color: STATUS_META.price_issue.color }}
+            >
+              <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.5)" }}>
+                <DollarSign size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold">{t.closeAsPriceIssue}</div>
+                <div className="text-[11px] opacity-80">{t.closeAsPriceIssueHelp}</div>
+              </div>
+            </button>
+
+            <button
+              disabled={submitting}
+              onClick={() => pickOption("not_interested")}
+              className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-all hover:scale-[1.01] disabled:opacity-50"
+              style={{ background: STATUS_META.not_interested.bg, color: STATUS_META.not_interested.color }}
+            >
+              <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.5)" }}>
+                <XCircle size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold">{t.closeAsNotInterested}</div>
+                <div className="text-[11px] opacity-80">{t.closeAsNotInterestedHelp}</div>
+              </div>
+            </button>
+
+            <button
+              disabled={submitting}
+              onClick={() => pickOption("other")}
+              className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-all hover:scale-[1.01] disabled:opacity-50"
+              style={{ background: "#F0EAE0", color: "#8B7355" }}
+            >
+              <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.5)" }}>
+                <X size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold">{t.closeAsCancel}</div>
+                <div className="text-[11px] opacity-80">{t.closeAsCancelHelp}</div>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
-      <button onClick={onUndo} className="ml-2 px-2 py-1 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide flex-shrink-0" style={{ background: "rgba(255,255,255,0.65)", color: meta.color }}>
-        <Pencil size={10} /> {t.change}
-      </button>
     </div>
   );
 }
@@ -7120,3 +7285,4 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
     </div>
   );
 }
+
