@@ -74,6 +74,7 @@ const T = {
     callOutcomesTotal: "total calls",
     callbackPending: "pending callback",
     callbacksPending: "pending callbacks",
+    contactedShort: "contacted",
     statusOther: "Other note",
 
     // not interested reasons
@@ -418,6 +419,7 @@ const T = {
     callOutcomesTotal: "llamadas totales",
     callbackPending: "callback pendiente",
     callbacksPending: "callbacks pendientes",
+    contactedShort: "contactados",
     statusOther: "Otra nota",
 
     whyNotInterested: "¿Por qué no le interesa?",
@@ -4199,27 +4201,44 @@ function CallOutcomesBreakdown({ t, totalCalls, orders, callbacks, noAnswers, pr
 }
 
 function VendorLiveCard({ t, stat, rank }) {
-  const { vendor, contacted, myClients, orders, textedIds, emailedIds, rate } = stat;
+  const { vendor, contacted, myClients, orders, callbacks, textedIds, emailedIds, rate } = stat;
+  const ordersCount = orders.length;
+  const callbacksCount = callbacks ? callbacks.length : 0;
   return (
     <div className="bg-white rounded-2xl p-4 card-shadow">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style={{ background: rank === 1 ? "#1C1B1A" : "#F0EAE0", color: rank === 1 ? "#F5F1EA" : "#8B7355" }}>{rank}</div>
-          <div>
-            <div className="font-medium text-sm">{vendor.name}</div>
-            <div className="text-xs text-stone-500 flex items-center gap-2 flex-wrap mt-0.5">
-              <span className="flex items-center gap-1"><Phone size={9} /> {contacted.length}/{myClients.length}</span>
-              <span className="flex items-center gap-1"><MessageCircle size={9} /> {textedIds.size}</span>
-              <span className="flex items-center gap-1"><Mail size={9} /> {emailedIds.size}</span>
-              <span>· {orders.length} {t.ordersWord}</span>
-            </div>
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium" style={{ background: rank === 1 ? "#1C1B1A" : "#F0EAE0", color: rank === 1 ? "#F5F1EA" : "#8B7355" }}>{rank}</div>
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-sm truncate">{vendor.name}</div>
+            <div className="text-[10px] text-stone-400 mt-0.5">{contacted.length}/{myClients.length} {t.contactedShort || "contacted"}</div>
           </div>
         </div>
-        <div className="text-xs font-medium" style={{ color: "#73A626" }}>{Math.round(rate * 100)}%</div>
+        <div className="text-xs font-medium flex-shrink-0" style={{ color: "#73A626" }}>{Math.round(rate * 100)}%</div>
       </div>
-      <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+
+      <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden mb-3">
         <div className="h-full transition-all" style={{ width: `${rate * 100}%`, background: "#73A626" }} />
       </div>
+
+      <div className="grid grid-cols-4 gap-1.5">
+        <VendorStatPill icon={CheckCircle2} value={ordersCount} label={t.ordersWord} color="#73A626" bg="#E8F2D5" />
+        <VendorStatPill icon={Clock} value={callbacksCount} label={t.statusCallback} color="#5A6B85" bg="#E5EAF2" />
+        <VendorStatPill icon={MessageCircle} value={textedIds.size} label={t.textChannel} color="#1C5E6E" bg="#D7EDF1" />
+        <VendorStatPill icon={Mail} value={emailedIds.size} label={t.emailChannel} color="#5A4A6B" bg="#EAE3F0" />
+      </div>
+    </div>
+  );
+}
+
+function VendorStatPill({ icon: Icon, value, label, color, bg }) {
+  return (
+    <div className="rounded-lg p-2 flex flex-col items-center justify-center text-center" style={{ background: bg }}>
+      <div className="flex items-center gap-1 mb-0.5">
+        <Icon size={10} style={{ color }} />
+        <span className="text-sm font-bold" style={{ color }}>{value}</span>
+      </div>
+      <div className="text-[9px] uppercase tracking-wide truncate w-full" style={{ color }}>{label}</div>
     </div>
   );
 }
