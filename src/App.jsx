@@ -75,6 +75,49 @@ const T = {
     callbackPending: "pending callback",
     callbacksPending: "pending callbacks",
     contactedShort: "contacted",
+
+    // Reminders (SMS scheduling)
+    smsReminders: "SMS reminders",
+    smsRemindersSub: "Schedule reminders with pending client lists",
+    newReminder: "New reminder",
+    reminderVendor: "Send to",
+    noVendorsYet: "No vendors yet",
+    noPhone: "no phone",
+    vendorNoPhoneWarning: "This vendor hasn't added their phone number yet",
+    atSpecificTime: "At specific time",
+    inXHours: "In X hours",
+    date: "Date",
+    time: "Time",
+    hoursFromNow: "Hours from now",
+    willBeSentAt: "Will be sent at",
+    includePendingClients: "Include pending clients",
+    includePendingClientsHelp: "Adds list of clients not called today",
+    customMessageOptional: "Custom message (optional)",
+    customMessagePlaceholder: "Add an extra note for the vendor…",
+    messagePreview: "Preview",
+    scheduleReminder: "Schedule",
+    scheduling: "Scheduling…",
+    statusPending: "Pending",
+    statusSent: "Sent",
+    statusCancelled: "Cancelled",
+    statusOverdue: "Overdue",
+    sendNowVia: "Ready to send — choose channel",
+    cancelReminder: "Cancel",
+    noRemindersYet: "No reminders yet. Click 'New reminder' to schedule one.",
+    overdueRemindersToSend: "Ready to send",
+    upcomingReminders: "Upcoming",
+    completedReminders: "Completed",
+    twilioComingSoon: "Auto-send via Twilio coming soon.",
+    manualSendForNowHelp: "For now, use the buttons to send manually when due.",
+    unknownVendor: "Unknown vendor",
+    vendorHasNoPhone: "This vendor doesn't have a phone number set",
+
+    // Vendor phone settings
+    yourPhoneNumber: "Your phone number",
+    noPhoneSet: "No phone set",
+    phoneUsedForReminders: "Used for reminders from your manager",
+    addPhone: "Add phone",
+    saving: "Saving…",
     statusOther: "Other note",
 
     // not interested reasons
@@ -420,6 +463,49 @@ const T = {
     callbackPending: "callback pendiente",
     callbacksPending: "callbacks pendientes",
     contactedShort: "contactados",
+
+    // Reminders (SMS scheduling)
+    smsReminders: "Recordatorios SMS",
+    smsRemindersSub: "Programar recordatorios con lista de clientes pendientes",
+    newReminder: "Nuevo recordatorio",
+    reminderVendor: "Enviar a",
+    noVendorsYet: "Sin vendedores",
+    noPhone: "sin teléfono",
+    vendorNoPhoneWarning: "Este vendedor no ha agregado su número aún",
+    atSpecificTime: "A una hora específica",
+    inXHours: "En X horas",
+    date: "Fecha",
+    time: "Hora",
+    hoursFromNow: "Horas desde ahora",
+    willBeSentAt: "Se enviará a las",
+    includePendingClients: "Incluir clientes pendientes",
+    includePendingClientsHelp: "Agrega lista de clientes sin llamada hoy",
+    customMessageOptional: "Mensaje personalizado (opcional)",
+    customMessagePlaceholder: "Agrega una nota extra para el vendedor…",
+    messagePreview: "Vista previa",
+    scheduleReminder: "Programar",
+    scheduling: "Programando…",
+    statusPending: "Pendiente",
+    statusSent: "Enviado",
+    statusCancelled: "Cancelado",
+    statusOverdue: "Atrasado",
+    sendNowVia: "Listo para enviar — elige canal",
+    cancelReminder: "Cancelar",
+    noRemindersYet: "Sin recordatorios. Haz click en 'Nuevo recordatorio' para programar.",
+    overdueRemindersToSend: "Listos para enviar",
+    upcomingReminders: "Próximos",
+    completedReminders: "Completados",
+    twilioComingSoon: "Envío automático con Twilio próximamente.",
+    manualSendForNowHelp: "Por ahora, usa los botones para enviar manualmente.",
+    unknownVendor: "Vendedor desconocido",
+    vendorHasNoPhone: "Este vendedor no tiene teléfono registrado",
+
+    // Vendor phone settings
+    yourPhoneNumber: "Tu número de teléfono",
+    noPhoneSet: "Sin teléfono",
+    phoneUsedForReminders: "Para recordatorios de tu manager",
+    addPhone: "Agregar teléfono",
+    saving: "Guardando…",
     statusOther: "Otra nota",
 
     whyNotInterested: "¿Por qué no le interesa?",
@@ -941,6 +1027,22 @@ function vendorFromProfile(row) {
   };
 }
 
+function reminderFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    managerId: row.manager_id,
+    vendorId: row.vendor_id,
+    scheduledFor: row.scheduled_for,
+    customMessage: row.custom_message,
+    includePendingClients: row.include_pending_clients,
+    status: row.status,
+    sentAt: row.sent_at ? new Date(row.sent_at).getTime() : null,
+    errorMessage: row.error_message,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+
 
 function dateKeyFor(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1315,6 +1417,13 @@ export default function App() {
           .eq("role", "vendor");
         if (data) setVendors(data.map(vendorFromProfile));
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "reminders" }, async () => {
+        const { data } = await supabase
+          .from("reminders")
+          .select("*")
+          .order("scheduled_for", { ascending: true });
+        if (data) setReminders(data.map(reminderFromDb));
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -1448,6 +1557,8 @@ export default function App() {
 
   // ----- ACCOUNT APPROVAL (Manager only) -----
   const [pendingProfiles, setPendingProfiles] = useState([]);
+  const [reminders, setReminders] = useState([]);
+  const [myPhone, setMyPhone] = useState("");
   async function loadPendingProfiles() {
     if (currentUser?.role !== "admin") return;
     const { data, error } = await supabase
@@ -1458,6 +1569,8 @@ export default function App() {
     if (!error && data) setPendingProfiles(data);
   }
   useEffect(() => { loadPendingProfiles(); }, [currentUser]);
+  useEffect(() => { loadReminders(); }, [currentUser]);
+  useEffect(() => { loadMyPhone(); }, [currentUser]);
 
   async function approveProfile(profileId) {
     const { error } = await supabase
@@ -1480,6 +1593,99 @@ export default function App() {
       })
       .eq("id", profileId);
     if (!error) await loadPendingProfiles();
+  }
+
+  // ----- REMINDERS (SMS scheduling) -----
+  async function loadReminders() {
+    if (!currentUser) return;
+    const { data, error } = await supabase
+      .from("reminders")
+      .select("*")
+      .order("scheduled_for", { ascending: true });
+    if (!error && data) {
+      setReminders(data.map(reminderFromDb));
+    }
+  }
+
+  async function createReminder({ vendorId, scheduledFor, customMessage, includePendingClients }) {
+    if (!vendorId || !scheduledFor) return { success: false, error: "Missing required fields" };
+
+    const { data, error } = await supabase
+      .from("reminders")
+      .insert({
+        manager_id: currentUser.id,
+        vendor_id: vendorId,
+        scheduled_for: scheduledFor,
+        custom_message: customMessage || null,
+        include_pending_clients: includePendingClients !== false,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("createReminder failed:", error);
+      return { success: false, error: error.message };
+    }
+    if (data) {
+      setReminders((prev) => [...prev, reminderFromDb(data)].sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor)));
+    }
+    return { success: true, reminder: data ? reminderFromDb(data) : null };
+  }
+
+  async function cancelReminder(reminderId) {
+    const { error } = await supabase
+      .from("reminders")
+      .update({ status: "cancelled" })
+      .eq("id", reminderId);
+    if (!error) {
+      setReminders((prev) => prev.map((r) => r.id === reminderId ? { ...r, status: "cancelled" } : r));
+    }
+  }
+
+  async function deleteReminder(reminderId) {
+    const { error } = await supabase
+      .from("reminders")
+      .delete()
+      .eq("id", reminderId);
+    if (!error) {
+      setReminders((prev) => prev.filter((r) => r.id !== reminderId));
+    }
+  }
+
+  async function markReminderSent(reminderId) {
+    const { error } = await supabase
+      .from("reminders")
+      .update({ status: "sent", sent_at: new Date().toISOString() })
+      .eq("id", reminderId);
+    if (!error) {
+      setReminders((prev) => prev.map((r) => r.id === reminderId ? { ...r, status: "sent", sentAt: Date.now() } : r));
+    }
+  }
+
+  // ----- USER PROFILE PHONE -----
+  async function updateMyPhone(newPhone) {
+    if (!currentUser) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ phone: newPhone })
+      .eq("id", currentUser.id);
+    if (!error) {
+      setMyPhone(newPhone);
+    }
+    return !error;
+  }
+
+  async function loadMyPhone() {
+    if (!currentUser) return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("phone")
+      .eq("id", currentUser.id)
+      .single();
+    if (!error && data) {
+      setMyPhone(data.phone || "");
+    }
   }
 
 
@@ -1801,6 +2007,8 @@ export default function App() {
           tasks={tasks}
           quotas={quotas}
           tags={tags}
+          myPhone={myPhone}
+          onUpdatePhone={updateMyPhone}
           onLog={logInteraction}
           onUndo={deleteInteraction}
           onUpdate={updateInteraction}
@@ -1825,7 +2033,7 @@ export default function App() {
       )}
 
       {currentUser?.role === "admin" && adminView === "home" && (
-        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} onPick={setAdminView} />
+        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} reminders={reminders} onPick={setAdminView} />
       )}
       {currentUser?.role === "admin" && adminView === "approvals" && (
         <ApprovalsView
@@ -1862,6 +2070,20 @@ export default function App() {
           onCreateTask={createTask}
           onUpdateTask={updateTask}
           onDeleteTask={deleteTask}
+          onBack={() => setAdminView("home")}
+        />
+      )}
+      {currentUser?.role === "admin" && adminView === "reminders" && (
+        <RemindersView
+          t={t}
+          reminders={reminders}
+          vendors={vendors}
+          clients={clients}
+          interactions={interactions}
+          onCreate={createReminder}
+          onCancel={cancelReminder}
+          onDelete={deleteReminder}
+          onMarkSent={markReminderSent}
           onBack={() => setAdminView("home")}
         />
       )}
@@ -2561,12 +2783,17 @@ function FindEmailPanel({ t, onLookupEmail }) {
 }
 
 // ---------- ADMIN HOME ----------
-function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, onPick }) {
+function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, onPick }) {
   const pendingCount = (leads || []).filter((l) => l.status === "pending").length;
   const pendingUsersCount = (pendingProfiles || []).length;
   const todayKeyStr = todayKey();
   const overdueTasks = (tasks || []).filter((tk) => !tk.completed && tk.dueDate && tk.dueDate < todayKeyStr).length;
   const todayTasksCount = (tasks || []).filter((tk) => !tk.completed && tk.dueDate === todayKeyStr).length;
+
+  // Reminders due now (overdue + pending)
+  const now = new Date();
+  const overdueReminders = (reminders || []).filter((r) => r.status === "pending" && new Date(r.scheduledFor) < now).length;
+  const upcomingReminders = (reminders || []).filter((r) => r.status === "pending").length;
   return (
     <div className="max-w-md mx-auto px-5 pt-12 pb-24">
       <div className="mb-10">
@@ -2703,6 +2930,34 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, onPick }) {
           )}
         </button>
         <button
+          onClick={() => onPick("reminders")}
+          className="w-full text-left bg-white rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#FFF5D6" }}>
+              <Bell size={20} style={{ color: "#B8860B" }} />
+            </div>
+            <div>
+              <div className="font-semibold">{t.smsReminders}</div>
+              <div className="text-xs text-stone-500">
+                {overdueReminders > 0
+                  ? `${overdueReminders} ${t.overdueRemindersToSend.toLowerCase()}`
+                  : upcomingReminders > 0
+                    ? `${upcomingReminders} ${t.upcomingReminders.toLowerCase()}`
+                    : t.smsRemindersSub
+                }
+              </div>
+            </div>
+          </div>
+          {overdueReminders > 0 ? (
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: "#B8860B", color: "white" }}>
+              {overdueReminders}
+            </div>
+          ) : (
+            <ChevronRight size={18} className="text-stone-400" />
+          )}
+        </button>
+        <button
           onClick={() => onPick("setup")}
           className="w-full text-left bg-white rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
         >
@@ -2717,6 +2972,485 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, onPick }) {
           </div>
           <ChevronRight size={18} className="text-stone-400" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- REMINDERS VIEW (Manager — schedule SMS reminders) ----------
+
+// Helper: build the reminder message text
+function buildReminderMessage({ vendor, customMessage, includePendingClients, pendingClients, t }) {
+  const lines = [];
+  const greeting = `Hi ${vendor?.name?.split(" ")[0] || "team"},`;
+  lines.push(greeting);
+  lines.push("");
+
+  if (customMessage && customMessage.trim()) {
+    lines.push(customMessage.trim());
+    lines.push("");
+  }
+
+  if (includePendingClients && pendingClients && pendingClients.length > 0) {
+    lines.push(`You still have ${pendingClients.length} client${pendingClients.length === 1 ? "" : "s"} to call today:`);
+    pendingClients.forEach((c) => {
+      lines.push(`- ${c.name}`);
+    });
+  } else if (includePendingClients) {
+    lines.push("All your clients have been contacted today. Great job!");
+  }
+
+  lines.push("");
+  lines.push("— Icon Produce CRM");
+  return lines.join("\n");
+}
+
+// Helper: get pending clients (no call today) for a vendor
+function getPendingClientsForVendor(vendorId, clients, interactions) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const myClients = clients.filter((c) => c.vendorId === vendorId);
+  const calledToday = new Set(
+    interactions
+      .filter((i) => i.vendorId === vendorId && i.channel === "call" && i.timestamp >= todayStart.getTime())
+      .map((i) => i.clientId)
+  );
+  return myClients.filter((c) => !calledToday.has(c.id));
+}
+
+function ReminderForm({ t, vendors, clients, interactions, onSave, onCancel }) {
+  const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
+  const [scheduleType, setScheduleType] = useState("at_time"); // "at_time" or "in_hours"
+  const [scheduleTime, setScheduleTime] = useState(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 30);
+    return d.toTimeString().slice(0, 5); // HH:MM
+  });
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  });
+  const [hoursOffset, setHoursOffset] = useState(2);
+  const [includePending, setIncludePending] = useState(true);
+  const [customMessage, setCustomMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const selectedVendor = vendors.find((v) => v.id === vendorId);
+  const pendingClients = vendorId ? getPendingClientsForVendor(vendorId, clients, interactions) : [];
+  const previewMessage = buildReminderMessage({
+    vendor: selectedVendor,
+    customMessage,
+    includePendingClients: includePending,
+    pendingClients,
+    t,
+  });
+
+  function computeScheduledFor() {
+    if (scheduleType === "at_time") {
+      const dt = new Date(`${scheduleDate}T${scheduleTime}`);
+      return dt.toISOString();
+    } else {
+      const dt = new Date();
+      dt.setHours(dt.getHours() + Number(hoursOffset));
+      return dt.toISOString();
+    }
+  }
+
+  async function submit() {
+    if (!vendorId) return;
+    setSubmitting(true);
+    const result = await onSave({
+      vendorId,
+      scheduledFor: computeScheduledFor(),
+      customMessage: customMessage.trim() || null,
+      includePendingClients: includePending,
+    });
+    setSubmitting(false);
+    if (result?.success) {
+      onCancel();
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onCancel}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5">
+              <Bell size={12} /> {t.newReminder}
+            </div>
+            <button onClick={onCancel} className="text-stone-400 hover:text-stone-600 p-1"><X size={16} /></button>
+          </div>
+
+          {/* Vendor selector */}
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.reminderVendor}</div>
+            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
+              {vendors.length === 0 ? (
+                <option value="">{t.noVendorsYet}</option>
+              ) : (
+                vendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}{v.phone ? "" : ` (${t.noPhone})`}</option>
+                ))
+              )}
+            </select>
+            {selectedVendor && !selectedVendor.phone && (
+              <div className="text-[11px] mt-1 flex items-center gap-1" style={{ color: "#9C5757" }}>
+                <AlertCircle size={11} /> {t.vendorNoPhoneWarning}
+              </div>
+            )}
+          </div>
+
+          {/* Schedule type toggle */}
+          <div className="grid grid-cols-2 gap-1 mb-3 bg-stone-100 rounded-lg p-1">
+            <button onClick={() => setScheduleType("at_time")} className={`py-1.5 rounded-md text-xs font-medium ${scheduleType === "at_time" ? "text-white" : "text-stone-600"}`} style={{ background: scheduleType === "at_time" ? BRAND_PURPLE : "transparent" }}>
+              {t.atSpecificTime}
+            </button>
+            <button onClick={() => setScheduleType("in_hours")} className={`py-1.5 rounded-md text-xs font-medium ${scheduleType === "in_hours" ? "text-white" : "text-stone-600"}`} style={{ background: scheduleType === "in_hours" ? BRAND_PURPLE : "transparent" }}>
+              {t.inXHours}
+            </button>
+          </div>
+
+          {/* Schedule inputs */}
+          {scheduleType === "at_time" ? (
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.date}</div>
+                <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.time}</div>
+                <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none" />
+              </div>
+            </div>
+          ) : (
+            <div className="mb-3">
+              <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.hoursFromNow}</div>
+              <input type="number" min="1" max="48" value={hoursOffset} onChange={(e) => setHoursOffset(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none" />
+              <div className="text-[10px] text-stone-400 mt-1">{t.willBeSentAt}: {new Date(Date.now() + Number(hoursOffset) * 60 * 60 * 1000).toLocaleString()}</div>
+            </div>
+          )}
+
+          {/* Include pending clients toggle */}
+          <label className="flex items-center justify-between p-3 bg-stone-50 rounded-lg mb-3 cursor-pointer">
+            <div>
+              <div className="text-sm font-medium">{t.includePendingClients}</div>
+              <div className="text-[11px] text-stone-500 mt-0.5">{t.includePendingClientsHelp}</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={includePending}
+              onChange={(e) => setIncludePending(e.target.checked)}
+              className="w-4 h-4 flex-shrink-0"
+              style={{ accentColor: BRAND_PURPLE }}
+            />
+          </label>
+
+          {/* Custom message */}
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.customMessageOptional}</div>
+            <textarea
+              value={customMessage}
+              onChange={(e) => setCustomMessage(e.target.value)}
+              placeholder={t.customMessagePlaceholder}
+              rows={2}
+              className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none resize-none"
+            />
+          </div>
+
+          {/* Preview */}
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.messagePreview}</div>
+            <div className="bg-stone-50 rounded-lg p-3 text-xs text-stone-700 whitespace-pre-wrap">
+              {previewMessage}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg bg-stone-100 text-sm font-medium text-stone-700">{t.cancel}</button>
+            <button onClick={submit} disabled={submitting || !vendorId} className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50" style={{ background: BRAND_PURPLE }}>
+              {submitting ? t.scheduling : t.scheduleReminder}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReminderCard({ t, reminder, vendor, clients, interactions, onCancel, onDelete, onMarkSent }) {
+  const scheduledDate = new Date(reminder.scheduledFor);
+  const isPast = scheduledDate < new Date();
+  const isPending = reminder.status === "pending";
+  const isCancelled = reminder.status === "cancelled";
+  const isSent = reminder.status === "sent";
+
+  const pendingClients = vendor ? getPendingClientsForVendor(vendor.id, clients, interactions) : [];
+  const previewMessage = buildReminderMessage({
+    vendor,
+    customMessage: reminder.customMessage,
+    includePendingClients: reminder.includePendingClients,
+    pendingClients,
+    t,
+  });
+
+  function sendNow(channel) {
+    if (!vendor || !vendor.phone) {
+      alert(t.vendorHasNoPhone);
+      return;
+    }
+    const cleanPhone = vendor.phone.replace(/[^0-9+]/g, "");
+    if (channel === "whatsapp") {
+      const cleanForWa = cleanPhone.replace(/[^0-9]/g, "");
+      window.open(`https://wa.me/${cleanForWa}?text=${encodeURIComponent(previewMessage)}`, "_blank");
+    } else {
+      window.open(`sms:${cleanPhone}?body=${encodeURIComponent(previewMessage)}`, "_blank");
+    }
+    onMarkSent(reminder.id);
+  }
+
+  let statusColor = "#5A6B85";
+  let statusBg = "#E5EAF2";
+  let statusLabel = t.statusPending;
+  if (isSent) { statusColor = "#73A626"; statusBg = "#E8F2D5"; statusLabel = t.statusSent; }
+  else if (isCancelled) { statusColor = "#8B7355"; statusBg = "#F0EAE0"; statusLabel = t.statusCancelled; }
+  else if (isPast && isPending) { statusColor = "#9C5757"; statusBg = "#F2E2E2"; statusLabel = t.statusOverdue; }
+
+  return (
+    <div className="bg-white rounded-2xl p-4 card-shadow" style={{ borderLeft: `3px solid ${statusColor}` }}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm">{vendor?.name || t.unknownVendor}</div>
+          <div className="text-xs text-stone-500 mt-0.5">
+            {scheduledDate.toLocaleString()}
+          </div>
+        </div>
+        <span className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: statusBg, color: statusColor }}>
+          {statusLabel}
+        </span>
+      </div>
+
+      {reminder.customMessage && (
+        <div className="text-xs text-stone-600 italic mb-2 truncate">"{reminder.customMessage}"</div>
+      )}
+
+      {isPending && isPast && (
+        <div className="space-y-2 mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#9C5757" }}>
+            {t.sendNowVia}:
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => sendNow("whatsapp")} className="py-2 rounded-lg text-xs font-medium text-white" style={{ background: "#25D366" }}>
+              {t.sendViaWhatsApp}
+            </button>
+            <button onClick={() => sendNow("sms")} className="py-2 rounded-lg text-xs font-medium text-white" style={{ background: BRAND_PURPLE }}>
+              {t.sendViaSms}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-3 pt-2" style={{ borderTop: "1px solid rgba(28,27,26,0.06)" }}>
+        {isPending && !isPast && (
+          <button onClick={() => onCancel(reminder.id)} className="flex-1 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#F0EAE0", color: "#8B7355" }}>
+            {t.cancelReminder}
+          </button>
+        )}
+        <button onClick={() => onDelete(reminder.id)} className="px-3 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+          <Trash2 size={11} className="inline" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RemindersView({ t, reminders, vendors, clients, interactions, onCreate, onCancel, onDelete, onMarkSent, onBack }) {
+  const [showForm, setShowForm] = useState(false);
+
+  // Group reminders
+  const now = new Date();
+  const sortedReminders = [...reminders].sort((a, b) => new Date(b.scheduledFor) - new Date(a.scheduledFor));
+  const overdue = sortedReminders.filter((r) => r.status === "pending" && new Date(r.scheduledFor) < now);
+  const upcoming = sortedReminders.filter((r) => r.status === "pending" && new Date(r.scheduledFor) >= now)
+    .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor));
+  const completed = sortedReminders.filter((r) => r.status === "sent" || r.status === "cancelled");
+
+  return (
+    <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={16} /> {t.back}
+      </button>
+
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
+          <h1 className="display text-3xl leading-tight flex items-center gap-2">
+            <Bell size={22} /> {t.smsReminders}
+          </h1>
+          <p className="text-stone-500 text-sm mt-2">{t.smsRemindersSub}</p>
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="px-3 py-2 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-white flex-shrink-0"
+          style={{ background: BRAND_PURPLE }}
+        >
+          <Plus size={13} /> {t.newReminder}
+        </button>
+      </div>
+
+      {/* Twilio integration coming soon banner */}
+      <div className="bg-white rounded-2xl p-3 card-shadow mb-5" style={{ borderLeft: `3px solid ${BRAND_PURPLE}` }}>
+        <div className="text-[11px] flex items-start gap-2">
+          <AlertCircle size={12} style={{ color: BRAND_PURPLE }} className="mt-0.5 flex-shrink-0" />
+          <div className="text-stone-600">
+            <span className="font-semibold" style={{ color: BRAND_PURPLE }}>{t.twilioComingSoon}</span> {t.manualSendForNowHelp}
+          </div>
+        </div>
+      </div>
+
+      {sortedReminders.length === 0 && (
+        <div className="text-center py-12 text-stone-400 text-sm italic">{t.noRemindersYet}</div>
+      )}
+
+      {overdue.length > 0 && (
+        <div className="mb-5">
+          <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: "#9C5757" }}>{t.overdueRemindersToSend}</div>
+          <div className="space-y-2">
+            {overdue.map((r) => {
+              const vendor = vendors.find((v) => v.id === r.vendorId);
+              return (
+                <ReminderCard
+                  key={r.id}
+                  t={t}
+                  reminder={r}
+                  vendor={vendor}
+                  clients={clients}
+                  interactions={interactions}
+                  onCancel={onCancel}
+                  onDelete={onDelete}
+                  onMarkSent={onMarkSent}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <div className="mb-5">
+          <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2">{t.upcomingReminders}</div>
+          <div className="space-y-2">
+            {upcoming.map((r) => {
+              const vendor = vendors.find((v) => v.id === r.vendorId);
+              return (
+                <ReminderCard
+                  key={r.id}
+                  t={t}
+                  reminder={r}
+                  vendor={vendor}
+                  clients={clients}
+                  interactions={interactions}
+                  onCancel={onCancel}
+                  onDelete={onDelete}
+                  onMarkSent={onMarkSent}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {completed.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2">{t.completedReminders}</div>
+          <div className="space-y-2">
+            {completed.slice(0, 10).map((r) => {
+              const vendor = vendors.find((v) => v.id === r.vendorId);
+              return (
+                <ReminderCard
+                  key={r.id}
+                  t={t}
+                  reminder={r}
+                  vendor={vendor}
+                  clients={clients}
+                  interactions={interactions}
+                  onCancel={onCancel}
+                  onDelete={onDelete}
+                  onMarkSent={onMarkSent}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <ReminderForm
+          t={t}
+          vendors={vendors}
+          clients={clients}
+          interactions={interactions}
+          onSave={onCreate}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Vendor's own phone setting (shown in vendor's view)
+function VendorPhoneCard({ t, currentPhone, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(currentPhone || "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    const ok = await onUpdate(draft.trim());
+    setSaving(false);
+    if (ok) setEditing(false);
+  }
+
+  return (
+    <div className="bg-white rounded-2xl p-4 card-shadow mb-4" style={{ borderLeft: `3px solid ${currentPhone ? "#73A626" : "#B8860B"}` }}>
+      <div className="flex items-start gap-2.5">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: currentPhone ? "#E8F2D5" : "#FFF5D6" }}>
+          <Phone size={14} style={{ color: currentPhone ? "#73A626" : "#B8860B" }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs uppercase tracking-widest" style={{ color: currentPhone ? "#73A626" : "#B8860B" }}>
+            {t.yourPhoneNumber}
+          </div>
+          {editing ? (
+            <div className="mt-2 space-y-2">
+              <input
+                type="tel"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="+1 555-123-4567"
+                autoFocus
+                className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setEditing(false); setDraft(currentPhone || ""); }} className="flex-1 py-1.5 rounded-md bg-stone-100 text-xs font-medium text-stone-700">
+                  {t.cancel}
+                </button>
+                <button onClick={save} disabled={saving} className="flex-1 py-1.5 rounded-md text-xs font-medium text-white disabled:opacity-50" style={{ background: BRAND_PURPLE }}>
+                  {saving ? t.saving : t.save}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-sm mt-0.5">
+                {currentPhone || <span className="italic text-stone-400">{t.noPhoneSet}</span>}
+              </div>
+              <div className="text-[10px] text-stone-500 mt-0.5">{t.phoneUsedForReminders}</div>
+              <button onClick={() => setEditing(true)} className="text-[11px] mt-1.5 px-2 py-0.5 rounded-md font-semibold" style={{ background: BRAND_PURPLE + "15", color: BRAND_PURPLE }}>
+                {currentPhone ? <><Pencil size={10} className="inline mr-1" />{t.edit}</> : <><Plus size={10} className="inline mr-1" />{t.addPhone}</>}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -3220,7 +3954,7 @@ function Home({ t, onPick, vendors }) {
 }
 
 // ---------- VENDOR VIEW ----------
-function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, onLog, onUndo, onUpdate, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onBack }) {
+function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onBack }) {
   const vendor = vendors.find((v) => v.id === vendorId);
   const myClients = clients.filter((c) => c.vendorId === vendorId);
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
@@ -3285,6 +4019,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
         <h1 className="display text-3xl leading-tight">{vendor?.name}</h1>
       </div>
+
+      {/* Phone number setting */}
+      {onUpdatePhone && (
+        <VendorPhoneCard t={t} currentPhone={myPhone} onUpdate={onUpdatePhone} />
+      )}
 
       {/* Quota progress (if set) */}
       <QuotaProgressCard t={t} vendorId={vendorId} quotas={quotas} interactions={interactions} allInts={interactions} />
