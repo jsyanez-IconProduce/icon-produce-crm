@@ -118,6 +118,17 @@ const T = {
     phoneUsedForReminders: "Used for reminders from your manager",
     addPhone: "Add phone",
     saving: "Saving…",
+
+    // Auto-archive feature
+    archivedClients: "Archived clients",
+    archivedClientsSub: "Clients auto-archived after 3 'not interested'",
+    noArchivedClients: "No archived clients",
+    archivedAuto: "Auto-archived",
+    archivedManually: "Manually archived",
+    restore: "Restore",
+    notInterestedWarning: "2 of 3 'not interested' — will auto-archive next time",
+    clientArchived: "Client auto-archived",
+    archiveBadge: "Archived",
     statusOther: "Other note",
 
     // not interested reasons
@@ -506,6 +517,17 @@ const T = {
     phoneUsedForReminders: "Para recordatorios de tu manager",
     addPhone: "Agregar teléfono",
     saving: "Guardando…",
+
+    // Auto-archive feature
+    archivedClients: "Clientes archivados",
+    archivedClientsSub: "Clientes auto-archivados después de 3 'no interesa'",
+    noArchivedClients: "Sin clientes archivados",
+    archivedAuto: "Auto-archivado",
+    archivedManually: "Archivado manualmente",
+    restore: "Restaurar",
+    notInterestedWarning: "2 de 3 'no interesa' — se auto-archivará la próxima",
+    clientArchived: "Cliente auto-archivado",
+    archiveBadge: "Archivado",
     statusOther: "Otra nota",
 
     whyNotInterested: "¿Por qué no le interesa?",
@@ -945,6 +967,9 @@ function clientFromDb(row) {
     longNote: row.long_note,
     convertedFromLead: row.converted_from_lead,
     convertedAt: row.converted_at ? new Date(row.converted_at).getTime() : null,
+    archived: row.archived || false,
+    archivedAt: row.archived_at ? new Date(row.archived_at).getTime() : null,
+    archiveReason: row.archive_reason || null,
   };
 }
 function clientToDb(c) {
@@ -956,6 +981,9 @@ function clientToDb(c) {
   if (c.tags !== undefined) out.tags = c.tags;
   if (c.longNote !== undefined) out.long_note = c.longNote;
   if (c.convertedFromLead !== undefined) out.converted_from_lead = c.convertedFromLead;
+  if (c.archived !== undefined) out.archived = c.archived;
+  if (c.archivedAt !== undefined) out.archived_at = c.archivedAt ? new Date(c.archivedAt).toISOString() : null;
+  if (c.archiveReason !== undefined) out.archive_reason = c.archiveReason;
   return out;
 }
 
@@ -1715,6 +1743,70 @@ export default function App() {
         await convertLeadToCustomer(lead);
       }
     }
+
+    // AUTO-ARCHIVE: After 3rd "not interested" total, archive the client
+    if (payload.status === "not_interested" && payload.channel === "call" && payload.clientId) {
+      try {
+        // Count total "not_interested" call interactions for this client (across all time)
+        const { count, error: countError } = await supabase
+          .from("interactions")
+          .select("id", { count: "exact", head: true })
+          .eq("client_id", payload.clientId)
+          .eq("channel", "call")
+          .eq("status", "not_interested");
+
+        if (countError) {
+          console.error("Failed to count not_interested:", countError);
+          return;
+        }
+
+        if (count >= 3) {
+          // Archive the client
+          const client = clients.find((c) => c.id === payload.clientId);
+          if (client && !client.archived) {
+            const { error: archiveError } = await supabase
+              .from("clients")
+              .update({
+                archived: true,
+                archived_at: new Date().toISOString(),
+                archive_reason: "auto: 3 not interested",
+              })
+              .eq("id", payload.clientId);
+            if (archiveError) {
+              console.error("Failed to archive client:", archiveError);
+            } else {
+              // Optimistic update
+              setClients((prev) => prev.map((c) =>
+                c.id === payload.clientId
+                  ? { ...c, archived: true, archivedAt: Date.now(), archiveReason: "auto: 3 not interested" }
+                  : c
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Auto-archive check failed:", e);
+      }
+    }
+  }
+
+  // Helper for manager to manually archive/unarchive a client
+  async function setClientArchived(clientId, archived, reason = null) {
+    const updates = {
+      archived,
+      archived_at: archived ? new Date().toISOString() : null,
+      archive_reason: archived ? (reason || "manual") : null,
+    };
+    const { error } = await supabase.from("clients").update(updates).eq("id", clientId);
+    if (error) {
+      console.error("Failed to set archived:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, archived, archivedAt: archived ? Date.now() : null, archiveReason: archived ? (reason || "manual") : null }
+        : c
+    ));
   }
 
   async function convertLeadToCustomer(lead) {
@@ -2033,7 +2125,7 @@ export default function App() {
       )}
 
       {currentUser?.role === "admin" && adminView === "home" && (
-        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} reminders={reminders} onPick={setAdminView} />
+        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} reminders={reminders} clients={clients} onPick={setAdminView} />
       )}
       {currentUser?.role === "admin" && adminView === "approvals" && (
         <ApprovalsView
@@ -2084,6 +2176,16 @@ export default function App() {
           onCancel={cancelReminder}
           onDelete={deleteReminder}
           onMarkSent={markReminderSent}
+          onBack={() => setAdminView("home")}
+        />
+      )}
+      {currentUser?.role === "admin" && adminView === "archived" && (
+        <ArchivedClientsView
+          t={t}
+          clients={clients}
+          vendors={vendors}
+          interactions={interactions}
+          onUnarchive={(clientId) => setClientArchived(clientId, false)}
           onBack={() => setAdminView("home")}
         />
       )}
@@ -2783,12 +2885,13 @@ function FindEmailPanel({ t, onLookupEmail }) {
 }
 
 // ---------- ADMIN HOME ----------
-function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, onPick }) {
+function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, onPick }) {
   const pendingCount = (leads || []).filter((l) => l.status === "pending").length;
   const pendingUsersCount = (pendingProfiles || []).length;
   const todayKeyStr = todayKey();
   const overdueTasks = (tasks || []).filter((tk) => !tk.completed && tk.dueDate && tk.dueDate < todayKeyStr).length;
   const todayTasksCount = (tasks || []).filter((tk) => !tk.completed && tk.dueDate === todayKeyStr).length;
+  const archivedCount = (clients || []).filter((c) => c.archived).length;
 
   // Reminders due now (overdue + pending)
   const now = new Date();
@@ -2958,6 +3061,29 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, o
           )}
         </button>
         <button
+          onClick={() => onPick("archived")}
+          className="w-full text-left bg-white rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "#F0EAE0" }}>
+              <Inbox size={20} style={{ color: "#8B7355" }} />
+            </div>
+            <div>
+              <div className="font-semibold">{t.archivedClients}</div>
+              <div className="text-xs text-stone-500">
+                {archivedCount > 0 ? `${archivedCount} ${t.archivedClients.toLowerCase()}` : t.archivedClientsSub}
+              </div>
+            </div>
+          </div>
+          {archivedCount > 0 ? (
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: "#8B7355", color: "white" }}>
+              {archivedCount}
+            </div>
+          ) : (
+            <ChevronRight size={18} className="text-stone-400" />
+          )}
+        </button>
+        <button
           onClick={() => onPick("setup")}
           className="w-full text-left bg-white rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
         >
@@ -3009,7 +3135,7 @@ function buildReminderMessage({ vendor, customMessage, includePendingClients, pe
 function getPendingClientsForVendor(vendorId, clients, interactions) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const myClients = clients.filter((c) => c.vendorId === vendorId);
+  const myClients = clients.filter((c) => c.vendorId === vendorId && !c.archived);
   const calledToday = new Set(
     interactions
       .filter((i) => i.vendorId === vendorId && i.channel === "call" && i.timestamp >= todayStart.getTime())
@@ -3452,6 +3578,69 @@ function VendorPhoneCard({ t, currentPhone, onUpdate }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- ARCHIVED CLIENTS VIEW (Manager — see and restore archived clients) ----------
+function ArchivedClientsView({ t, clients, vendors, interactions, onUnarchive, onBack }) {
+  const archivedClients = (clients || []).filter((c) => c.archived);
+
+  return (
+    <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={16} /> {t.back}
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
+        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+          <Inbox size={22} /> {t.archivedClients}
+        </h1>
+        <p className="text-stone-500 text-sm mt-2">{t.archivedClientsSub}</p>
+      </div>
+
+      {archivedClients.length === 0 ? (
+        <div className="text-center py-12 text-stone-400 text-sm italic">{t.noArchivedClients}</div>
+      ) : (
+        <div className="space-y-2">
+          {archivedClients
+            .sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0))
+            .map((c) => {
+              const vendor = vendors.find((v) => v.id === c.vendorId);
+              const notInterestedCount = (interactions || []).filter(
+                (i) => i.clientId === c.id && i.channel === "call" && i.status === "not_interested"
+              ).length;
+              const archivedDate = c.archivedAt ? new Date(c.archivedAt).toLocaleDateString() : "";
+              return (
+                <div key={c.id} className="bg-white rounded-2xl p-3 card-shadow" style={{ borderLeft: "3px solid #8B7355" }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{c.name}</div>
+                      <div className="text-xs text-stone-500 mt-0.5">
+                        {c.phone} {vendor ? `· ${vendor.name}` : ""}
+                      </div>
+                      <div className="text-[11px] text-stone-400 mt-1 flex items-center gap-1.5">
+                        <Inbox size={10} />
+                        {c.archiveReason === "auto: 3 not interested"
+                          ? `${t.archivedAuto} (${notInterestedCount} 'not interested')`
+                          : t.archivedManually}
+                        {archivedDate && ` · ${archivedDate}`}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onUnarchive(c.id)}
+                      className="px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide flex items-center gap-1 flex-shrink-0"
+                      style={{ background: BRAND_PURPLE + "15", color: BRAND_PURPLE }}
+                    >
+                      <Check size={10} /> {t.restore}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
     </div>
   );
 }
@@ -3956,7 +4145,7 @@ function Home({ t, onPick, vendors }) {
 // ---------- VENDOR VIEW ----------
 function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onBack }) {
   const vendor = vendors.find((v) => v.id === vendorId);
-  const myClients = clients.filter((c) => c.vendorId === vendorId);
+  const myClients = clients.filter((c) => c.vendorId === vendorId && !c.archived);
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
   const myRecentRejected = (leads || []).filter((l) => {
     if (l.status !== "rejected") return false;
@@ -4334,6 +4523,10 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, allInter
 
   const clientTags = (tags || []).filter((tg) => (client.tags || []).includes(tg.id));
 
+  // Count "not_interested" calls for this client to show warning badge before auto-archive
+  const notInterestedCount = (allInteractions || [])
+    .filter((i) => i.clientId === client.id && i.channel === "call" && i.status === "not_interested").length;
+
   function handleSendTemplate({ template, channel, text }) {
     // Open the appropriate channel
     if (channel === "whatsapp") {
@@ -4380,6 +4573,12 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, allInter
         {clientTags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {clientTags.map((tg) => <TagBadge key={tg.id} tag={tg} />)}
+          </div>
+        )}
+        {notInterestedCount === 2 && (
+          <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
+            <AlertCircle size={10} />
+            {t.notInterestedWarning || "2 of 3 'not interested' — will auto-archive next time"}
           </div>
         )}
       </div>
@@ -4646,7 +4845,7 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
   }, [period, interactions]);
 
   const stats = useMemo(() => vendors.map((v) => {
-    const myClients = clients.filter((c) => c.vendorId === v.id);
+    const myClients = clients.filter((c) => c.vendorId === v.id && !c.archived);
     const myInts = periodInts.filter((i) => i.vendorId === v.id);
     const callInts = myInts.filter((i) => chOf(i) === "call");
     const textInts = myInts.filter((i) => chOf(i) === "text");
