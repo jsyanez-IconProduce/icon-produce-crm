@@ -832,21 +832,131 @@ async function saveKey(key, value) {
   } catch (e) { console.error("save failed", key, e); }
 }
 
+// ---------- SUPABASE DATA MAPPERS ----------
+// Database uses snake_case, frontend uses camelCase. These translate between them.
+
+function clientFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    vendorId: row.vendor_id,
+    frequency: row.frequency,
+    tags: row.tags || [],
+    longNote: row.long_note,
+    convertedFromLead: row.converted_from_lead,
+    convertedAt: row.converted_at ? new Date(row.converted_at).getTime() : null,
+  };
+}
+function clientToDb(c) {
+  const out = {};
+  if (c.name !== undefined) out.name = c.name;
+  if (c.phone !== undefined) out.phone = c.phone;
+  if (c.vendorId !== undefined) out.vendor_id = c.vendorId;
+  if (c.frequency !== undefined) out.frequency = c.frequency;
+  if (c.tags !== undefined) out.tags = c.tags;
+  if (c.longNote !== undefined) out.long_note = c.longNote;
+  if (c.convertedFromLead !== undefined) out.converted_from_lead = c.convertedFromLead;
+  return out;
+}
+
+function leadFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    note: row.note || "",
+    status: row.status,
+    assignedVendorId: row.assigned_vendor_id,
+    createdBy: row.created_by_role
+      ? `${row.created_by_role}:${row.created_by}`
+      : "manager",
+    createdById: row.created_by,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    rejectionNote: row.rejection_note,
+    approvedAt: row.approved_at ? new Date(row.approved_at).getTime() : null,
+    rejectedAt: row.rejected_at ? new Date(row.rejected_at).getTime() : null,
+    convertedAt: row.converted_at ? new Date(row.converted_at).getTime() : null,
+    history: [],
+  };
+}
+function leadToDb(l) {
+  const out = {};
+  if (l.name !== undefined) out.name = l.name;
+  if (l.phone !== undefined) out.phone = l.phone;
+  if (l.note !== undefined) out.note = l.note;
+  if (l.status !== undefined) out.status = l.status;
+  if (l.assignedVendorId !== undefined) out.assigned_vendor_id = l.assignedVendorId;
+  if (l.rejectionNote !== undefined) out.rejection_note = l.rejectionNote;
+  return out;
+}
+
+function interactionFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    vendorId: row.vendor_id,
+    channel: row.channel,
+    status: row.status,
+    note: row.note || "",
+    subReason: row.sub_reason,
+    scheduledTime: row.scheduled_time,
+    timestamp: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+function interactionToDb(i) {
+  const out = {};
+  if (i.clientId !== undefined) out.client_id = i.clientId;
+  if (i.vendorId !== undefined) out.vendor_id = i.vendorId;
+  if (i.channel !== undefined) out.channel = i.channel;
+  if (i.status !== undefined) out.status = i.status;
+  if (i.note !== undefined) out.note = i.note;
+  if (i.subReason !== undefined) out.sub_reason = i.subReason;
+  if (i.scheduledTime !== undefined) out.scheduled_time = i.scheduledTime;
+  return out;
+}
+
+function vendorFromProfile(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.full_name,
+    phone: row.phone || "",
+    email: row.email,
+  };
+}
+
+
 function dateKeyFor(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 async function loadInteractionsForDays(daysBack, excludeToday = false) {
-  const dates = [];
-  const today = new Date();
-  const start = excludeToday ? 1 : 0;
-  for (let i = start; i < daysBack; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    dates.push(dateKeyFor(d));
+  const now = new Date();
+  const startDate = new Date(now);
+  startDate.setDate(now.getDate() - daysBack);
+  startDate.setHours(0, 0, 0, 0);
+
+  let query = supabase
+    .from("interactions")
+    .select("*")
+    .gte("created_at", startDate.toISOString());
+
+  if (excludeToday) {
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    query = query.lt("created_at", todayStart.toISOString());
   }
-  const arrays = await Promise.all(dates.map((date) => loadKey(KEYS.interactions(date), [])));
-  return arrays.flat();
+
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(5000);
+  if (error) {
+    console.error("loadInteractionsForDays failed:", error);
+    return [];
+  }
+  return (data || []).map(interactionFromDb);
 }
 
 async function seedHistoricalIfNeeded(vendors, clients) {
@@ -1084,89 +1194,119 @@ export default function App() {
     return () => subscription?.unsubscribe();
   }, []);
 
+  // Initial app load — only handles things that don't depend on user (lang, local-only data)
   useEffect(() => {
     (async () => {
       try {
-        let v = await loadKey(KEYS.vendors, null);
-        let c = await loadKey(KEYS.clients, null);
         const savedLang = await loadKey(KEYS.lang, "en");
         if (savedLang === "en" || savedLang === "es") setLang(savedLang);
-        if (!v || v.length === 0) { v = SEED_VENDORS; await saveKey(KEYS.vendors, v); }
 
-        // Migrate vendors: ensure each has email + password (convert from old pin if needed)
-        let migrated = false;
-        v = v.map((vv) => {
-          const updated = { ...vv };
-          if (!updated.email) { updated.email = defaultEmailFromName(vv.name); migrated = true; }
-          if (!updated.password) {
-            updated.password = vv.pin || defaultPasswordFromName(vv.name);
-            migrated = true;
-          }
-          if (vv.pin) { delete updated.pin; migrated = true; }
-          return updated;
-        });
-        if (migrated) await saveKey(KEYS.vendors, v);
-
-        if (!c || c.length === 0) { c = SEED_CLIENTS; await saveKey(KEYS.clients, c); }
-
-        // Admin credentials migration
-        let creds = await loadKey(KEYS.adminCreds, null);
-        if (!creds || !creds.email || !creds.password) {
-          const oldPin = await loadKey(KEYS.adminPin, null);
-          creds = {
-            email: DEFAULT_ADMIN_CREDS.email,
-            password: oldPin || DEFAULT_ADMIN_CREDS.password,
-          };
-          await saveKey(KEYS.adminCreds, creds);
-        }
-        setAdminCreds(creds);
-
-        let ld = await loadKey(KEYS.leads, []);
-        const de = await loadKey(KEYS.dataEntry, []);
-
-        // Templates: seed defaults on first run
+        // Templates, tags, tasks, quotas still in localStorage for now (Fase 3)
         let tpl = await loadKey(KEYS.templates, null);
         if (!tpl || tpl.length === 0) {
           tpl = SEED_TEMPLATES;
           await saveKey(KEYS.templates, tpl);
         }
-
-        // Tags: seed defaults on first run
         let tg = await loadKey(KEYS.tags, null);
         if (!tg || tg.length === 0) {
           tg = SEED_TAGS;
           await saveKey(KEYS.tags, tg);
         }
-
         const tk = await loadKey(KEYS.tasks, []);
         const qt = await loadKey(KEYS.quotas, {});
+        const de = await loadKey(KEYS.dataEntry, []);
 
-        // Seed historical data — wrapped so a failure doesn't block app load
-        try {
-          const seedResult = await seedHistoricalIfNeeded(v, c);
-          if (seedResult && seedResult.leads && ld.length === 0) {
-            ld = seedResult.leads;
-          }
-        } catch (e) {
-          console.error("Historical seed failed (non-fatal):", e);
-        }
-
-        const i = await loadKey(KEYS.interactions(todayKey()), []);
-        setVendors(v); setClients(c); setInteractions(i);
-        setLeads(ld); setDataEntryUsers(de);
         setTemplates(tpl); setTags(tg); setTasks(tk); setQuotas(qt);
+        setDataEntryUsers(de);
       } catch (e) {
-        console.error("App init failed:", e);
-        // Fall back to in-memory seed data so the app at least loads
-        setVendors(SEED_VENDORS);
-        setClients(SEED_CLIENTS);
-        setTemplates(SEED_TEMPLATES);
-        setTags(SEED_TAGS);
+        console.error("Initial load failed:", e);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
+
+  // Load Supabase data when user logs in
+  useEffect(() => {
+    if (!currentUser || currentUser.role === "pending") {
+      setVendors([]); setClients([]); setLeads([]); setInteractions([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        // Vendors = active profiles with role='vendor'
+        const { data: profiles, error: pErr } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("status", "active")
+          .eq("role", "vendor");
+        if (!pErr && profiles) {
+          setVendors(profiles.map(vendorFromProfile));
+        }
+
+        // Clients (RLS auto-filters: vendors see only theirs)
+        const { data: clientsData } = await supabase.from("clients").select("*");
+        if (clientsData) setClients(clientsData.map(clientFromDb));
+
+        // Leads (RLS auto-filters)
+        const { data: leadsData } = await supabase
+          .from("leads")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (leadsData) setLeads(leadsData.map(leadFromDb));
+
+        // Today's interactions (RLS auto-filters)
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const { data: intsData } = await supabase
+          .from("interactions")
+          .select("*")
+          .gte("created_at", startOfToday.toISOString())
+          .order("created_at", { ascending: false });
+        if (intsData) setInteractions(intsData.map(interactionFromDb));
+      } catch (e) {
+        console.error("Failed to load user data:", e);
+      }
+    })();
+  }, [currentUser]);
+
+  // Realtime subscriptions: when data changes anywhere, all clients see updates
+  useEffect(() => {
+    if (!currentUser || currentUser.role === "pending") return;
+
+    const channel = supabase
+      .channel("crm-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, async () => {
+        const { data } = await supabase.from("clients").select("*");
+        if (data) setClients(data.map(clientFromDb));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, async () => {
+        const { data } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+        if (data) setLeads(data.map(leadFromDb));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "interactions" }, async () => {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const { data } = await supabase
+          .from("interactions")
+          .select("*")
+          .gte("created_at", startOfToday.toISOString())
+          .order("created_at", { ascending: false });
+        if (data) setInteractions(data.map(interactionFromDb));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, async () => {
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("status", "active")
+          .eq("role", "vendor");
+        if (data) setVendors(data.map(vendorFromProfile));
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser]);
 
   async function changeLang(next) { setLang(next); await saveKey(KEYS.lang, next); }
   async function changeAdminCreds(newCreds) {
@@ -1332,20 +1472,23 @@ export default function App() {
 
 
   async function logInteraction(payload) {
-    const entry = {
-      id: `i_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      clientId: payload.clientId,
-      vendorId: payload.vendorId,
-      channel: payload.channel || "call",
-      status: payload.status,
-      note: payload.note || "",
-      subReason: payload.subReason || null,
-      scheduledTime: payload.scheduledTime || null,
-      timestamp: Date.now(),
-    };
-    const nextInts = [...interactions, entry];
-    setInteractions(nextInts);
-    await saveKey(KEYS.interactions(todayKey()), nextInts);
+    const dbPayload = interactionToDb(payload);
+    if (!dbPayload.vendor_id) dbPayload.vendor_id = currentUser?.id;
+    if (!dbPayload.channel) dbPayload.channel = "call";
+
+    const { data, error } = await supabase
+      .from("interactions")
+      .insert(dbPayload)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("logInteraction failed:", error);
+      return;
+    }
+    if (data) {
+      setInteractions((prev) => [interactionFromDb(data), ...prev]);
+    }
 
     // Auto-convert lead → customer on first "ordered" call
     if (payload.status === "ordered" && payload.channel !== "text" && payload.channel !== "email") {
@@ -1357,110 +1500,191 @@ export default function App() {
   }
 
   async function convertLeadToCustomer(lead) {
-    const newClient = {
-      id: lead.id, // keep same id so interactions continue to reference it
+    // Insert client (using lead's id so existing interactions continue to match)
+    const { error: cErr } = await supabase.from("clients").insert({
+      id: lead.id,
       name: lead.name,
       phone: lead.phone,
-      vendorId: lead.assignedVendorId,
+      vendor_id: lead.assignedVendorId,
       frequency: "weekly",
-      convertedFromLead: true,
-      convertedAt: Date.now(),
-    };
-    const nextClients = [...clients, newClient];
-    setClients(nextClients);
-    await saveKey(KEYS.clients, nextClients);
+      converted_from_lead: true,
+      converted_at: new Date().toISOString(),
+    });
+    if (cErr) {
+      console.error("Failed to create client from lead:", cErr);
+      return;
+    }
 
-    const nextLeads = leads.map((l) =>
-      l.id === lead.id
-        ? {
-            ...l,
-            status: "converted",
-            convertedAt: Date.now(),
-            history: [...(l.history || []), { action: "converted_to_customer", at: Date.now() }],
-          }
-        : l
-    );
-    setLeads(nextLeads);
-    await saveKey(KEYS.leads, nextLeads);
+    // Mark lead as converted
+    const { error: lErr } = await supabase
+      .from("leads")
+      .update({
+        status: "converted",
+        converted_at: new Date().toISOString(),
+      })
+      .eq("id", lead.id);
+    if (lErr) console.error("Failed to mark lead as converted:", lErr);
   }
 
   async function deleteInteraction(id) {
-    const next = interactions.filter((i) => i.id !== id);
-    setInteractions(next);
-    await saveKey(KEYS.interactions(todayKey()), next);
+    const { error } = await supabase.from("interactions").delete().eq("id", id);
+    if (error) {
+      console.error("deleteInteraction failed:", error);
+      return;
+    }
+    setInteractions((prev) => prev.filter((i) => i.id !== id));
   }
+
   async function updateInteraction(id, updates) {
-    const next = interactions.map((i) => (i.id === id ? { ...i, ...updates } : i));
-    setInteractions(next);
-    await saveKey(KEYS.interactions(todayKey()), next);
+    const dbUpdates = interactionToDb(updates);
+    const { error } = await supabase.from("interactions").update(dbUpdates).eq("id", id);
+    if (error) {
+      console.error("updateInteraction failed:", error);
+      return;
+    }
+    setInteractions((prev) => prev.map((i) => (i.id === id ? { ...i, ...updates } : i)));
   }
-  async function updateVendors(next) { setVendors(next); await saveKey(KEYS.vendors, next); }
-  async function updateClients(next) { setClients(next); await saveKey(KEYS.clients, next); }
+
+  // updateVendors — vendors are now profiles, this just updates local state for legacy code paths
+  async function updateVendors(next) { setVendors(next); }
   async function updateDataEntryUsers(next) { setDataEntryUsers(next); await saveKey(KEYS.dataEntry, next); }
+
+  // updateClients — receives full new array (legacy interface). Diffs and applies to Supabase.
+  async function updateClients(nextClients) {
+    const prevById = new Map(clients.map((c) => [c.id, c]));
+    const nextById = new Map(nextClients.map((c) => [c.id, c]));
+
+    // Removed
+    for (const c of clients) {
+      if (!nextById.has(c.id)) {
+        const { error } = await supabase.from("clients").delete().eq("id", c.id);
+        if (error) console.error("Failed to delete client:", error);
+      }
+    }
+    // Added
+    for (const c of nextClients) {
+      if (!prevById.has(c.id)) {
+        const dbRow = clientToDb(c);
+        // If the local id looks generated (starts with "c_" or non-uuid), let DB generate one
+        const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c.id || "");
+        if (looksLikeUuid) dbRow.id = c.id;
+        const { error } = await supabase.from("clients").insert(dbRow);
+        if (error) console.error("Failed to insert client:", error);
+      }
+    }
+    // Updated
+    for (const c of nextClients) {
+      const prev = prevById.get(c.id);
+      if (!prev) continue;
+      if (JSON.stringify(prev) !== JSON.stringify(c)) {
+        const dbUpdates = clientToDb(c);
+        const { error } = await supabase.from("clients").update(dbUpdates).eq("id", c.id);
+        if (error) console.error("Failed to update client:", error);
+      }
+    }
+    setClients(nextClients);
+  }
 
   // ----- LEAD MANAGEMENT -----
   async function createLead({ name, phone, note, createdBy, status = "pending" }) {
     if (!name?.trim()) return { success: false, error: t.nameRequired };
+
+    let createdByRole = "manager";
+    let createdById = currentUser?.id;
+    if (createdBy && createdBy.includes(":")) {
+      const [role, id] = createdBy.split(":");
+      createdByRole = role;
+      createdById = id;
+    }
+
     const newLead = {
-      id: `l_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
       name: name.trim(),
       phone: (phone || "").trim(),
       note: (note || "").trim(),
-      status, // "pending" | "active" | "rejected" | "converted"
-      assignedVendorId: null,
-      createdBy: createdBy || "manager",
-      createdAt: Date.now(),
-      rejectionNote: null,
-      history: [{ action: "created", by: createdBy || "manager", at: Date.now() }],
+      status,
+      created_by: createdById,
+      created_by_role: createdByRole,
     };
-    const next = [...leads, newLead];
-    setLeads(next);
-    await saveKey(KEYS.leads, next);
-    return { success: true, lead: newLead };
+
+    const { data, error } = await supabase
+      .from("leads")
+      .insert(newLead)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("createLead failed:", error);
+      return { success: false, error: error.message };
+    }
+    if (data) {
+      setLeads((prev) => [leadFromDb(data), ...prev]);
+    }
+    return { success: true, lead: data ? leadFromDb(data) : null };
   }
 
   async function approveLead(leadId, vendorId, approverLabel = "manager") {
-    const next = leads.map((l) =>
-      l.id === leadId
-        ? {
-            ...l,
-            status: "active",
-            assignedVendorId: vendorId,
-            approvedAt: Date.now(),
-            history: [...(l.history || []), { action: "approved_and_assigned", by: approverLabel, vendorId, at: Date.now() }],
-          }
-        : l
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        status: "active",
+        assigned_vendor_id: vendorId,
+        approved_at: new Date().toISOString(),
+      })
+      .eq("id", leadId);
+
+    if (error) {
+      console.error("approveLead failed:", error);
+      return;
+    }
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === leadId
+          ? { ...l, status: "active", assignedVendorId: vendorId, approvedAt: Date.now() }
+          : l
+      )
     );
-    setLeads(next);
-    await saveKey(KEYS.leads, next);
   }
 
   async function rejectLead(leadId, reason, rejecterLabel = "manager") {
-    const next = leads.map((l) =>
-      l.id === leadId
-        ? {
-            ...l,
-            status: "rejected",
-            rejectionNote: reason,
-            rejectedAt: Date.now(),
-            history: [...(l.history || []), { action: "rejected", by: rejecterLabel, reason, at: Date.now() }],
-          }
-        : l
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        status: "rejected",
+        rejection_note: reason,
+        rejected_at: new Date().toISOString(),
+      })
+      .eq("id", leadId);
+
+    if (error) {
+      console.error("rejectLead failed:", error);
+      return;
+    }
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === leadId
+          ? { ...l, status: "rejected", rejectionNote: reason, rejectedAt: Date.now() }
+          : l
+      )
     );
-    setLeads(next);
-    await saveKey(KEYS.leads, next);
   }
 
   async function updateLead(leadId, updates) {
-    const next = leads.map((l) => (l.id === leadId ? { ...l, ...updates } : l));
-    setLeads(next);
-    await saveKey(KEYS.leads, next);
+    const dbUpdates = leadToDb(updates);
+    const { error } = await supabase.from("leads").update(dbUpdates).eq("id", leadId);
+    if (error) {
+      console.error("updateLead failed:", error);
+      return;
+    }
+    setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...updates } : l)));
   }
 
   async function deleteLead(leadId) {
-    const next = leads.filter((l) => l.id !== leadId);
-    setLeads(next);
-    await saveKey(KEYS.leads, next);
+    const { error } = await supabase.from("leads").delete().eq("id", leadId);
+    if (error) {
+      console.error("deleteLead failed:", error);
+      return;
+    }
+    setLeads((prev) => prev.filter((l) => l.id !== leadId));
   }
 
   // ----- TEMPLATES -----
