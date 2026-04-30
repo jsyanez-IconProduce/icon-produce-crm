@@ -4201,9 +4201,13 @@ function CallOutcomesBreakdown({ t, totalCalls, orders, callbacks, noAnswers, pr
 }
 
 function VendorLiveCard({ t, stat, rank }) {
-  const { vendor, contacted, myClients, orders, callbacks, textedIds, emailedIds, rate } = stat;
+  const { vendor, contacted, myClients, orders, callbacks, noAnswers, priceIssues, notInterested, textedIds, emailedIds, rate } = stat;
   const ordersCount = orders.length;
   const callbacksCount = callbacks ? callbacks.length : 0;
+  const noAnswersCount = noAnswers ? noAnswers.length : 0;
+  const priceIssuesCount = priceIssues ? priceIssues.length : 0;
+  const notInterestedCount = notInterested ? notInterested.length : 0;
+
   return (
     <div className="bg-white rounded-2xl p-4 card-shadow">
       <div className="flex items-center justify-between mb-3">
@@ -4221,9 +4225,16 @@ function VendorLiveCard({ t, stat, rank }) {
         <div className="h-full transition-all" style={{ width: `${rate * 100}%`, background: "#73A626" }} />
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5">
-        <VendorStatPill icon={CheckCircle2} value={ordersCount} label={t.ordersWord} color="#73A626" bg="#E8F2D5" />
+      {/* Row 1: Call results */}
+      <div className="grid grid-cols-4 gap-1.5 mb-1.5">
+        <VendorStatPill icon={CheckCircle2} value={ordersCount} label={t.statusOrdered} color="#73A626" bg="#E8F2D5" />
         <VendorStatPill icon={Clock} value={callbacksCount} label={t.statusCallback} color="#5A6B85" bg="#E5EAF2" />
+        <VendorStatPill icon={PhoneOff} value={noAnswersCount} label={t.statusNoAnswer} color="#8B7355" bg="#F0EAE0" />
+        <VendorStatPill icon={XCircle} value={notInterestedCount} label={t.statusNotInterested} color="#9C5757" bg="#F2E2E2" />
+      </div>
+      {/* Row 2: Other contacts + edge cases */}
+      <div className="grid grid-cols-3 gap-1.5">
+        <VendorStatPill icon={DollarSign} value={priceIssuesCount} label={t.statusPriceIssue} color="#B8860B" bg="#FFF5D6" />
         <VendorStatPill icon={MessageCircle} value={textedIds.size} label={t.textChannel} color="#1C5E6E" bg="#D7EDF1" />
         <VendorStatPill icon={Mail} value={emailedIds.size} label={t.emailChannel} color="#5A4A6B" bg="#EAE3F0" />
       </div>
