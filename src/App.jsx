@@ -164,6 +164,23 @@ const T = {
     requestPending: "request pending",
     requestsPending: "requests pending",
 
+    // Quick add task
+    quickAddTask: "Quick add task",
+    taskTitle: "Title",
+    taskTitlePlaceholder: "Task title…",
+    dueDate: "Due date",
+    assignToVendor: "Assign to vendor",
+    optional: "optional",
+    unassigned: "Unassigned",
+    relatedClient: "Related client",
+    noneSelected: "None",
+    notesOptional: "Notes",
+    taskNotePlaceholder: "Additional details…",
+    createTask: "Create task",
+    openTask: "open task",
+    openTasks: "open tasks",
+    noTasks: "No active tasks",
+
     // not interested reasons
     whyNotInterested: "Why not interested?",
     reasonHasVendor: "We already have a vendor",
@@ -595,6 +612,23 @@ const T = {
     approveRemoval: "Aprobar y archivar",
     requestPending: "solicitud pendiente",
     requestsPending: "solicitudes pendientes",
+
+    // Quick add task
+    quickAddTask: "Agregar tarea rápida",
+    taskTitle: "Título",
+    taskTitlePlaceholder: "Título de la tarea…",
+    dueDate: "Fecha límite",
+    assignToVendor: "Asignar a vendedor",
+    optional: "opcional",
+    unassigned: "Sin asignar",
+    relatedClient: "Cliente relacionado",
+    noneSelected: "Ninguno",
+    notesOptional: "Notas",
+    taskNotePlaceholder: "Detalles adicionales…",
+    createTask: "Crear tarea",
+    openTask: "tarea abierta",
+    openTasks: "tareas abiertas",
+    noTasks: "Sin tareas activas",
 
     whyNotInterested: "¿Por qué no le interesa?",
     reasonHasVendor: "Ya tenemos proveedor",
@@ -2594,7 +2628,7 @@ export default function App() {
       )}
 
       {currentUser?.role === "admin" && adminView === "home" && (
-        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} reminders={reminders} clients={clients} onPick={setAdminView} />
+        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} reminders={reminders} clients={clients} vendors={vendors} onCreateTask={createTask} onPick={setAdminView} />
       )}
       {currentUser?.role === "admin" && adminView === "approvals" && (
         <ApprovalsView
@@ -3365,12 +3399,14 @@ function FindEmailPanel({ t, onLookupEmail }) {
 }
 
 // ---------- ADMIN HOME ----------
-function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, onPick }) {
+function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, onCreateTask, onPick }) {
+  const [showQuickTask, setShowQuickTask] = useState(false);
   const pendingCount = (leads || []).filter((l) => l.status === "pending").length;
   const pendingUsersCount = (pendingProfiles || []).length;
   const todayKeyStr = todayKey();
   const overdueTasks = (tasks || []).filter((tk) => !tk.completed && tk.dueDate && tk.dueDate < todayKeyStr).length;
   const todayTasksCount = (tasks || []).filter((tk) => !tk.completed && tk.dueDate === todayKeyStr).length;
+  const openTasksCount = (tasks || []).filter((tk) => !tk.completed).length;
   const archivedCount = (clients || []).filter((c) => c.archived).length;
   const removalRequestsCount = (clients || []).filter((c) => c.removalRequested && !c.archived).length;
 
@@ -3524,13 +3560,27 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             <div>
               <div className="font-semibold">{t.tasks}</div>
               <div className="text-xs text-stone-500">
-                {overdueTasks > 0 ? t.nOverdue(overdueTasks) : todayTasksCount > 0 ? t.nDueToday(todayTasksCount) : t.upcomingTasks}
+                {overdueTasks > 0
+                  ? t.nOverdue(overdueTasks)
+                  : todayTasksCount > 0
+                    ? t.nDueToday(todayTasksCount)
+                    : openTasksCount > 0
+                      ? `${openTasksCount} ${openTasksCount === 1 ? (t.openTask || "open task") : (t.openTasks || "open tasks")}`
+                      : t.noTasks || "No active tasks"}
               </div>
             </div>
           </div>
-          {overdueTasks + todayTasksCount > 0 ? (
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: overdueTasks > 0 ? "#9C5757" : "#5A6B85", color: "white" }}>
-              {overdueTasks + todayTasksCount}
+          {overdueTasks > 0 ? (
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: "#9C5757", color: "white" }}>
+              {overdueTasks}
+            </div>
+          ) : todayTasksCount > 0 ? (
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold" style={{ background: "#5A6B85", color: "white" }}>
+              {todayTasksCount}
+            </div>
+          ) : openTasksCount > 0 ? (
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-medium" style={{ background: "#F0EAE0", color: "#8B7355" }}>
+              {openTasksCount}
             </div>
           ) : (
             <ChevronRight size={18} className="text-stone-400" />
@@ -3602,6 +3652,156 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           </div>
           <ChevronRight size={18} className="text-stone-400" />
         </button>
+      </div>
+
+      {/* Floating Action Button — Quick Add Task */}
+      {onCreateTask && (
+        <button
+          onClick={() => setShowQuickTask(true)}
+          className="fixed bottom-6 right-6 z-30 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-95"
+          style={{ background: BRAND_PURPLE, color: "#fff", boxShadow: "0 4px 12px rgba(95,47,157,0.4)" }}
+          title={t.quickAddTask || "Quick add task"}
+        >
+          <Plus size={24} />
+        </button>
+      )}
+
+      {/* Quick Task Modal */}
+      {showQuickTask && (
+        <QuickTaskModal
+          t={t}
+          vendors={vendors || []}
+          clients={clients || []}
+          onSave={async (payload) => {
+            await onCreateTask(payload);
+            setShowQuickTask(false);
+          }}
+          onCancel={() => setShowQuickTask(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Quick task creation modal — accessible from FAB on home
+function QuickTaskModal({ t, vendors, clients, onSave, onCancel }) {
+  const [title, setTitle] = useState("");
+  const [vendorId, setVendorId] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const visibleClients = vendorId ? clients.filter((c) => c.vendorId === vendorId && !c.archived) : clients.filter((c) => !c.archived);
+
+  async function submit() {
+    if (!title.trim()) return;
+    setSubmitting(true);
+    await onSave({
+      title: title.trim(),
+      dueDate: dueDate || null,
+      vendorId: vendorId || null,
+      clientId: clientId || null,
+      note: note.trim() || null,
+    });
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onCancel}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5">
+              <ListTodo size={12} /> {t.quickAddTask || "Quick add task"}
+            </div>
+            <button onClick={onCancel} className="text-stone-400 hover:text-stone-700 p-1">
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Title */}
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.taskTitle || "Title"}</div>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t.taskTitlePlaceholder || "Task title…"}
+              autoFocus
+              className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
+            />
+          </div>
+
+          {/* Due date */}
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.dueDate || "Due date"}</div>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
+            />
+          </div>
+
+          {/* Vendor (optional) */}
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.assignToVendor || "Assign to vendor"} <span className="text-stone-400 normal-case">({t.optional || "optional"})</span></div>
+            <select
+              value={vendorId}
+              onChange={(e) => { setVendorId(e.target.value); setClientId(""); }}
+              className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
+            >
+              <option value="">{t.unassigned || "Unassigned"}</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Client (optional) */}
+          {visibleClients.length > 0 && (
+            <div className="mb-3">
+              <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.relatedClient || "Related client"} <span className="text-stone-400 normal-case">({t.optional || "optional"})</span></div>
+              <select
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
+              >
+                <option value="">{t.noneSelected || "None"}</option>
+                {visibleClients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Note (optional) */}
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.notesOptional || "Notes"} <span className="text-stone-400 normal-case">({t.optional || "optional"})</span></div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={t.taskNotePlaceholder || "Additional details…"}
+              rows={2}
+              className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg bg-stone-100 text-sm font-medium text-stone-700">
+              {t.cancel}
+            </button>
+            <button
+              onClick={submit}
+              disabled={submitting || !title.trim()}
+              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: BRAND_PURPLE }}
+            >
+              {submitting ? (t.saving || "Saving…") : (t.createTask || "Create task")}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
