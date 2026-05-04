@@ -1143,6 +1143,103 @@ function reminderFromDb(row) {
   };
 }
 
+// ---------- FASE 3 MAPPERS ----------
+
+function taskFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || "",
+    note: row.description || "", // legacy alias for backward compat
+    vendorId: row.vendor_id,
+    clientId: row.client_id,
+    dueDate: row.due_date,
+    dueTime: null, // legacy field, not in DB
+    priority: row.priority || "normal",
+    completed: row.completed || false,
+    completedAt: row.completed_at ? new Date(row.completed_at).getTime() : null,
+    createdBy: row.created_by,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+function taskToDb(t) {
+  const out = {};
+  if (t.title !== undefined) out.title = t.title;
+  // Accept both description (new) and note (legacy)
+  if (t.description !== undefined) out.description = t.description;
+  else if (t.note !== undefined) out.description = t.note;
+  if (t.vendorId !== undefined) out.vendor_id = t.vendorId;
+  if (t.clientId !== undefined) out.client_id = t.clientId;
+  if (t.dueDate !== undefined) out.due_date = t.dueDate;
+  if (t.priority !== undefined) out.priority = t.priority;
+  if (t.completed !== undefined) out.completed = t.completed;
+  if (t.completedAt !== undefined) out.completed_at = t.completedAt ? new Date(t.completedAt).toISOString() : null;
+  return out;
+}
+
+function templateFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    channel: row.channel,
+    subject: row.subject || "",
+    body: row.body || "",
+    createdBy: row.created_by,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+function templateToDb(t) {
+  const out = {};
+  if (t.name !== undefined) out.name = t.name;
+  if (t.channel !== undefined) out.channel = t.channel;
+  if (t.subject !== undefined) out.subject = t.subject;
+  if (t.body !== undefined) out.body = t.body;
+  return out;
+}
+
+function tagFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color || "#5F2F9D",
+    createdBy: row.created_by,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+function tagToDb(tg) {
+  const out = {};
+  if (tg.name !== undefined) out.name = tg.name;
+  if (tg.color !== undefined) out.color = tg.color;
+  return out;
+}
+
+function quotaFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    vendorId: row.vendor_id,
+    periodType: row.period_type || "monthly",
+    targetCalls: row.target_calls || 0,
+    targetOrders: row.target_orders || 0,
+    targetRevenue: Number(row.target_revenue) || 0,
+    createdBy: row.created_by,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : Date.now(),
+  };
+}
+function quotaToDb(q) {
+  const out = {};
+  if (q.vendorId !== undefined) out.vendor_id = q.vendorId;
+  if (q.periodType !== undefined) out.period_type = q.periodType;
+  if (q.targetCalls !== undefined) out.target_calls = q.targetCalls;
+  if (q.targetOrders !== undefined) out.target_orders = q.targetOrders;
+  if (q.targetRevenue !== undefined) out.target_revenue = q.targetRevenue;
+  return out;
+}
+
 
 function dateKeyFor(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1415,22 +1512,8 @@ export default function App() {
         const savedLang = await loadKey(KEYS.lang, "en");
         if (savedLang === "en" || savedLang === "es") setLang(savedLang);
 
-        // Templates, tags, tasks, quotas still in localStorage for now (Fase 3)
-        let tpl = await loadKey(KEYS.templates, null);
-        if (!tpl || tpl.length === 0) {
-          tpl = SEED_TEMPLATES;
-          await saveKey(KEYS.templates, tpl);
-        }
-        let tg = await loadKey(KEYS.tags, null);
-        if (!tg || tg.length === 0) {
-          tg = SEED_TAGS;
-          await saveKey(KEYS.tags, tg);
-        }
-        const tk = await loadKey(KEYS.tasks, []);
-        const qt = await loadKey(KEYS.quotas, {});
+        // Data entry users still in localStorage (legacy)
         const de = await loadKey(KEYS.dataEntry, []);
-
-        setTemplates(tpl); setTags(tg); setTasks(tk); setQuotas(qt);
         setDataEntryUsers(de);
       } catch (e) {
         console.error("Initial load failed:", e);
@@ -1479,6 +1562,46 @@ export default function App() {
           .gte("created_at", startOfToday.toISOString())
           .order("created_at", { ascending: false });
         if (intsData) setInteractions(intsData.map(interactionFromDb));
+
+        // ----- FASE 3: Load tasks, templates, tags, quotas from Supabase -----
+
+        // Tasks (RLS: managers see all, vendors see own)
+        const { data: tasksData } = await supabase
+          .from("tasks")
+          .select("*")
+          .order("due_date", { ascending: true, nullsFirst: false });
+        if (tasksData) setTasks(tasksData.map(taskFromDb));
+
+        // Templates (org-wide, all active users see them)
+        const { data: tplData } = await supabase
+          .from("templates")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (tplData) setTemplates(tplData.map(templateFromDb));
+
+        // Tags (org-wide)
+        const { data: tagsData } = await supabase
+          .from("tags")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (tagsData) setTags(tagsData.map(tagFromDb));
+
+        // Quotas (RLS: managers see all, vendors see own)
+        const { data: quotasData } = await supabase
+          .from("quotas")
+          .select("*");
+        if (quotasData) {
+          // Convert array to object keyed by vendorId for compatibility with existing code
+          const qMap = {};
+          quotasData.forEach((row) => {
+            const q = quotaFromDb(row);
+            // Add legacy fields for backward compat with existing UI code
+            q.ordersGoal = q.targetOrders;
+            q.callsGoal = q.targetCalls;
+            qMap[q.vendorId] = q;
+          });
+          setQuotas(qMap);
+        }
       } catch (e) {
         console.error("Failed to load user data:", e);
       }
@@ -1523,6 +1646,40 @@ export default function App() {
           .select("*")
           .order("scheduled_for", { ascending: true });
         if (data) setReminders(data.map(reminderFromDb));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, async () => {
+        const { data } = await supabase
+          .from("tasks")
+          .select("*")
+          .order("due_date", { ascending: true, nullsFirst: false });
+        if (data) setTasks(data.map(taskFromDb));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "templates" }, async () => {
+        const { data } = await supabase
+          .from("templates")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (data) setTemplates(data.map(templateFromDb));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tags" }, async () => {
+        const { data } = await supabase
+          .from("tags")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (data) setTags(data.map(tagFromDb));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "quotas" }, async () => {
+        const { data } = await supabase.from("quotas").select("*");
+        if (data) {
+          const qMap = {};
+          data.forEach((row) => {
+            const q = quotaFromDb(row);
+            q.ordersGoal = q.targetOrders;
+            q.callsGoal = q.targetCalls;
+            qMap[q.vendorId] = q;
+          });
+          setQuotas(qMap);
+        }
       })
       .subscribe();
 
@@ -2177,47 +2334,177 @@ export default function App() {
   }
 
   // ----- TEMPLATES -----
-  async function updateTemplates(next) { setTemplates(next); await saveKey(KEYS.templates, next); }
+  // Legacy interface: receives full new array, diffs and applies to Supabase
+  async function updateTemplates(nextTemplates) {
+    const prevById = new Map(templates.map((tp) => [tp.id, tp]));
+    const nextById = new Map(nextTemplates.map((tp) => [tp.id, tp]));
+
+    // Removed
+    for (const tp of templates) {
+      if (!nextById.has(tp.id)) {
+        const { error } = await supabase.from("templates").delete().eq("id", tp.id);
+        if (error) console.error("Failed to delete template:", error);
+      }
+    }
+    // Added
+    for (const tp of nextTemplates) {
+      if (!prevById.has(tp.id)) {
+        const dbRow = templateToDb(tp);
+        const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tp.id || "");
+        if (looksLikeUuid) dbRow.id = tp.id;
+        const { error } = await supabase.from("templates").insert(dbRow);
+        if (error) console.error("Failed to insert template:", error);
+      }
+    }
+    // Updated
+    for (const tp of nextTemplates) {
+      const prev = prevById.get(tp.id);
+      if (!prev) continue;
+      if (JSON.stringify(prev) !== JSON.stringify(tp)) {
+        const dbUpdates = templateToDb(tp);
+        const { error } = await supabase.from("templates").update(dbUpdates).eq("id", tp.id);
+        if (error) console.error("Failed to update template:", error);
+      }
+    }
+    setTemplates(nextTemplates);
+  }
 
   // ----- TASKS -----
   async function createTask({ title, dueDate, dueTime, clientId, note, vendorId }) {
     const newTask = {
-      id: `tk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      title: title.trim(),
-      dueDate, // "YYYY-MM-DD"
-      dueTime: dueTime || null,
-      clientId: clientId || null,
-      vendorId: vendorId || null,
-      note: (note || "").trim(),
+      title: (title || "").trim(),
+      due_date: dueDate || null,
+      client_id: clientId || null,
+      vendor_id: vendorId || null,
+      description: (note || "").trim() || null,
+      priority: "normal",
       completed: false,
-      createdAt: Date.now(),
+      created_by: currentUser?.id || null,
     };
-    const next = [...tasks, newTask];
-    setTasks(next);
-    await saveKey(KEYS.tasks, next);
-    return newTask;
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert(newTask)
+      .select()
+      .single();
+    if (error) {
+      console.error("createTask failed:", error);
+      return null;
+    }
+    if (data) {
+      const mapped = taskFromDb(data);
+      setTasks((prev) => [...prev, mapped]);
+      return mapped;
+    }
+    return null;
   }
   async function updateTask(id, updates) {
-    const next = tasks.map((t) => (t.id === id ? { ...t, ...updates } : t));
-    setTasks(next);
-    await saveKey(KEYS.tasks, next);
+    const dbUpdates = taskToDb(updates);
+    const { error } = await supabase.from("tasks").update(dbUpdates).eq("id", id);
+    if (error) {
+      console.error("updateTask failed:", error);
+      return;
+    }
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   }
   async function deleteTask(id) {
-    const next = tasks.filter((t) => t.id !== id);
-    setTasks(next);
-    await saveKey(KEYS.tasks, next);
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    if (error) {
+      console.error("deleteTask failed:", error);
+      return;
+    }
+    setTasks((prev) => prev.filter((t) => t.id !== id));
   }
 
   // ----- QUOTAS -----
-  // quotas shape: { [vendorId]: { ordersGoal, callsGoal } }
+  // Legacy interface: setQuotaForVendor with orders+calls goal numbers
+  // Internally maps to the quotas table (one row per vendor)
   async function setQuotaForVendor(vendorId, ordersGoal, callsGoal) {
-    const next = { ...quotas, [vendorId]: { ordersGoal: Number(ordersGoal) || 0, callsGoal: Number(callsGoal) || 0 } };
-    setQuotas(next);
-    await saveKey(KEYS.quotas, next);
+    const ordersInt = Number(ordersGoal) || 0;
+    const callsInt = Number(callsGoal) || 0;
+
+    // Check if quota row exists for this vendor
+    const existing = quotas[vendorId];
+    if (existing && existing.id) {
+      // Update existing
+      const { error } = await supabase
+        .from("quotas")
+        .update({
+          target_orders: ordersInt,
+          target_calls: callsInt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      if (error) {
+        console.error("Failed to update quota:", error);
+        return;
+      }
+      setQuotas((prev) => ({
+        ...prev,
+        [vendorId]: { ...prev[vendorId], targetOrders: ordersInt, targetCalls: callsInt, ordersGoal: ordersInt, callsGoal: callsInt },
+      }));
+    } else {
+      // Create new
+      const { data, error } = await supabase
+        .from("quotas")
+        .insert({
+          vendor_id: vendorId,
+          period_type: "monthly",
+          target_orders: ordersInt,
+          target_calls: callsInt,
+          target_revenue: 0,
+          created_by: currentUser?.id || null,
+        })
+        .select()
+        .single();
+      if (error) {
+        console.error("Failed to create quota:", error);
+        return;
+      }
+      if (data) {
+        const mapped = quotaFromDb(data);
+        // Add legacy fields for backward compat with existing UI code
+        mapped.ordersGoal = ordersInt;
+        mapped.callsGoal = callsInt;
+        setQuotas((prev) => ({ ...prev, [vendorId]: mapped }));
+      }
+    }
   }
 
   // ----- TAGS -----
-  async function updateTags(next) { setTags(next); await saveKey(KEYS.tags, next); }
+  // Legacy interface: receives full new array, diffs and applies to Supabase
+  async function updateTags(nextTags) {
+    const prevById = new Map(tags.map((tg) => [tg.id, tg]));
+    const nextById = new Map(nextTags.map((tg) => [tg.id, tg]));
+
+    // Removed
+    for (const tg of tags) {
+      if (!nextById.has(tg.id)) {
+        const { error } = await supabase.from("tags").delete().eq("id", tg.id);
+        if (error) console.error("Failed to delete tag:", error);
+      }
+    }
+    // Added
+    for (const tg of nextTags) {
+      if (!prevById.has(tg.id)) {
+        const dbRow = tagToDb(tg);
+        const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tg.id || "");
+        if (looksLikeUuid) dbRow.id = tg.id;
+        const { error } = await supabase.from("tags").insert(dbRow);
+        if (error) console.error("Failed to insert tag:", error);
+      }
+    }
+    // Updated
+    for (const tg of nextTags) {
+      const prev = prevById.get(tg.id);
+      if (!prev) continue;
+      if (JSON.stringify(prev) !== JSON.stringify(tg)) {
+        const dbUpdates = tagToDb(tg);
+        const { error } = await supabase.from("tags").update(dbUpdates).eq("id", tg.id);
+        if (error) console.error("Failed to update tag:", error);
+      }
+    }
+    setTags(nextTags);
+  }
 
   if (loading || !splashDone) {
     return <Splash />;
