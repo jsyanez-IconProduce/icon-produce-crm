@@ -2648,7 +2648,8 @@ export default function App() {
           vendors={vendors}
           dataEntryUsers={dataEntryUsers}
           leads={leads}
-          onCreate={(payload) => createLead({ ...payload, createdBy: "manager", status: "pending" })}
+          currentUser={currentUser}
+          onCreate={(payload) => createLead({ ...payload, createdBy: `manager:${currentUser.id}`, status: "pending" })}
           onApprove={approveLead}
           onReject={rejectLead}
           onUpdate={updateLead}
@@ -4519,7 +4520,7 @@ function PendingUserCard({ profile, onApprove, onReject }) {
 }
 
 // ---------- LEADS VIEW (Manager) ----------
-function LeadsView({ t, vendors, dataEntryUsers, leads, onCreate, onApprove, onReject, onUpdate, onDelete, onBack }) {
+function LeadsView({ t, vendors, dataEntryUsers, leads, currentUser, onCreate, onApprove, onReject, onUpdate, onDelete, onBack }) {
   const [tab, setTab] = useState("pending");
   const [creating, setCreating] = useState(false);
 
@@ -4565,13 +4566,14 @@ function LeadsView({ t, vendors, dataEntryUsers, leads, onCreate, onApprove, onR
           leads={pending}
           vendors={vendors}
           dataEntryUsers={dataEntryUsers}
+          currentUser={currentUser}
           onApprove={onApprove}
           onReject={onReject}
           onDelete={onDelete}
         />
       )}
-      {tab === "active" && <ActiveLeadsList t={t} leads={active} vendors={vendors} dataEntryUsers={dataEntryUsers} onDelete={onDelete} />}
-      {tab === "rejected" && <RejectedLeadsList t={t} leads={rejected} vendors={vendors} dataEntryUsers={dataEntryUsers} onDelete={onDelete} />}
+      {tab === "active" && <ActiveLeadsList t={t} leads={active} vendors={vendors} dataEntryUsers={dataEntryUsers} currentUser={currentUser} onDelete={onDelete} />}
+      {tab === "rejected" && <RejectedLeadsList t={t} leads={rejected} vendors={vendors} dataEntryUsers={dataEntryUsers} currentUser={currentUser} onDelete={onDelete} />}
     </div>
   );
 }
@@ -4623,39 +4625,68 @@ function CreateLeadForm({ t, onCreate, onClose }) {
   );
 }
 
-function creatorLabel(createdBy, vendors, dataEntryUsers, t) {
-  if (!createdBy || createdBy === "manager") return t.roleManager;
+function creatorLabel(createdBy, vendors, dataEntryUsers, t, currentUser) {
+  if (!createdBy) return t.roleManager;
+
+  // Plain string "manager" (legacy format from before Fase 2)
+  if (createdBy === "manager") return t.roleManager;
+
+  // Format with role:uuid (post-Fase 2)
+  if (createdBy.includes(":")) {
+    const [role, id] = createdBy.split(":");
+    if (role === "manager") {
+      // Look up manager by id — could be the current user or another manager
+      // The vendors array holds active vendors, but managers aren't there.
+      // If currentUser matches, use their name. Otherwise show generic.
+      if (currentUser && currentUser.id === id) {
+        return `${currentUser.name || currentUser.email || t.roleManager} (${t.roleManager})`;
+      }
+      return t.roleManager;
+    }
+    if (role === "vendor") {
+      const v = (vendors || []).find((x) => x.id === id);
+      return v ? `${v.name} (${t.roleVendor})` : t.roleVendor;
+    }
+    if (role === "data_entry") {
+      const u = (dataEntryUsers || []).find((x) => x.id === id);
+      return u ? `${u.name} (${t.roleDataEntry})` : t.roleDataEntry;
+    }
+  }
+
+  // Legacy formats without colons
   if (createdBy.startsWith("vendor:")) {
     const id = createdBy.split(":")[1];
-    const v = vendors.find((x) => x.id === id);
+    const v = (vendors || []).find((x) => x.id === id);
     return v ? `${v.name} (${t.roleVendor})` : t.roleVendor;
   }
   if (createdBy.startsWith("data_entry:")) {
     const id = createdBy.split(":")[1];
-    const u = dataEntryUsers.find((x) => x.id === id);
+    const u = (dataEntryUsers || []).find((x) => x.id === id);
     return u ? `${u.name} (${t.roleDataEntry})` : t.roleDataEntry;
   }
-  return createdBy;
+
+  // Fallback: never show raw UUID
+  return t.roleManager;
 }
 
-function PendingLeadsList({ t, leads, vendors, dataEntryUsers, onApprove, onReject, onDelete }) {
+function PendingLeadsList({ t, leads, vendors, dataEntryUsers, currentUser, onApprove, onReject, onDelete }) {
   if (leads.length === 0) {
     return <div className="text-center py-12 text-stone-500 text-sm">{t.noPending}</div>;
   }
   return (
     <div className="space-y-3">
       {leads.map((lead) => (
-        <PendingLeadCard key={lead.id} t={t} lead={lead} vendors={vendors} dataEntryUsers={dataEntryUsers} onApprove={onApprove} onReject={onReject} onDelete={onDelete} />
+        <PendingLeadCard key={lead.id} t={t} lead={lead} vendors={vendors} dataEntryUsers={dataEntryUsers} currentUser={currentUser} onApprove={onApprove} onReject={onReject} onDelete={onDelete} />
       ))}
     </div>
   );
 }
 
-function PendingLeadCard({ t, lead, vendors, dataEntryUsers, onApprove, onReject, onDelete }) {
+function PendingLeadCard({ t, lead, vendors, dataEntryUsers, currentUser, onApprove, onReject, onDelete }) {
   const [mode, setMode] = useState(null); // null | "approve" | "reject"
   const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
   const [reason, setReason] = useState("");
-  const creator = creatorLabel(lead.createdBy, vendors, dataEntryUsers, t);
+  const creator = creatorLabel(lead.createdBy, vendors, dataEntryUsers, t, currentUser);
 
   return (
     <div className="bg-white rounded-2xl p-4 card-shadow" style={{ borderLeft: "3px solid #F5D785" }}>
@@ -4742,7 +4773,7 @@ function PendingLeadCard({ t, lead, vendors, dataEntryUsers, onApprove, onReject
   );
 }
 
-function ActiveLeadsList({ t, leads, vendors, dataEntryUsers, onDelete }) {
+function ActiveLeadsList({ t, leads, vendors, dataEntryUsers, currentUser, onDelete }) {
   if (leads.length === 0) {
     return <div className="text-center py-12 text-stone-500 text-sm">{t.noActiveLeads}</div>;
   }
@@ -4750,7 +4781,7 @@ function ActiveLeadsList({ t, leads, vendors, dataEntryUsers, onDelete }) {
     <div className="space-y-3">
       {leads.map((lead) => {
         const vendor = vendors.find((v) => v.id === lead.assignedVendorId);
-        const creator = creatorLabel(lead.createdBy, vendors, dataEntryUsers, t);
+        const creator = creatorLabel(lead.createdBy, vendors, dataEntryUsers, t, currentUser);
         return (
           <div key={lead.id} className="bg-white rounded-2xl p-4 card-shadow" style={{ borderLeft: "3px solid #2D5A3D" }}>
             <div className="flex items-start justify-between gap-2">
@@ -4772,14 +4803,14 @@ function ActiveLeadsList({ t, leads, vendors, dataEntryUsers, onDelete }) {
   );
 }
 
-function RejectedLeadsList({ t, leads, vendors, dataEntryUsers, onDelete }) {
+function RejectedLeadsList({ t, leads, vendors, dataEntryUsers, currentUser, onDelete }) {
   if (leads.length === 0) {
     return <div className="text-center py-12 text-stone-500 text-sm">{t.noRejected}</div>;
   }
   return (
     <div className="space-y-3">
       {leads.map((lead) => {
-        const creator = creatorLabel(lead.createdBy, vendors, dataEntryUsers, t);
+        const creator = creatorLabel(lead.createdBy, vendors, dataEntryUsers, t, currentUser);
         return (
           <div key={lead.id} className="bg-white rounded-2xl p-4 card-shadow" style={{ borderLeft: "3px solid #9C5757" }}>
             <div className="flex items-start justify-between gap-2">
