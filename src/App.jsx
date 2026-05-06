@@ -4593,6 +4593,32 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           <ChevronRight size={18} className="opacity-70" />
         </button>
 
+        <button
+          onClick={() => onPick("insights")}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "linear-gradient(135deg, #5F2F9D 0%, #7B4DBF 100%)", color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <BarChart3 size={20} />
+            </div>
+            <div>
+              <div className="font-semibold">{t.salesInsights || "Sales Insights"}</div>
+              <div className="text-xs opacity-80">{t.salesInsightsTeamSub || "Team-wide ordering patterns"}</div>
+            </div>
+          </div>
+          <ChevronRight size={18} className="opacity-90" />
+        </button>
+
+        <WeeklyReportButton
+          t={t}
+          scope="manager"
+          scopeName="Icon Produce"
+          vendors={vendors}
+          clients={clients}
+          tasks={tasks}
+        />
+
         {/* Quick action row — fast access to common manager tasks */}
         <div className="grid grid-cols-3 gap-2">
           <button
@@ -4632,32 +4658,6 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             </div>
           </button>
         </div>
-
-        <button
-          onClick={() => onPick("insights")}
-          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
-          style={{ background: "linear-gradient(135deg, #5F2F9D 0%, #7B4DBF 100%)", color: "white" }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
-              <BarChart3 size={20} />
-            </div>
-            <div>
-              <div className="font-semibold">{t.salesInsights || "Sales Insights"}</div>
-              <div className="text-xs opacity-80">{t.salesInsightsTeamSub || "Team-wide ordering patterns"}</div>
-            </div>
-          </div>
-          <ChevronRight size={18} className="opacity-90" />
-        </button>
-
-        <WeeklyReportButton
-          t={t}
-          scope="manager"
-          scopeName="Icon Produce"
-          vendors={vendors}
-          clients={clients}
-          tasks={tasks}
-        />
         <button
           onClick={() => onPick("leads")}
           className="w-full text-left bg-white rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
