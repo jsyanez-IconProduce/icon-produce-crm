@@ -186,6 +186,33 @@ const T = {
     salesInsightsTagline: "See who orders on which days",
     salesInsightsSub: "Track your customer ordering patterns across all history",
     salesInsightsTeamSub: "Team-wide ordering patterns",
+    weeklyReport: "Weekly Report",
+    weeklyReportSub: "Download last 7 days as PDF",
+    generatingPdf: "Generating PDF…",
+    fullTeam: "Full team report",
+    individual: "Individual",
+    executiveSummary: "Executive Summary",
+    calls: "Calls",
+    uniqueContacted: "Unique contacted",
+    uniqueOrdered: "Unique ordered",
+    vsLastWeek: "vs. last week",
+    moreOrders: "more orders",
+    fewerOrders: "fewer orders",
+    same: "same as last week",
+    dayByDayActivity: "Day-by-day activity",
+    vendorRanking: "Vendor ranking",
+    topClients: "Top performing clients",
+    topClientsHelper: "Most orders placed this week",
+    atRiskClients: "At-risk clients",
+    atRiskHelper: "Ordered last week but not this week — worth reaching out",
+    outstandingTasks: "Outstanding tasks",
+    overdue: "Overdue",
+    dueToday: "Due today",
+    upcoming: "Upcoming",
+    interactionBreakdown: "Interaction breakdown",
+    generatedOn: "Generated on",
+    page: "Page",
+    order: "order",
     viewingFor: "Viewing for",
     allVendors: "All vendors",
     showingDataFor: "Showing data for",
@@ -683,6 +710,33 @@ const T = {
     salesInsightsTagline: "Ver quién ordena qué días",
     salesInsightsSub: "Sigue los patrones de pedidos de tus clientes en todo el historial",
     salesInsightsTeamSub: "Patrones de pedidos del equipo completo",
+    weeklyReport: "Reporte Semanal",
+    weeklyReportSub: "Descarga los últimos 7 días como PDF",
+    generatingPdf: "Generando PDF…",
+    fullTeam: "Reporte del equipo completo",
+    individual: "Individual",
+    executiveSummary: "Resumen Ejecutivo",
+    calls: "Llamadas",
+    uniqueContacted: "Contactados únicos",
+    uniqueOrdered: "Ordenaron únicos",
+    vsLastWeek: "vs. semana pasada",
+    moreOrders: "más pedidos",
+    fewerOrders: "menos pedidos",
+    same: "igual que la semana pasada",
+    dayByDayActivity: "Actividad día por día",
+    vendorRanking: "Ranking de vendedores",
+    topClients: "Mejores clientes",
+    topClientsHelper: "Más pedidos esta semana",
+    atRiskClients: "Clientes en riesgo",
+    atRiskHelper: "Ordenaron la semana pasada pero no esta — vale la pena contactar",
+    outstandingTasks: "Tareas pendientes",
+    overdue: "Vencidas",
+    dueToday: "Para hoy",
+    upcoming: "Próximas",
+    interactionBreakdown: "Desglose de interacciones",
+    generatedOn: "Generado el",
+    page: "Página",
+    order: "pedido",
     viewingFor: "Ver datos de",
     allVendors: "Todo el equipo",
     showingDataFor: "Mostrando datos de",
@@ -1414,6 +1468,541 @@ async function loadAllInteractions() {
     return [];
   }
   return (data || []).map(interactionFromDb);
+}
+
+// ============================================
+// WEEKLY REPORT PDF GENERATION
+// ============================================
+//
+// generateWeeklyReportPDF computes the past 7 days of activity for the given
+// scope (manager = whole team, vendor = own activity) and produces a styled
+// PDF that downloads to the user's device.
+//
+// The PDF includes:
+//   1. Header with brand + date range
+//   2. Executive summary (totals, comparison vs previous week)
+//   3. Day-by-day activity breakdown (table)
+//   4. Per-vendor ranking (manager only)
+//   5. Top performing clients
+//   6. At-risk clients (recurring but missed)
+//   7. Outstanding tasks
+//   8. Day-of-week patterns
+
+async function generateWeeklyReportPDF({
+  scope, // "manager" | "vendor"
+  scopeName, // company or vendor name
+  vendors,
+  clients,
+  tasks,
+  vendorIdFilter, // null for manager, vendorId for vendor
+  t,
+}) {
+  // Lazy-import jsPDF so we don't load it on every page render
+  const { default: jsPDF } = await import("jspdf");
+
+  // ------- Date range: last 7 days ending today -------
+  const now = new Date();
+  const endDate = new Date(now);
+  endDate.setHours(23, 59, 59, 999);
+  const startDate = new Date(now);
+  startDate.setDate(now.getDate() - 6);
+  startDate.setHours(0, 0, 0, 0);
+  const prevStart = new Date(startDate);
+  prevStart.setDate(prevStart.getDate() - 7);
+  const prevEnd = new Date(endDate);
+  prevEnd.setDate(prevEnd.getDate() - 7);
+
+  // ------- Load data -------
+  // Last 14 days of interactions: current week + previous week for comparison
+  const allInts = await loadInteractionsForDays(14, false);
+
+  // Filter by scope
+  let scopedClients = (clients || []).filter((c) => !c.archived);
+  let scopedInts = allInts;
+  let scopedVendors = vendors || [];
+  if (scope === "vendor" && vendorIdFilter) {
+    scopedClients = scopedClients.filter((c) => c.vendorId === vendorIdFilter);
+    scopedInts = allInts.filter((i) => i.vendorId === vendorIdFilter);
+    scopedVendors = scopedVendors.filter((v) => v.id === vendorIdFilter);
+  }
+
+  const currentWeekInts = scopedInts.filter((i) => {
+    const ts = i.timestamp || 0;
+    return ts >= startDate.getTime() && ts <= endDate.getTime();
+  });
+  const prevWeekInts = scopedInts.filter((i) => {
+    const ts = i.timestamp || 0;
+    return ts >= prevStart.getTime() && ts <= prevEnd.getTime();
+  });
+
+  // ------- Compute metrics -------
+  const callInts = currentWeekInts.filter((i) => (i.channel || "call") === "call");
+  const orderedInts = callInts.filter((i) => i.status === "ordered");
+  const callbackInts = callInts.filter((i) => i.status === "callback");
+  const noAnswerInts = callInts.filter((i) => i.status === "no_answer");
+  const notInterestedInts = callInts.filter((i) => i.status === "not_interested");
+  const priceIssueInts = callInts.filter((i) => i.status === "price_issue");
+  const textInts = currentWeekInts.filter((i) => i.channel === "text");
+  const emailInts = currentWeekInts.filter((i) => i.channel === "email");
+
+  const prevCallInts = prevWeekInts.filter((i) => (i.channel || "call") === "call");
+  const prevOrderedInts = prevCallInts.filter((i) => i.status === "ordered");
+
+  const uniqueClientsContacted = new Set(callInts.map((i) => i.clientId)).size;
+  const uniqueClientsOrdered = new Set(orderedInts.map((i) => i.clientId)).size;
+  const conversionRate = callInts.length > 0 ? (orderedInts.length / callInts.length) * 100 : 0;
+  const prevConversionRate = prevCallInts.length > 0 ? (prevOrderedInts.length / prevCallInts.length) * 100 : 0;
+
+  // ------- Day-by-day breakdown -------
+  const dowLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayBuckets = Array.from({ length: 7 }, (_, idx) => ({
+    label: dowLabels[idx],
+    calls: 0, orders: 0, callbacks: 0,
+  }));
+  callInts.forEach((i) => {
+    const d = new Date(i.timestamp || 0);
+    const dow = d.getDay();
+    dayBuckets[dow].calls++;
+    if (i.status === "ordered") dayBuckets[dow].orders++;
+    else if (i.status === "callback") dayBuckets[dow].callbacks++;
+  });
+
+  // ------- Per-vendor breakdown (manager only) -------
+  const vendorStats = scopedVendors.map((v) => {
+    const vInts = currentWeekInts.filter((i) => i.vendorId === v.id);
+    const vCalls = vInts.filter((i) => (i.channel || "call") === "call");
+    const vOrders = vCalls.filter((i) => i.status === "ordered");
+    const vClients = scopedClients.filter((c) => c.vendorId === v.id);
+    return {
+      name: v.name,
+      calls: vCalls.length,
+      orders: vOrders.length,
+      conversion: vCalls.length > 0 ? (vOrders.length / vCalls.length) * 100 : 0,
+      uniqueOrdered: new Set(vOrders.map((i) => i.clientId)).size,
+      totalClients: vClients.length,
+    };
+  }).sort((a, b) => b.orders - a.orders);
+
+  // ------- Top clients (most orders this week) -------
+  const ordersByClient = new Map();
+  orderedInts.forEach((i) => {
+    ordersByClient.set(i.clientId, (ordersByClient.get(i.clientId) || 0) + 1);
+  });
+  const topClients = Array.from(ordersByClient.entries())
+    .map(([clientId, count]) => {
+      const client = scopedClients.find((c) => c.id === clientId);
+      return { name: client?.name || "Unknown", phone: client?.phone || "", count };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  // ------- At-risk clients: ordered last week but NOT this week -------
+  const orderedThisWeek = new Set(orderedInts.map((i) => i.clientId));
+  const orderedLastWeek = new Set(
+    prevWeekInts.filter((i) => i.status === "ordered").map((i) => i.clientId)
+  );
+  const atRiskClients = [];
+  orderedLastWeek.forEach((clientId) => {
+    if (!orderedThisWeek.has(clientId)) {
+      const client = scopedClients.find((c) => c.id === clientId);
+      if (client) atRiskClients.push({ name: client.name, phone: client.phone || "" });
+    }
+  });
+
+  // ------- Outstanding tasks (incomplete) -------
+  const todayKeyStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const scopedTasks = (tasks || []).filter((tk) => {
+    if (tk.completed) return false;
+    if (scope === "vendor" && vendorIdFilter && tk.vendorId !== vendorIdFilter) return false;
+    return true;
+  });
+  const overdueTasks = scopedTasks.filter((tk) => tk.dueDate && tk.dueDate < todayKeyStr);
+  const todayTasks = scopedTasks.filter((tk) => tk.dueDate === todayKeyStr);
+  const upcomingTasks = scopedTasks.filter((tk) => tk.dueDate && tk.dueDate > todayKeyStr);
+
+  // ============================================
+  // BUILD THE PDF
+  // ============================================
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 50;
+  let y = margin;
+
+  // Brand color in RGB
+  const PURPLE = [95, 47, 157];
+  const PURPLE_LIGHT = [240, 230, 250];
+  const STONE_TEXT = [60, 55, 50];
+  const STONE_LIGHT = [140, 130, 120];
+  const GREEN = [115, 166, 38];
+  const RED = [156, 87, 87];
+  const AMBER = [184, 134, 11];
+
+  function addPageIfNeeded(spaceNeeded = 80) {
+    if (y + spaceNeeded > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  }
+
+  function setColor(rgb) { doc.setTextColor(rgb[0], rgb[1], rgb[2]); }
+  function setFill(rgb) { doc.setFillColor(rgb[0], rgb[1], rgb[2]); }
+
+  function fmtDate(d) {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  function fmtPct(n) { return `${n.toFixed(1)}%`; }
+
+  // ------- HEADER -------
+  setFill(PURPLE);
+  doc.rect(0, 0, pageWidth, 90, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.text("ICON PRODUCE LLC", margin, 40);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text(t.weeklyReport || "Weekly Sales Report", margin, 60);
+  doc.setFontSize(9);
+  doc.text(`${fmtDate(startDate)} — ${fmtDate(endDate)}`, margin, 76);
+
+  // Scope label on right
+  doc.setFontSize(9);
+  const scopeLabel = scope === "manager"
+    ? (t.fullTeam || "Full team report")
+    : `${scopeName} (${t.individual || "Individual"})`;
+  const scopeWidth = doc.getTextWidth(scopeLabel);
+  doc.text(scopeLabel, pageWidth - margin - scopeWidth, 76);
+
+  y = 120;
+
+  // ------- EXECUTIVE SUMMARY -------
+  setColor(STONE_TEXT);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(t.executiveSummary || "Executive Summary", margin, y);
+  y += 22;
+
+  // Big stat boxes — 4 across
+  const statBoxW = (pageWidth - margin * 2 - 24) / 4;
+  const statBoxH = 70;
+  const statData = [
+    { label: t.calls || "Calls", value: callInts.length, color: PURPLE },
+    { label: t.orders || "Orders", value: orderedInts.length, color: GREEN, sub: `${fmtPct(conversionRate)}` },
+    { label: t.uniqueContacted || "Unique contacted", value: uniqueClientsContacted, color: PURPLE },
+    { label: t.uniqueOrdered || "Unique ordered", value: uniqueClientsOrdered, color: GREEN },
+  ];
+  statData.forEach((s, idx) => {
+    const x = margin + idx * (statBoxW + 8);
+    setFill([248, 245, 240]);
+    doc.roundedRect(x, y, statBoxW, statBoxH, 6, 6, "F");
+    setColor(s.color);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text(String(s.value), x + 12, y + 28);
+    setColor(STONE_LIGHT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(s.label.toUpperCase(), x + 12, y + 46);
+    if (s.sub) {
+      setColor(GREEN);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(s.sub, x + 12, y + 60);
+    }
+  });
+  y += statBoxH + 16;
+
+  // Comparison line
+  const orderDelta = orderedInts.length - prevOrderedInts.length;
+  const orderDeltaPct = prevOrderedInts.length > 0
+    ? ((orderDelta / prevOrderedInts.length) * 100).toFixed(1)
+    : null;
+  setColor(STONE_TEXT);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  let comparisonText = `${t.vsLastWeek || "vs. last week"}: `;
+  if (orderDelta > 0) {
+    comparisonText += `+${orderDelta} ${t.moreOrders || "more orders"}`;
+    if (orderDeltaPct) comparisonText += ` (+${orderDeltaPct}%)`;
+  } else if (orderDelta < 0) {
+    comparisonText += `${orderDelta} ${t.fewerOrders || "fewer orders"}`;
+    if (orderDeltaPct) comparisonText += ` (${orderDeltaPct}%)`;
+  } else {
+    comparisonText += t.same || "same as last week";
+  }
+  doc.text(comparisonText, margin, y);
+  y += 24;
+
+  // ------- DAY-BY-DAY BREAKDOWN -------
+  addPageIfNeeded(180);
+  setColor(STONE_TEXT);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(t.dayByDayActivity || "Day-by-day activity", margin, y);
+  y += 18;
+
+  // Table header
+  setFill(PURPLE_LIGHT);
+  doc.rect(margin, y, pageWidth - margin * 2, 22, "F");
+  setColor(PURPLE);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("DAY", margin + 8, y + 14);
+  doc.text("CALLS", margin + 120, y + 14);
+  doc.text("ORDERS", margin + 200, y + 14);
+  doc.text("CALLBACKS", margin + 290, y + 14);
+  doc.text("CONVERSION", margin + 400, y + 14);
+  y += 22;
+
+  // Table rows — re-order so Mon comes first
+  const orderedDayBuckets = [...dayBuckets.slice(1), dayBuckets[0]];
+  orderedDayBuckets.forEach((d, idx) => {
+    if (idx % 2 === 0) {
+      setFill([252, 250, 247]);
+      doc.rect(margin, y, pageWidth - margin * 2, 20, "F");
+    }
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(d.label, margin + 8, y + 14);
+    doc.text(String(d.calls), margin + 120, y + 14);
+    setColor(GREEN);
+    doc.setFont("helvetica", "bold");
+    doc.text(String(d.orders), margin + 200, y + 14);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(d.callbacks), margin + 290, y + 14);
+    const conv = d.calls > 0 ? (d.orders / d.calls) * 100 : 0;
+    doc.text(d.calls > 0 ? fmtPct(conv) : "—", margin + 400, y + 14);
+    y += 20;
+  });
+  y += 14;
+
+  // ------- VENDOR RANKING (manager only) -------
+  if (scope === "manager" && vendorStats.length > 0) {
+    addPageIfNeeded(140);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(t.vendorRanking || "Vendor ranking", margin, y);
+    y += 18;
+
+    setFill(PURPLE_LIGHT);
+    doc.rect(margin, y, pageWidth - margin * 2, 22, "F");
+    setColor(PURPLE);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("RANK", margin + 8, y + 14);
+    doc.text("NAME", margin + 50, y + 14);
+    doc.text("CALLS", margin + 230, y + 14);
+    doc.text("ORDERS", margin + 290, y + 14);
+    doc.text("CONVERSION", margin + 360, y + 14);
+    doc.text("CLIENTS", margin + 460, y + 14);
+    y += 22;
+
+    vendorStats.forEach((v, idx) => {
+      addPageIfNeeded(24);
+      if (idx % 2 === 0) {
+        setFill([252, 250, 247]);
+        doc.rect(margin, y, pageWidth - margin * 2, 20, "F");
+      }
+      setColor(STONE_TEXT);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`#${idx + 1}`, margin + 8, y + 14);
+      doc.text(v.name.substring(0, 30), margin + 50, y + 14);
+      doc.text(String(v.calls), margin + 230, y + 14);
+      setColor(GREEN);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(v.orders), margin + 290, y + 14);
+      setColor(STONE_TEXT);
+      doc.setFont("helvetica", "normal");
+      doc.text(v.calls > 0 ? fmtPct(v.conversion) : "—", margin + 360, y + 14);
+      doc.text(`${v.uniqueOrdered}/${v.totalClients}`, margin + 460, y + 14);
+      y += 20;
+    });
+    y += 14;
+  }
+
+  // ------- TOP CLIENTS -------
+  if (topClients.length > 0) {
+    addPageIfNeeded(120);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(t.topClients || "Top performing clients", margin, y);
+    y += 6;
+    setColor(STONE_LIGHT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(t.topClientsHelper || "Most orders placed this week", margin, y + 12);
+    y += 24;
+
+    topClients.forEach((c, idx) => {
+      addPageIfNeeded(22);
+      if (idx % 2 === 0) {
+        setFill([252, 250, 247]);
+        doc.rect(margin, y, pageWidth - margin * 2, 20, "F");
+      }
+      setColor(STONE_TEXT);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`${idx + 1}.`, margin + 8, y + 14);
+      doc.text(c.name.substring(0, 50), margin + 30, y + 14);
+      if (c.phone) {
+        setColor(STONE_LIGHT);
+        doc.setFontSize(9);
+        doc.text(c.phone, margin + 280, y + 14);
+      }
+      setColor(GREEN);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      const ordersText = `${c.count} ${c.count === 1 ? (t.order || "order") : (t.orders || "orders")}`;
+      doc.text(ordersText, margin + 420, y + 14);
+      y += 20;
+    });
+    y += 14;
+  }
+
+  // ------- AT-RISK CLIENTS -------
+  if (atRiskClients.length > 0) {
+    addPageIfNeeded(120);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(t.atRiskClients || "At-risk clients", margin, y);
+    y += 6;
+    setColor(STONE_LIGHT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(t.atRiskHelper || "Ordered last week but not this week — worth reaching out", margin, y + 12);
+    y += 24;
+
+    atRiskClients.slice(0, 15).forEach((c, idx) => {
+      addPageIfNeeded(22);
+      if (idx % 2 === 0) {
+        setFill([252, 245, 240]);
+        doc.rect(margin, y, pageWidth - margin * 2, 20, "F");
+      }
+      setColor(RED);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`• ${c.name.substring(0, 50)}`, margin + 8, y + 14);
+      if (c.phone) {
+        setColor(STONE_LIGHT);
+        doc.setFontSize(9);
+        doc.text(c.phone, margin + 320, y + 14);
+      }
+      y += 20;
+    });
+    y += 14;
+  }
+
+  // ------- OUTSTANDING TASKS -------
+  if (overdueTasks.length + todayTasks.length + upcomingTasks.length > 0) {
+    addPageIfNeeded(140);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(t.outstandingTasks || "Outstanding tasks", margin, y);
+    y += 22;
+
+    function renderTaskGroup(heading, taskList, color) {
+      if (taskList.length === 0) return;
+      addPageIfNeeded(40);
+      setColor(color);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(`${heading} (${taskList.length})`, margin, y);
+      y += 16;
+      taskList.slice(0, 10).forEach((tk) => {
+        addPageIfNeeded(20);
+        setColor(STONE_TEXT);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        const vendor = vendors.find((v) => v.id === tk.vendorId);
+        const taskLine = `• ${tk.title.substring(0, 60)}`;
+        doc.text(taskLine, margin + 8, y + 12);
+        const meta = [tk.dueDate, vendor?.name].filter(Boolean).join(" · ");
+        if (meta) {
+          setColor(STONE_LIGHT);
+          doc.setFontSize(8);
+          doc.text(meta.substring(0, 40), margin + 380, y + 12);
+        }
+        y += 16;
+      });
+      y += 8;
+    }
+
+    renderTaskGroup(t.overdue || "Overdue", overdueTasks, RED);
+    renderTaskGroup(t.dueToday || "Due today", todayTasks, AMBER);
+    renderTaskGroup(t.upcoming || "Upcoming", upcomingTasks, PURPLE);
+    y += 8;
+  }
+
+  // ------- INTERACTION BREAKDOWN -------
+  addPageIfNeeded(180);
+  setColor(STONE_TEXT);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(t.interactionBreakdown || "Interaction breakdown", margin, y);
+  y += 22;
+
+  const breakdownData = [
+    { label: t.statusOrdered || "Ordered", value: orderedInts.length, color: GREEN },
+    { label: t.statusCallback || "Callback", value: callbackInts.length, color: [90, 107, 133] },
+    { label: t.statusNoAnswer || "No answer", value: noAnswerInts.length, color: [139, 115, 85] },
+    { label: t.statusPriceIssue || "Price issue", value: priceIssueInts.length, color: AMBER },
+    { label: t.statusNotInterested || "Not interested", value: notInterestedInts.length, color: RED },
+    { label: t.textChannel || "Text", value: textInts.length, color: [28, 94, 110] },
+    { label: t.emailChannel || "Email", value: emailInts.length, color: [90, 74, 107] },
+  ];
+
+  const totalForPct = callInts.length || 1;
+  breakdownData.forEach((b) => {
+    addPageIfNeeded(24);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(b.label, margin, y + 12);
+    setColor(b.color);
+    doc.setFont("helvetica", "bold");
+    doc.text(String(b.value), margin + 220, y + 12);
+    setColor(STONE_LIGHT);
+    doc.setFont("helvetica", "normal");
+    const pct = (b.value / totalForPct) * 100;
+    doc.text(b.value > 0 ? fmtPct(pct) : "—", margin + 280, y + 12);
+    // Bar visualization
+    const barW = (b.value / Math.max(...breakdownData.map((x) => x.value), 1)) * 200;
+    setFill(b.color);
+    doc.rect(margin + 350, y + 4, barW, 12, "F");
+    y += 18;
+  });
+  y += 14;
+
+  // ------- FOOTER on every page -------
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    setColor(STONE_LIGHT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(
+      `Icon Produce LLC · ${t.generatedOn || "Generated on"} ${now.toLocaleDateString()} · ${t.page || "Page"} ${i}/${totalPages}`,
+      margin,
+      pageHeight - 24
+    );
+  }
+
+  // ------- DOWNLOAD -------
+  const fileName = `icon-produce-weekly-${scope}-${now.toISOString().slice(0, 10)}.pdf`;
+  doc.save(fileName);
+
+  return { fileName, totalPages };
 }
 
 async function seedHistoricalIfNeeded(vendors, clients) {
@@ -3667,6 +4256,15 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           </div>
           <ChevronRight size={18} className="opacity-90" />
         </button>
+
+        <WeeklyReportButton
+          t={t}
+          scope="manager"
+          scopeName="Icon Produce"
+          vendors={vendors}
+          clients={clients}
+          tasks={tasks}
+        />
         <button
           onClick={() => onPick("leads")}
           className="w-full text-left bg-white rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
@@ -4367,6 +4965,87 @@ function RemindersView({ t, reminders, vendors, clients, interactions, onCreate,
 }
 
 // Vendor's own phone setting (shown in vendor's view)
+// Reusable button that triggers weekly PDF report generation.
+// Props decide the scope:
+//   - For manager: pass scope="manager", omit vendorIdFilter
+//   - For vendor:  pass scope="vendor", vendorIdFilter={vendor.id}, scopeName={vendor.name}
+function WeeklyReportButton({ t, scope, scopeName, vendors, clients, tasks, vendorIdFilter, variant = "card" }) {
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      await generateWeeklyReportPDF({
+        scope,
+        scopeName: scopeName || "Icon Produce",
+        vendors: vendors || [],
+        clients: clients || [],
+        tasks: tasks || [],
+        vendorIdFilter,
+        t,
+      });
+    } catch (e) {
+      console.error("Weekly report generation failed:", e);
+      setError(e.message || "Failed to generate report");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  if (variant === "card") {
+    // Big card style — for prominent placement (manager home, vendor home)
+    return (
+      <div>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1 disabled:opacity-60"
+          style={{ background: "linear-gradient(135deg, #1C5E6E 0%, #2E8294 100%)", color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <FileText size={20} />
+            </div>
+            <div>
+              <div className="font-semibold">{t.weeklyReport || "Weekly Report"}</div>
+              <div className="text-xs opacity-80">
+                {generating
+                  ? (t.generatingPdf || "Generating PDF…")
+                  : (t.weeklyReportSub || "Download last 7 days as PDF")}
+              </div>
+            </div>
+          </div>
+          {generating ? (
+            <div className="text-xs opacity-90 font-semibold">…</div>
+          ) : (
+            <ChevronRight size={18} className="opacity-90" />
+          )}
+        </button>
+        {error && (
+          <div className="mt-2 text-xs px-3 py-2 rounded-lg" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+            {error}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Inline button variant (for use inside sections)
+  return (
+    <button
+      onClick={handleGenerate}
+      disabled={generating}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
+      style={{ background: "#1C5E6E", color: "white" }}
+    >
+      <FileText size={14} />
+      {generating ? (t.generatingPdf || "Generating…") : (t.weeklyReport || "Weekly Report")}
+    </button>
+  );
+}
+
 function VendorPhoneCard({ t, currentPhone, onUpdate }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(currentPhone || "");
@@ -5984,6 +6663,19 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
         <ChevronRight size={18} className="flex-shrink-0 opacity-90" />
       </button>
+
+      {/* Weekly PDF Report — vendor sees their own */}
+      <div className="mb-4">
+        <WeeklyReportButton
+          t={t}
+          scope="vendor"
+          scopeName={vendor?.name || "Vendor"}
+          vendors={vendors}
+          clients={clients}
+          tasks={tasks}
+          vendorIdFilter={vendorId}
+        />
+      </div>
 
       {/* Progress card */}
       <div className="bg-white rounded-2xl p-5 card-shadow mb-4">
