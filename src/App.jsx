@@ -5,7 +5,7 @@ import {
   Settings, ArrowLeft, Plus, Trash2, Phone, MessageSquare,
   AlertCircle, Crown, ChevronRight, MessageCircle, Mail, Bell, Pencil, Award, TrendingUp,
   Lock, LogOut, Eye, EyeOff, UserPlus, Inbox, Check, X, ClipboardList, Database, FileText, Users,
-  MessageSquareText, ListTodo, Tag, Target, History, Calendar, Zap,
+  MessageSquareText, ListTodo, Tag, Target, History, Calendar, Zap, BarChart3, Info,
 } from "lucide-react";
 
 // ---------- SUPABASE CLIENT ----------
@@ -180,6 +180,49 @@ const T = {
     openTask: "open task",
     openTasks: "open tasks",
     noTasks: "No active tasks",
+
+    // Sales Insights
+    salesInsights: "Sales Insights",
+    salesInsightsTagline: "See who orders on which days",
+    salesInsightsSub: "Track your customer ordering patterns across all history",
+    notEnoughData: "Not enough data yet",
+    notEnoughDataSub: "Patterns appear after a few weeks of consistent use. Keep logging orders!",
+    byDay: "By day",
+    byCustomer: "By customer",
+    trends: "Trends",
+    selectDay: "Select day",
+    patternFor: "Pattern for",
+    recurringClient: "recurring client",
+    recurringClients: "recurring clients",
+    noRecurringPatterns: "No patterns yet",
+    todayProgress: "Today's progress",
+    orderedToday: "Ordered today",
+    stronglyRecurring: "Strong pattern (3+ of 4)",
+    mildlyRecurring: "Mild pattern (2 of 4)",
+    atRisk: "At risk — used to order this day",
+    noPatternsForDay: "No customers with ordering patterns for this day yet",
+    lastOrder: "Last order",
+    yesterday: "yesterday",
+    daysAgo: "days ago",
+    orderedLastTime: "ordered last time",
+    last4Weeks: "Last 4 weeks",
+    inLast4Weeks: "across full history",
+    totalOrder: "total order",
+    totalOrders: "total orders",
+    summary: "Summary",
+    withOrderHistory: "with order history",
+    noRecentOrders: "No recent orders",
+    andMore: "and",
+    more: "more",
+    order: "order",
+    orders: "orders",
+    mostly: "mostly",
+    every: "every",
+    days: "days",
+    dayOfWeekDistribution: "By day of week",
+    ordersByDay: "Orders by day of week",
+    strongestDay: "Strongest day",
+    ofYourOrders: "of your orders",
 
     // not interested reasons
     whyNotInterested: "Why not interested?",
@@ -629,6 +672,49 @@ const T = {
     openTask: "tarea abierta",
     openTasks: "tareas abiertas",
     noTasks: "Sin tareas activas",
+
+    // Sales Insights
+    salesInsights: "Análisis de Ventas",
+    salesInsightsTagline: "Ve quién ordena en qué días",
+    salesInsightsSub: "Sigue los patrones de pedidos de tus clientes en todo el historial",
+    notEnoughData: "Aún no hay suficientes datos",
+    notEnoughDataSub: "Los patrones aparecen después de unas semanas de uso constante. ¡Sigue registrando pedidos!",
+    byDay: "Por día",
+    byCustomer: "Por cliente",
+    trends: "Tendencias",
+    selectDay: "Selecciona día",
+    patternFor: "Patrón para",
+    recurringClient: "cliente recurrente",
+    recurringClients: "clientes recurrentes",
+    noRecurringPatterns: "Sin patrones aún",
+    todayProgress: "Progreso de hoy",
+    orderedToday: "Ordenaron hoy",
+    stronglyRecurring: "Patrón fuerte (3+ de 4)",
+    mildlyRecurring: "Patrón leve (2 de 4)",
+    atRisk: "En riesgo — solían ordenar este día",
+    noPatternsForDay: "Aún no hay clientes con patrones de pedido para este día",
+    lastOrder: "Último pedido",
+    yesterday: "ayer",
+    daysAgo: "días atrás",
+    orderedLastTime: "ordenó la vez pasada",
+    last4Weeks: "Últimas 4 semanas",
+    inLast4Weeks: "en todo el historial",
+    totalOrder: "pedido total",
+    totalOrders: "pedidos totales",
+    summary: "Resumen",
+    withOrderHistory: "con historial de pedidos",
+    noRecentOrders: "Sin pedidos recientes",
+    andMore: "y",
+    more: "más",
+    order: "pedido",
+    orders: "pedidos",
+    mostly: "principalmente",
+    every: "cada",
+    days: "días",
+    dayOfWeekDistribution: "Por día de la semana",
+    ordersByDay: "Pedidos por día de la semana",
+    strongestDay: "Día más fuerte",
+    ofYourOrders: "de tus pedidos",
 
     whyNotInterested: "¿Por qué no le interesa?",
     reasonHasVendor: "Ya tenemos proveedor",
@@ -1299,6 +1385,22 @@ async function loadInteractionsForDays(daysBack, excludeToday = false) {
   const { data, error } = await query.order("created_at", { ascending: false }).limit(5000);
   if (error) {
     console.error("loadInteractionsForDays failed:", error);
+    return [];
+  }
+  return (data || []).map(interactionFromDb);
+}
+
+// Load ALL historical interactions for the current user (RLS-filtered).
+// Used by Sales Insights to detect ordering patterns over the full history.
+// Capped at 20000 rows for performance — beyond that, older data is dropped.
+async function loadAllInteractions() {
+  const { data, error } = await supabase
+    .from("interactions")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(20000);
+  if (error) {
+    console.error("loadAllInteractions failed:", error);
     return [];
   }
   return (data || []).map(interactionFromDb);
@@ -4952,7 +5054,656 @@ function Home({ t, onPick, vendors }) {
 }
 
 // ---------- VENDOR VIEW ----------
+// ============================================
+// SALES INSIGHTS VIEW (Vendor — analyze ordering patterns by day)
+// ============================================
+//
+// This view helps vendors identify which customers tend to order on specific days.
+// Backed by the full historical interaction data (loaded from Supabase on mount).
+// Data is grouped 3 ways:
+//   1. By day of week — "These customers usually order on Mondays"
+//   2. By customer pattern — "Customer X orders every 7 days like clockwork"
+//   3. By weekday trend — "Mondays are your strongest day"
+function SalesInsightsView({ t, vendorId, clients, vendorInteractions, onBack }) {
+  // Tab: "byDay" (default), "byCustomer", "trends"
+  const [tab, setTab] = useState("byDay");
+
+  // For "byDay" tab: which day of week to inspect (0=Sun, 1=Mon, ..., 6=Sat)
+  const todayDow = new Date().getDay();
+  const [selectedDow, setSelectedDow] = useState(todayDow);
+
+  // Filter to only "ordered" status interactions for this vendor's customers
+  const myClients = useMemo(() => clients.filter((c) => c.vendorId === vendorId && !c.archived), [clients, vendorId]);
+  const myClientIds = useMemo(() => new Set(myClients.map((c) => c.id)), [myClients]);
+
+  const orderedInts = useMemo(() => {
+    return (vendorInteractions || [])
+      .filter((i) => i.status === "ordered" && i.channel === "call" && myClientIds.has(i.clientId))
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  }, [vendorInteractions, myClientIds]);
+
+  // Today's date as YYYY-MM-DD string
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const isShowingToday = selectedDow === todayDow;
+
+  // For each customer, analyze their ordering pattern across full history
+  // Returns map: clientId -> { ordersByDow: { 0..6: count }, lastOrderDate, totalOrders, daysSinceLastOrder }
+  // Uses FULL order history (no time filter) so patterns reflect all available data
+  const customerPatterns = useMemo(() => {
+    const map = new Map();
+
+    orderedInts.forEach((i) => {
+      const d = new Date(i.timestamp);
+      const dow = d.getDay();
+      const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+      if (!map.has(i.clientId)) {
+        map.set(i.clientId, {
+          clientId: i.clientId,
+          ordersByDow: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+          orderDates: new Set(),
+          lastOrderTimestamp: 0,
+          totalOrders: 0,
+        });
+      }
+      const p = map.get(i.clientId);
+      // Count unique order dates per dow (avoid double-counting if multiple orders same day)
+      if (!p.orderDates.has(dateKey)) {
+        p.ordersByDow[dow] += 1;
+        p.orderDates.add(dateKey);
+        p.totalOrders += 1;
+      }
+      if ((i.timestamp || 0) > p.lastOrderTimestamp) {
+        p.lastOrderTimestamp = i.timestamp;
+      }
+    });
+
+    // Compute days since last order
+    map.forEach((p) => {
+      p.daysSinceLastOrder = p.lastOrderTimestamp
+        ? Math.floor((today.getTime() - p.lastOrderTimestamp) / (24 * 60 * 60 * 1000))
+        : null;
+    });
+
+    return map;
+  }, [orderedInts]);
+
+  // For the "by day" tab: classify clients into buckets based on selected dow
+  const byDayBuckets = useMemo(() => {
+    // Did they order TODAY (only relevant if selected day = today)?
+    const orderedTodayIds = new Set(
+      orderedInts
+        .filter((i) => {
+          const d = new Date(i.timestamp);
+          const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          return k === todayKey;
+        })
+        .map((i) => i.clientId)
+    );
+
+    const recurringStrong = []; // 3+ of last 4 instances of selectedDow
+    const recurringMild = [];   // 2 of last 4 instances of selectedDow
+    const ordered = [];         // Already ordered today (only if showing today)
+    const atRisk = [];          // Used to order this dow but skipped recently
+    const newPattern = [];      // 2 orders on selectedDow recently — emerging pattern
+
+    myClients.forEach((c) => {
+      const pattern = customerPatterns.get(c.id);
+      if (!pattern) return; // No order history
+
+      const dowCount = pattern.ordersByDow[selectedDow] || 0;
+      const isOrderedToday = orderedTodayIds.has(c.id);
+
+      // Find the most recent occurrence of selectedDow before today
+      // and check if they ordered then
+      const lastSelectedDowDate = (() => {
+        let d = new Date(today);
+        // Step back to most recent past selectedDow (excluding today)
+        const diff = (d.getDay() - selectedDow + 7) % 7;
+        if (diff === 0) {
+          // Selected dow is today — go back 7 days for "last week"
+          d = new Date(d.getTime() - 7 * 24 * 60 * 60 * 1000);
+        } else {
+          d = new Date(d.getTime() - diff * 24 * 60 * 60 * 1000);
+        }
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      })();
+
+      const orderedLastSelectedDow = pattern.orderDates.has(lastSelectedDowDate);
+
+      if (isShowingToday && isOrderedToday) {
+        ordered.push({ client: c, pattern, orderedLastWeek: orderedLastSelectedDow });
+        return;
+      }
+
+      if (dowCount >= 3) {
+        recurringStrong.push({ client: c, pattern, orderedLastWeek: orderedLastSelectedDow });
+      } else if (dowCount === 2) {
+        recurringMild.push({ client: c, pattern, orderedLastWeek: orderedLastSelectedDow });
+      } else if (dowCount === 1 && pattern.totalOrders >= 2) {
+        // Was ordering on this dow but slipped — at risk
+        if (!orderedLastSelectedDow) {
+          atRisk.push({ client: c, pattern, orderedLastWeek: false });
+        }
+      }
+    });
+
+    // Sort by recency / relevance
+    recurringStrong.sort((a, b) => (b.pattern.lastOrderTimestamp || 0) - (a.pattern.lastOrderTimestamp || 0));
+    recurringMild.sort((a, b) => (b.pattern.lastOrderTimestamp || 0) - (a.pattern.lastOrderTimestamp || 0));
+    atRisk.sort((a, b) => (a.pattern.daysSinceLastOrder || 0) - (b.pattern.daysSinceLastOrder || 0));
+
+    return { recurringStrong, recurringMild, ordered, atRisk, newPattern, totalRecurring: recurringStrong.length + recurringMild.length };
+  }, [myClients, customerPatterns, selectedDow, todayKey, isShowingToday, orderedInts]);
+
+  // For the "by customer" tab: list all clients with their patterns
+  const byCustomerList = useMemo(() => {
+    return myClients
+      .map((c) => {
+        const pattern = customerPatterns.get(c.id);
+        if (!pattern) return { client: c, pattern: null, dominantDow: null };
+        // Find the DOW with most orders
+        let max = 0;
+        let dominantDow = null;
+        for (let dow = 0; dow < 7; dow++) {
+          if (pattern.ordersByDow[dow] > max) {
+            max = pattern.ordersByDow[dow];
+            dominantDow = dow;
+          }
+        }
+        // Calculate average days between orders
+        const sortedDates = Array.from(pattern.orderDates).sort();
+        let avgDays = null;
+        if (sortedDates.length >= 2) {
+          const intervals = [];
+          for (let i = 1; i < sortedDates.length; i++) {
+            const d1 = new Date(sortedDates[i - 1]);
+            const d2 = new Date(sortedDates[i]);
+            intervals.push(Math.round((d2 - d1) / (24 * 60 * 60 * 1000)));
+          }
+          avgDays = Math.round(intervals.reduce((s, v) => s + v, 0) / intervals.length);
+        }
+        return { client: c, pattern, dominantDow, avgDaysBetweenOrders: avgDays };
+      })
+      .sort((a, b) => (b.pattern?.totalOrders || 0) - (a.pattern?.totalOrders || 0));
+  }, [myClients, customerPatterns]);
+
+  // For the "trends" tab: total orders per day of week (last 4 weeks)
+  const trendsByDow = useMemo(() => {
+    const counts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    customerPatterns.forEach((p) => {
+      for (let dow = 0; dow < 7; dow++) counts[dow] += p.ordersByDow[dow];
+    });
+    const max = Math.max(...Object.values(counts), 1);
+    return { counts, max };
+  }, [customerPatterns]);
+
+  const dowLabels = t.locale === "es"
+    ? ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
+    : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dowLabelsLong = t.locale === "es"
+    ? ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    : ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  const totalDataPoints = orderedInts.length;
+  const hasEnoughData = totalDataPoints >= 5;
+
+  return (
+    <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={16} /> {t.back}
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
+        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+          <BarChart3 size={22} /> {t.salesInsights || "Sales Insights"}
+        </h1>
+        <p className="text-stone-500 text-sm mt-2">{t.salesInsightsSub || "Track your customer ordering patterns over the last 4 weeks"}</p>
+      </div>
+
+      {!hasEnoughData && (
+        <div className="bg-stone-100 rounded-2xl p-4 mb-6 text-center">
+          <Info size={20} className="mx-auto mb-2 text-stone-400" />
+          <div className="text-sm font-medium text-stone-700">{t.notEnoughData || "Not enough data yet"}</div>
+          <div className="text-xs text-stone-500 mt-1">
+            {t.notEnoughDataSub || "Patterns appear after a few weeks of consistent use. Keep logging orders!"}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="bg-stone-100 rounded-xl p-1 flex gap-1 mb-6">
+        <InsightTab label={t.byDay || "By day"} icon={Calendar} active={tab === "byDay"} onClick={() => setTab("byDay")} />
+        <InsightTab label={t.byCustomer || "By customer"} icon={Users} active={tab === "byCustomer"} onClick={() => setTab("byCustomer")} />
+        <InsightTab label={t.trends || "Trends"} icon={TrendingUp} active={tab === "trends"} onClick={() => setTab("trends")} />
+      </div>
+
+      {/* Tab content */}
+      {tab === "byDay" && (
+        <ByDayTab
+          t={t}
+          dowLabels={dowLabels}
+          dowLabelsLong={dowLabelsLong}
+          selectedDow={selectedDow}
+          setSelectedDow={setSelectedDow}
+          todayDow={todayDow}
+          isShowingToday={isShowingToday}
+          buckets={byDayBuckets}
+        />
+      )}
+
+      {tab === "byCustomer" && (
+        <ByCustomerTab t={t} dowLabelsLong={dowLabelsLong} list={byCustomerList} />
+      )}
+
+      {tab === "trends" && (
+        <TrendsTab t={t} dowLabels={dowLabels} dowLabelsLong={dowLabelsLong} trends={trendsByDow} totalOrders={Object.values(trendsByDow.counts).reduce((s, v) => s + v, 0)} />
+      )}
+    </div>
+  );
+}
+
+function InsightTab({ label, icon: Icon, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all"
+      style={{
+        background: active ? "white" : "transparent",
+        color: active ? BRAND_PURPLE : "#8B7355",
+        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
+      }}
+    >
+      <Icon size={11} /> {label}
+    </button>
+  );
+}
+
+// ===== BY DAY TAB =====
+function ByDayTab({ t, dowLabels, dowLabelsLong, selectedDow, setSelectedDow, todayDow, isShowingToday, buckets }) {
+  const totalRecurring = buckets.totalRecurring;
+  const orderedCount = buckets.ordered.length;
+
+  return (
+    <div>
+      {/* Day picker */}
+      <div className="mb-5">
+        <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2">{t.selectDay || "Select day"}</div>
+        <div className="grid grid-cols-7 gap-1.5">
+          {dowLabels.map((label, dow) => {
+            const isSelected = dow === selectedDow;
+            const isToday = dow === todayDow;
+            return (
+              <button
+                key={dow}
+                onClick={() => setSelectedDow(dow)}
+                className="rounded-lg py-2 text-xs font-semibold transition-all flex flex-col items-center justify-center"
+                style={{
+                  background: isSelected ? BRAND_PURPLE : "white",
+                  color: isSelected ? "white" : (isToday ? BRAND_PURPLE : "#3D3733"),
+                  border: isToday && !isSelected ? `1.5px solid ${BRAND_PURPLE}` : "1px solid rgba(0,0,0,0.06)",
+                }}
+              >
+                <span>{label}</span>
+                {isToday && <span className="text-[8px] opacity-70 mt-0.5">{t.today}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Summary card */}
+      <div className="bg-white rounded-2xl p-4 card-shadow mb-5">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">
+          {t.patternFor || "Pattern for"} {dowLabelsLong[selectedDow]}
+        </div>
+        <div className="display text-2xl mb-2">
+          {totalRecurring > 0
+            ? `${totalRecurring} ${totalRecurring === 1 ? (t.recurringClient || "recurring client") : (t.recurringClients || "recurring clients")}`
+            : (t.noRecurringPatterns || "No patterns yet")}
+        </div>
+        {isShowingToday && totalRecurring > 0 && (
+          <>
+            <div className="text-xs text-stone-500 mb-2">
+              {t.todayProgress || "Today's progress"}: {orderedCount}/{totalRecurring} ({Math.round((orderedCount / totalRecurring) * 100)}%)
+            </div>
+            <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+              <div
+                className="h-full transition-all"
+                style={{ width: `${(orderedCount / totalRecurring) * 100}%`, background: "#73A626" }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Buckets */}
+      {buckets.ordered.length > 0 && (
+        <InsightSection
+          t={t}
+          title={t.orderedToday || "Ordered today"}
+          icon={CheckCircle2}
+          color="#73A626"
+          bg="#E8F2D5"
+          lightBg="#F4F9E8"
+          items={buckets.ordered}
+          renderItem={(item) => <CustomerInsightCard t={t} item={item} status="ordered" />}
+        />
+      )}
+
+      {buckets.recurringStrong.length > 0 && (
+        <InsightSection
+          t={t}
+          title={t.stronglyRecurring || "Strong pattern (3+ of 4)"}
+          icon={Zap}
+          color="#5F2F9D"
+          bg="#E8DCF5"
+          lightBg="#F4EDFA"
+          items={buckets.recurringStrong}
+          renderItem={(item) => <CustomerInsightCard t={t} item={item} status={isShowingToday ? "pending" : "info"} />}
+        />
+      )}
+
+      {buckets.recurringMild.length > 0 && (
+        <InsightSection
+          t={t}
+          title={t.mildlyRecurring || "Mild pattern (2 of 4)"}
+          icon={Clock}
+          color="#5A6B85"
+          bg="#E5EAF2"
+          lightBg="#F2F5F9"
+          items={buckets.recurringMild}
+          renderItem={(item) => <CustomerInsightCard t={t} item={item} status={isShowingToday ? "pending" : "info"} />}
+        />
+      )}
+
+      {buckets.atRisk.length > 0 && (
+        <InsightSection
+          t={t}
+          title={t.atRisk || "At risk — used to order this day"}
+          icon={AlertCircle}
+          color="#9C5757"
+          bg="#F2E2E2"
+          lightBg="#F9EFEF"
+          items={buckets.atRisk}
+          renderItem={(item) => <CustomerInsightCard t={t} item={item} status="atRisk" />}
+        />
+      )}
+
+      {buckets.totalRecurring === 0 && buckets.atRisk.length === 0 && buckets.ordered.length === 0 && (
+        <div className="text-center py-12 text-stone-400 text-sm italic">
+          {t.noPatternsForDay || "No customers with ordering patterns for this day yet"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Reusable section header + collapsible list
+function InsightSection({ t, title, icon: Icon, color, bg, lightBg, items, renderItem }) {
+  const [expanded, setExpanded] = useState(true);
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="mb-5 rounded-2xl overflow-hidden" style={{ background: lightBg, border: `1px solid ${bg}` }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-2.5"
+        style={{ background: bg }}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.6)" }}>
+            <Icon size={14} style={{ color }} />
+          </div>
+          <div className="font-bold text-sm uppercase tracking-wide truncate text-left" style={{ color }}>
+            {title}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: color }}>
+            {items.length}
+          </div>
+          <ChevronRight size={16} style={{ color, transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="p-3 space-y-2.5">
+          {items.map((item, idx) => <div key={item.client?.id || idx}>{renderItem(item)}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Card for a single customer in the insights list — expands to show pattern history
+function CustomerInsightCard({ t, item, status }) {
+  const [expanded, setExpanded] = useState(false);
+  const { client, pattern, orderedLastWeek } = item;
+  if (!client) return null;
+
+  const totalOrders = pattern?.totalOrders || 0;
+  const lastOrderDays = pattern?.daysSinceLastOrder;
+  const lastOrderLabel = lastOrderDays === null ? "—"
+    : lastOrderDays === 0 ? (t.today || "today")
+    : lastOrderDays === 1 ? (t.yesterday || "yesterday")
+    : `${lastOrderDays} ${t.daysAgo || "days ago"}`;
+
+  return (
+    <div className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.04)" }}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-2"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm truncate">{client.name}</div>
+          <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <Phone size={9} /> {client.phone}
+            <span className="text-stone-300">·</span>
+            <span>{t.lastOrder || "Last order"}: {lastOrderLabel}</span>
+            {orderedLastWeek && status !== "ordered" && (
+              <>
+                <span className="text-stone-300">·</span>
+                <span style={{ color: "#73A626" }}>✓ {t.orderedLastTime || "ordered last time"}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <ChevronRight size={14} className="text-stone-400 flex-shrink-0" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+      </button>
+      {expanded && pattern && (
+        <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid rgba(0,0,0,0.04)" }}>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2 mt-1">{t.last4Weeks || "Last 4 weeks"}</div>
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {[0, 1, 2, 3, 4, 5, 6].map((dow) => {
+              const count = pattern.ordersByDow[dow];
+              const labels = ["S", "M", "T", "W", "T", "F", "S"];
+              return (
+                <div key={dow} className="text-center">
+                  <div className="text-[9px] text-stone-400 mb-0.5">{labels[dow]}</div>
+                  <div
+                    className="rounded text-xs font-bold py-1"
+                    style={{
+                      background: count > 0 ? `rgba(95,47,157,${0.2 + (count / 4) * 0.6})` : "#F0EAE0",
+                      color: count > 0 ? "#fff" : "#A89B8E",
+                    }}
+                  >
+                    {count}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-[11px] text-stone-500">
+            {totalOrders} {totalOrders === 1 ? (t.totalOrder || "total order") : (t.totalOrders || "total orders")} {t.inLast4Weeks || "in last 4 weeks"}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== BY CUSTOMER TAB =====
+function ByCustomerTab({ t, dowLabelsLong, list }) {
+  const withPatterns = list.filter((x) => x.pattern && x.pattern.totalOrders > 0);
+  const noOrders = list.filter((x) => !x.pattern || x.pattern.totalOrders === 0);
+
+  return (
+    <div>
+      <div className="bg-white rounded-2xl p-4 card-shadow mb-4">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{t.summary || "Summary"}</div>
+        <div className="display text-2xl mb-1">
+          {withPatterns.length} / {list.length} {t.withOrderHistory || "with order history"}
+        </div>
+        <div className="text-xs text-stone-500">{t.last4Weeks || "Last 4 weeks"}</div>
+      </div>
+
+      {withPatterns.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {withPatterns.map((item) => (
+            <ByCustomerRow key={item.client.id} t={t} item={item} dowLabelsLong={dowLabelsLong} />
+          ))}
+        </div>
+      )}
+
+      {noOrders.length > 0 && (
+        <div className="mt-6">
+          <div className="text-xs uppercase tracking-widest text-stone-400 mb-2">
+            {t.noRecentOrders || "No recent orders"} ({noOrders.length})
+          </div>
+          <div className="space-y-1">
+            {noOrders.slice(0, 10).map((item) => (
+              <div key={item.client.id} className="text-xs text-stone-500 flex items-center gap-2 py-1">
+                <span className="w-1 h-1 rounded-full bg-stone-300"></span>
+                {item.client.name}
+              </div>
+            ))}
+            {noOrders.length > 10 && (
+              <div className="text-[11px] text-stone-400 italic mt-1">{t.andMore || "and"} {noOrders.length - 10} {t.more || "more"}…</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ByCustomerRow({ t, item, dowLabelsLong }) {
+  const [expanded, setExpanded] = useState(false);
+  const { client, pattern, dominantDow, avgDaysBetweenOrders } = item;
+
+  return (
+    <div className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid rgba(0,0,0,0.04)" }}>
+      <button onClick={() => setExpanded(!expanded)} className="w-full text-left px-3 py-2.5 flex items-center justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm truncate">{client.name}</div>
+          <div className="text-[11px] text-stone-500 mt-0.5">
+            {pattern.totalOrders} {pattern.totalOrders === 1 ? (t.order || "order") : (t.orders || "orders")}
+            {dominantDow !== null && (
+              <span> · {t.mostly || "mostly"} <strong>{dowLabelsLong[dominantDow]}</strong></span>
+            )}
+            {avgDaysBetweenOrders && (
+              <span> · {t.every || "every"} ~{avgDaysBetweenOrders} {t.days || "days"}</span>
+            )}
+          </div>
+        </div>
+        <ChevronRight size={14} className="text-stone-400 flex-shrink-0" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid rgba(0,0,0,0.04)" }}>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2 mt-1">{t.dayOfWeekDistribution || "By day of week"}</div>
+          <div className="grid grid-cols-7 gap-1">
+            {[0, 1, 2, 3, 4, 5, 6].map((dow) => {
+              const count = pattern.ordersByDow[dow];
+              const labels = ["S", "M", "T", "W", "T", "F", "S"];
+              const isDominant = dow === dominantDow;
+              return (
+                <div key={dow} className="text-center">
+                  <div className="text-[9px] mb-0.5" style={{ color: isDominant ? BRAND_PURPLE : "#A89B8E", fontWeight: isDominant ? 700 : 400 }}>{labels[dow]}</div>
+                  <div className="rounded text-xs font-bold py-1" style={{
+                    background: count > 0 ? `rgba(95,47,157,${0.2 + (count / 4) * 0.6})` : "#F0EAE0",
+                    color: count > 0 ? "#fff" : "#A89B8E",
+                  }}>
+                    {count}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== TRENDS TAB =====
+function TrendsTab({ t, dowLabels, dowLabelsLong, trends, totalOrders }) {
+  const { counts, max } = trends;
+  const sortedByCount = [0, 1, 2, 3, 4, 5, 6].sort((a, b) => counts[b] - counts[a]);
+  const bestDow = sortedByCount[0];
+  const worstDow = sortedByCount[6];
+
+  return (
+    <div>
+      <div className="bg-white rounded-2xl p-4 card-shadow mb-5">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{t.totalOrders || "Total orders"}</div>
+        <div className="display text-3xl mb-1">{totalOrders}</div>
+        <div className="text-xs text-stone-500">{t.last4Weeks || "Last 4 weeks"}</div>
+      </div>
+
+      {totalOrders > 0 && (
+        <>
+          <div className="text-xs uppercase tracking-widest text-stone-500 mb-3">
+            {t.ordersByDay || "Orders by day of week"}
+          </div>
+          <div className="bg-white rounded-2xl p-4 card-shadow mb-5">
+            {[0, 1, 2, 3, 4, 5, 6].map((dow) => {
+              const count = counts[dow];
+              const pct = max > 0 ? (count / max) * 100 : 0;
+              return (
+                <div key={dow} className="flex items-center gap-3 mb-2 last:mb-0">
+                  <div className="text-xs font-medium w-10 flex-shrink-0" style={{ color: dow === bestDow ? "#73A626" : "#3D3733" }}>
+                    {dowLabels[dow]}
+                  </div>
+                  <div className="flex-1 h-6 bg-stone-100 rounded relative overflow-hidden">
+                    <div
+                      className="h-full rounded transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        background: dow === bestDow ? "#73A626" : (dow === worstDow && count > 0 ? "#9C5757" : BRAND_PURPLE),
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs font-semibold w-8 text-right flex-shrink-0">{count}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {counts[bestDow] > 0 && (
+            <div className="bg-white rounded-2xl p-4 card-shadow mb-3" style={{ borderLeft: "3px solid #73A626" }}>
+              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: "#73A626" }}>
+                💪 {t.strongestDay || "Strongest day"}
+              </div>
+              <div className="text-sm font-semibold">
+                {dowLabelsLong[bestDow]} · {counts[bestDow]} {counts[bestDow] === 1 ? (t.order || "order") : (t.orders || "orders")}
+              </div>
+              <div className="text-xs text-stone-500 mt-1">
+                {Math.round((counts[bestDow] / totalOrders) * 100)}% {t.ofYourOrders || "of your orders"}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ---------- VENDOR VIEW (main vendor home screen) ----------
 function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onBack }) {
+  const [view, setView] = useState("home"); // "home" | "insights"
   const vendor = vendors.find((v) => v.id === vendorId);
   const myClients = clients.filter((c) => c.vendorId === vendorId && !c.archived);
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
@@ -5001,9 +5752,25 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
 
   const [showSMS, setShowSMS] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
   const [rankingPeriod, setRankingPeriod] = useState("week");
   const [rankingInts, setRankingInts] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(true);
+
+  // Load ALL historical interactions for Sales Insights (full history)
+  const [insightsInts, setInsightsInts] = useState([]);
+  useEffect(() => {
+    if (showInsights) {
+      loadAllInteractions().then((historical) => {
+        // Realtime "interactions" prop already has today's data; combine for full coverage
+        // Use a Map keyed by id to dedupe in case of overlap
+        const byId = new Map();
+        historical.forEach((i) => byId.set(i.id, i));
+        interactions.forEach((i) => byId.set(i.id, i));
+        setInsightsInts(Array.from(byId.values()));
+      });
+    }
+  }, [showInsights, interactions]);
 
   useEffect(() => {
     setLoadingRanking(true);
@@ -5031,6 +5798,19 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     return myInts.filter((i) => i.clientId === clientId);
   }
 
+  // Show Sales Insights as a full-screen sub-view
+  if (showInsights) {
+    return (
+      <SalesInsightsView
+        t={t}
+        vendorId={vendorId}
+        clients={clients}
+        vendorInteractions={insightsInts}
+        onBack={() => setShowInsights(false)}
+      />
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto px-5 pt-6 pb-24">
       <div className="mb-6">
@@ -5045,6 +5825,24 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
       {/* Quota progress (if set) */}
       <QuotaProgressCard t={t} vendorId={vendorId} quotas={quotas} interactions={interactions} allInts={interactions} />
+
+      {/* Sales Insights — analyze ordering patterns by day */}
+      <button
+        onClick={() => setShowInsights(true)}
+        className="w-full text-left rounded-2xl p-4 mb-4 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+        style={{ background: "linear-gradient(135deg, #5F2F9D 0%, #7B4DBF 100%)", color: "white" }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.18)" }}>
+            <BarChart3 size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-sm">{t.salesInsights || "Sales Insights"}</div>
+            <div className="text-xs opacity-80 truncate">{t.salesInsightsTagline || "See who orders on which days"}</div>
+          </div>
+        </div>
+        <ChevronRight size={18} className="flex-shrink-0 opacity-90" />
+      </button>
 
       {/* Progress card */}
       <div className="bg-white rounded-2xl p-5 card-shadow mb-4">
