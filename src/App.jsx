@@ -1550,11 +1550,16 @@ async function generateWeeklyReportPDF({
 
   // Filter by scope
   let scopedClients = (clients || []).filter((c) => !c.archived);
-  let scopedInts = allInts;
+  // Build a set of active client IDs so we filter out interactions for archived/deleted clients.
+  // This prevents stale data (from archived clients) from polluting weekly reports.
+  const activeClientIdSet = new Set(scopedClients.map((c) => c.id));
+  let scopedInts = allInts.filter((i) => activeClientIdSet.has(i.clientId));
   let scopedVendors = vendors || [];
   if (scope === "vendor" && vendorIdFilter) {
     scopedClients = scopedClients.filter((c) => c.vendorId === vendorIdFilter);
-    scopedInts = allInts.filter((i) => i.vendorId === vendorIdFilter);
+    // Re-filter interactions: must be for both this vendor AND a still-active client
+    const filteredIdSet = new Set(scopedClients.map((c) => c.id));
+    scopedInts = allInts.filter((i) => i.vendorId === vendorIdFilter && filteredIdSet.has(i.clientId));
     scopedVendors = scopedVendors.filter((v) => v.id === vendorIdFilter);
   }
 
@@ -4403,7 +4408,9 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
     <div className="max-w-md mx-auto px-5 pt-12 pb-24">
       <div className="mb-10">
         <div className="text-xs uppercase tracking-widest text-stone-500 mb-2">{prettyDate(t.locale)}</div>
-        <h1 className="display text-5xl leading-none mb-2">{t.welcomeUser(t.roleManager)}</h1>
+        <h1 className="display text-5xl leading-none mb-2">
+          {t.welcomeUser((currentUser?.name || "").split(" ")[0] || t.roleManager)}
+        </h1>
         <p className="text-stone-600 text-sm font-mono">{currentUser.email}</p>
         <p className="text-stone-500 text-sm mt-3">{t.pickArea}</p>
       </div>
