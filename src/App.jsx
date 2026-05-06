@@ -185,6 +185,11 @@ const T = {
     salesInsights: "Sales Insights",
     salesInsightsTagline: "See who orders on which days",
     salesInsightsSub: "Track your customer ordering patterns across all history",
+    salesInsightsTeamSub: "Team-wide ordering patterns",
+    viewingFor: "Viewing for",
+    allVendors: "All vendors",
+    showingDataFor: "Showing data for",
+    loading: "Loading…",
     notEnoughData: "Not enough data yet",
     notEnoughDataSub: "Patterns appear after a few weeks of consistent use. Keep logging orders!",
     byDay: "By day",
@@ -675,8 +680,13 @@ const T = {
 
     // Sales Insights
     salesInsights: "Análisis de Ventas",
-    salesInsightsTagline: "Ve quién ordena en qué días",
+    salesInsightsTagline: "Ver quién ordena qué días",
     salesInsightsSub: "Sigue los patrones de pedidos de tus clientes en todo el historial",
+    salesInsightsTeamSub: "Patrones de pedidos del equipo completo",
+    viewingFor: "Ver datos de",
+    allVendors: "Todo el equipo",
+    showingDataFor: "Mostrando datos de",
+    loading: "Cargando…",
     notEnoughData: "Aún no hay suficientes datos",
     notEnoughDataSub: "Los patrones aparecen después de unas semanas de uso constante. ¡Sigue registrando pedidos!",
     byDay: "Por día",
@@ -2806,6 +2816,15 @@ export default function App() {
           onBack={() => setAdminView("home")}
         />
       )}
+      {currentUser?.role === "admin" && adminView === "insights" && (
+        <ManagerInsightsView
+          t={t}
+          vendors={vendors}
+          clients={clients}
+          interactions={interactions}
+          onBack={() => setAdminView("home")}
+        />
+      )}
       {currentUser?.role === "admin" && adminView === "setup" && (
         <SetupView
           t={t}
@@ -3630,6 +3649,23 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             </div>
           </div>
           <ChevronRight size={18} className="opacity-70" />
+        </button>
+
+        <button
+          onClick={() => onPick("insights")}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "linear-gradient(135deg, #5F2F9D 0%, #7B4DBF 100%)", color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <BarChart3 size={20} />
+            </div>
+            <div>
+              <div className="font-semibold">{t.salesInsights || "Sales Insights"}</div>
+              <div className="text-xs opacity-80">{t.salesInsightsTeamSub || "Team-wide ordering patterns"}</div>
+            </div>
+          </div>
+          <ChevronRight size={18} className="opacity-90" />
         </button>
         <button
           onClick={() => onPick("leads")}
@@ -5055,11 +5091,113 @@ function Home({ t, onPick, vendors }) {
 
 // ---------- VENDOR VIEW ----------
 // ============================================
-// SALES INSIGHTS VIEW (Vendor — analyze ordering patterns by day)
+// MANAGER INSIGHTS VIEW (Manager — team-wide and per-vendor pattern report)
 // ============================================
 //
-// This view helps vendors identify which customers tend to order on specific days.
+// Wraps SalesInsightsView with:
+//   - Loads ALL historical interactions (manager has RLS access to all)
+//   - Adds a vendor selector pill row at the top: "All vendors" or pick a specific one
+//   - Passes vendorId=null when "All vendors" is selected (SalesInsightsView handles this)
+function ManagerInsightsView({ t, vendors, clients, interactions, onBack }) {
+  const [selectedVendorId, setSelectedVendorId] = useState(null); // null = team-wide
+  const [allInts, setAllInts] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadAllInteractions().then((historical) => {
+      if (cancelled) return;
+      // Combine with realtime (today's) interactions; dedupe by id
+      const byId = new Map();
+      historical.forEach((i) => byId.set(i.id, i));
+      (interactions || []).forEach((i) => byId.set(i.id, i));
+      setAllInts(Array.from(byId.values()));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // While loading, show a basic skeleton
+  if (allInts === null) {
+    return (
+      <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+        <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+          <ArrowLeft size={16} /> {t.back}
+        </button>
+        <div className="text-center py-12 text-stone-400 text-sm">{t.loading || "Loading…"}</div>
+      </div>
+    );
+  }
+
+  // For the per-vendor mode: filter interactions to that vendor only
+  const filteredInts = selectedVendorId === null
+    ? allInts
+    : allInts.filter((i) => i.vendorId === selectedVendorId);
+
+  const selectedVendor = vendors.find((v) => v.id === selectedVendorId);
+
+  return (
+    <div>
+      {/* Vendor selector pill row — manager-only feature */}
+      <div className="max-w-2xl mx-auto px-5 pt-4">
+        <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2">
+          {t.viewingFor || "Viewing for"}
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2 -mx-1 px-1">
+          {/* All vendors pill */}
+          <button
+            onClick={() => setSelectedVendorId(null)}
+            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap"
+            style={{
+              background: selectedVendorId === null ? BRAND_PURPLE : "white",
+              color: selectedVendorId === null ? "white" : "#3D3733",
+              border: `1px solid ${selectedVendorId === null ? BRAND_PURPLE : "rgba(0,0,0,0.08)"}`,
+            }}
+          >
+            {t.allVendors || "All vendors"}
+          </button>
+          {/* One pill per vendor */}
+          {vendors.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setSelectedVendorId(v.id)}
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap"
+              style={{
+                background: selectedVendorId === v.id ? BRAND_PURPLE : "white",
+                color: selectedVendorId === v.id ? "white" : "#3D3733",
+                border: `1px solid ${selectedVendorId === v.id ? BRAND_PURPLE : "rgba(0,0,0,0.08)"}`,
+              }}
+            >
+              {v.name}
+            </button>
+          ))}
+        </div>
+        {selectedVendor && (
+          <div className="text-[11px] text-stone-500 mb-1">
+            {t.showingDataFor || "Showing data for"} <strong style={{ color: BRAND_PURPLE }}>{selectedVendor.name}</strong>
+          </div>
+        )}
+      </div>
+
+      {/* Reuse SalesInsightsView with filtered data */}
+      <SalesInsightsView
+        t={t}
+        key={selectedVendorId || "all"}
+        vendorId={selectedVendorId}
+        clients={clients}
+        vendorInteractions={filteredInts}
+        onBack={onBack}
+      />
+    </div>
+  );
+}
+
+
+// ============================================
+// SALES INSIGHTS VIEW (analyze ordering patterns by day)
+// ============================================
+//
+// This view helps users identify which customers tend to order on specific days.
 // Backed by the full historical interaction data (loaded from Supabase on mount).
+// When vendorId is null, shows team-wide patterns (used by ManagerInsightsView).
 // Data is grouped 3 ways:
 //   1. By day of week — "These customers usually order on Mondays"
 //   2. By customer pattern — "Customer X orders every 7 days like clockwork"
@@ -5073,7 +5211,10 @@ function SalesInsightsView({ t, vendorId, clients, vendorInteractions, onBack })
   const [selectedDow, setSelectedDow] = useState(todayDow);
 
   // Filter to only "ordered" status interactions for this vendor's customers
-  const myClients = useMemo(() => clients.filter((c) => c.vendorId === vendorId && !c.archived), [clients, vendorId]);
+  // If vendorId is null (manager team-wide view), include all non-archived clients
+  const myClients = useMemo(() => clients.filter((c) =>
+    !c.archived && (vendorId === null || c.vendorId === vendorId)
+  ), [clients, vendorId]);
   const myClientIds = useMemo(() => new Set(myClients.map((c) => c.id)), [myClients]);
 
   const orderedInts = useMemo(() => {
