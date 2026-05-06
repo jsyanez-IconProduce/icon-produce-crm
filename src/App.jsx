@@ -210,6 +210,22 @@ const T = {
     dueToday: "Due today",
     upcoming: "Upcoming",
     interactionBreakdown: "Interaction breakdown",
+    clientActivityTitle: "Client Activity Appendix",
+    clientActivitySub: "Per-client breakdown for the week (sorted by orders)",
+    allClientsTable: "All clients summary",
+    top10Detail: "Top 10 most active — detailed timeline",
+    noActivity: "No activity",
+    noActiveClientsThisWeek: "No active clients this week",
+    timeline: "Timeline",
+    callSingular: "call",
+    conversion: "conversion",
+    shortOrdered: "Order",
+    shortCallback: "Callback",
+    shortNoAnswer: "No ans.",
+    shortNotInt: "Not int.",
+    shortPriceIssue: "Price",
+    shortOther: "Other",
+    shortSent: "Sent",
     generatedOn: "Generated on",
     page: "Page",
     order: "order",
@@ -734,6 +750,22 @@ const T = {
     dueToday: "Para hoy",
     upcoming: "Próximas",
     interactionBreakdown: "Desglose de interacciones",
+    clientActivityTitle: "Anexo: Actividad por Cliente",
+    clientActivitySub: "Desglose por cliente de la semana (ordenado por pedidos)",
+    allClientsTable: "Resumen de todos los clientes",
+    top10Detail: "Top 10 más activos — línea de tiempo detallada",
+    noActivity: "Sin actividad",
+    noActiveClientsThisWeek: "Sin clientes activos esta semana",
+    timeline: "Línea de tiempo",
+    callSingular: "llamada",
+    conversion: "conversión",
+    shortOrdered: "Pedido",
+    shortCallback: "Devol.",
+    shortNoAnswer: "No cont.",
+    shortNotInt: "No int.",
+    shortPriceIssue: "Precio",
+    shortOther: "Otro",
+    shortSent: "Env.",
     generatedOn: "Generado el",
     page: "Página",
     order: "pedido",
@@ -1609,6 +1641,42 @@ async function generateWeeklyReportPDF({
     }
   });
 
+  // ------- Per-client activity (full breakdown for the appendix) -------
+  // For every active client in scope, compute weekly stats and timeline.
+  // Includes ALL clients (even with no activity) so the manager sees gaps too.
+  const clientActivity = scopedClients.map((c) => {
+    const clientInts = currentWeekInts
+      .filter((i) => i.clientId === c.id)
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); // oldest first for timeline
+    const callsForClient = clientInts.filter((i) => (i.channel || "call") === "call");
+    const ordersForClient = callsForClient.filter((i) => i.status === "ordered");
+    const callbacksForClient = callsForClient.filter((i) => i.status === "callback");
+    const lastInt = clientInts[clientInts.length - 1];
+    const vendor = vendors.find((v) => v.id === c.vendorId);
+    return {
+      client: c,
+      vendorName: vendor?.name || "—",
+      calls: callsForClient.length,
+      orders: ordersForClient.length,
+      callbacks: callbacksForClient.length,
+      totalInteractions: clientInts.length,
+      lastStatus: lastInt?.status || null,
+      lastChannel: lastInt?.channel || null,
+      conversion: callsForClient.length > 0 ? (ordersForClient.length / callsForClient.length) * 100 : 0,
+      timeline: clientInts, // for the detailed expanded section
+    };
+  }).sort((a, b) => {
+    // Sort by orders desc, then by total interactions desc, then by name
+    if (b.orders !== a.orders) return b.orders - a.orders;
+    if (b.totalInteractions !== a.totalInteractions) return b.totalInteractions - a.totalInteractions;
+    return a.client.name.localeCompare(b.client.name);
+  });
+
+  // Top 10 most active clients (by interactions, with at least 1 to be eligible) get the expanded detail
+  const top10Active = clientActivity
+    .filter((ca) => ca.totalInteractions > 0)
+    .slice(0, 10);
+
   // ------- Outstanding tasks (incomplete) -------
   const todayKeyStr = (() => {
     const d = new Date();
@@ -1983,6 +2051,212 @@ async function generateWeeklyReportPDF({
     y += 18;
   });
   y += 14;
+
+  // ============================================
+  // ------- CLIENT ACTIVITY APPENDIX -------
+  // Compact table of ALL active clients (sorted by orders desc) +
+  // expanded timeline detail for the top 10 most active clients.
+  // ============================================
+
+  // Force a new page for the appendix to keep it visually separated
+  doc.addPage();
+  y = margin;
+
+  setColor(PURPLE);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text(t.clientActivityTitle || "Client Activity Appendix", margin, y);
+  y += 6;
+  setColor(STONE_LIGHT);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(
+    t.clientActivitySub || "Per-client breakdown for the week (sorted by orders)",
+    margin, y + 12
+  );
+  y += 28;
+
+  // Translate status to a short label for the table
+  function shortStatusLabel(status) {
+    if (!status) return "—";
+    const labels = {
+      ordered: t.shortOrdered || "Order",
+      callback: t.shortCallback || "Callback",
+      no_answer: t.shortNoAnswer || "No ans.",
+      not_interested: t.shortNotInt || "Not int.",
+      price_issue: t.shortPriceIssue || "Price",
+      other: t.shortOther || "Other",
+      sent: t.shortSent || "Sent",
+    };
+    return labels[status] || status;
+  }
+  function statusColor(status) {
+    const map = {
+      ordered: GREEN,
+      callback: [90, 107, 133],
+      no_answer: [139, 115, 85],
+      not_interested: RED,
+      price_issue: AMBER,
+      sent: [28, 94, 110],
+    };
+    return map[status] || STONE_LIGHT;
+  }
+
+  // ---- COMPACT TABLE: all clients ----
+  setColor(STONE_TEXT);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text(t.allClientsTable || "All clients summary", margin, y);
+  y += 14;
+
+  // Table header
+  setFill(PURPLE_LIGHT);
+  doc.rect(margin, y, pageWidth - margin * 2, 22, "F");
+  setColor(PURPLE);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("CLIENT", margin + 8, y + 14);
+  doc.text("VENDOR", margin + 200, y + 14);
+  doc.text("CALLS", margin + 310, y + 14);
+  doc.text("ORDERS", margin + 360, y + 14);
+  doc.text("CONV.", margin + 415, y + 14);
+  doc.text("LAST RESULT", margin + 460, y + 14);
+  y += 22;
+
+  clientActivity.forEach((ca, idx) => {
+    addPageIfNeeded(22);
+    if (idx % 2 === 0) {
+      setFill([252, 250, 247]);
+      doc.rect(margin, y, pageWidth - margin * 2, 20, "F");
+    }
+    // Highlight clients with no activity in muted style
+    const noActivity = ca.totalInteractions === 0;
+    setColor(noActivity ? STONE_LIGHT : STONE_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    // Truncate name to fit
+    const nameStr = ca.client.name.length > 30 ? ca.client.name.substring(0, 28) + "…" : ca.client.name;
+    doc.text(nameStr, margin + 8, y + 14);
+    setColor(STONE_LIGHT);
+    const vendorStr = ca.vendorName.length > 18 ? ca.vendorName.substring(0, 16) + "…" : ca.vendorName;
+    doc.text(vendorStr, margin + 200, y + 14);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(ca.calls), margin + 310, y + 14);
+    if (ca.orders > 0) {
+      setColor(GREEN);
+      doc.setFont("helvetica", "bold");
+    }
+    doc.text(String(ca.orders), margin + 360, y + 14);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(ca.calls > 0 ? `${ca.conversion.toFixed(0)}%` : "—", margin + 415, y + 14);
+    if (ca.lastStatus) {
+      setColor(statusColor(ca.lastStatus));
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text(shortStatusLabel(ca.lastStatus), margin + 460, y + 14);
+    } else {
+      setColor(STONE_LIGHT);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(t.noActivity || "No activity", margin + 460, y + 14);
+    }
+    y += 20;
+  });
+  y += 18;
+
+  // ---- DETAIL CARDS: top 10 most active ----
+  if (top10Active.length > 0) {
+    addPageIfNeeded(140);
+    setColor(STONE_TEXT);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(t.top10Detail || "Top 10 most active — detailed timeline", margin, y);
+    y += 18;
+
+    top10Active.forEach((ca) => {
+      // Calculate the height needed (roughly): header 35 + each timeline row ~12 + padding
+      const cardHeight = 50 + (ca.timeline.length * 14) + 16;
+      addPageIfNeeded(cardHeight);
+
+      // Card background
+      setFill([252, 250, 247]);
+      doc.roundedRect(margin, y, pageWidth - margin * 2, cardHeight - 6, 6, 6, "F");
+      // Left accent stripe
+      setFill(PURPLE);
+      doc.rect(margin, y, 4, cardHeight - 6, "F");
+
+      // Client name
+      setColor(STONE_TEXT);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(ca.client.name, margin + 14, y + 16);
+
+      // Phone + vendor on the right side of header
+      setColor(STONE_LIGHT);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      const headerRightTxt = `${ca.client.phone || ""} · ${ca.vendorName}`;
+      const headerRightW = doc.getTextWidth(headerRightTxt);
+      doc.text(headerRightTxt, pageWidth - margin - 14 - headerRightW, y + 16);
+
+      // Stats line
+      setColor(STONE_TEXT);
+      doc.setFontSize(9);
+      const statsTxt = `${ca.calls} ${ca.calls === 1 ? (t.callSingular || "call") : (t.calls || "calls")} · ${ca.orders} ${ca.orders === 1 ? (t.order || "order") : (t.orders || "orders")} · ${ca.conversion.toFixed(0)}% ${t.conversion || "conversion"}`;
+      doc.text(statsTxt, margin + 14, y + 32);
+
+      // Timeline header
+      setColor(STONE_LIGHT);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.text((t.timeline || "TIMELINE").toUpperCase(), margin + 14, y + 46);
+
+      // Timeline rows
+      let timelineY = y + 58;
+      ca.timeline.forEach((it) => {
+        const itDate = new Date(it.timestamp || 0);
+        const dayStr = itDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+        const timeStr = itDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        const channel = it.channel || "call";
+        const status = it.status || "—";
+
+        setColor(STONE_LIGHT);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(`${dayStr} ${timeStr}`, margin + 14, timelineY);
+
+        // Channel
+        setColor(STONE_TEXT);
+        doc.text(channel, margin + 130, timelineY);
+
+        // Status with color
+        setColor(statusColor(status));
+        doc.setFont("helvetica", "bold");
+        doc.text(shortStatusLabel(status), margin + 180, timelineY);
+
+        // Note (if any) — truncated
+        if (it.note) {
+          setColor(STONE_TEXT);
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8);
+          const noteStr = it.note.length > 60 ? it.note.substring(0, 58) + "…" : it.note;
+          doc.text(`"${noteStr}"`, margin + 240, timelineY);
+        }
+        timelineY += 12;
+      });
+
+      y += cardHeight + 4;
+    });
+  } else {
+    setColor(STONE_LIGHT);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.text(t.noActiveClientsThisWeek || "No active clients this week", margin, y);
+    y += 24;
+  }
 
   // ------- FOOTER on every page -------
   const totalPages = doc.internal.getNumberOfPages();
