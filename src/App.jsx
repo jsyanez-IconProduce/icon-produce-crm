@@ -4462,7 +4462,6 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
   const [showQuickTask, setShowQuickTask] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
-  const [showAddVendor, setShowAddVendor] = useState(false);
   const pendingCount = (leads || []).filter((l) => l.status === "pending").length;
   const pendingUsersCount = (pendingProfiles || []).length;
   const todayKeyStr = todayKey();
@@ -4620,7 +4619,7 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
         />
 
         {/* Quick action row — fast access to common manager tasks */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => setShowAddClient(true)}
             className="bg-white rounded-xl py-3 px-2 flex flex-col items-center justify-center card-shadow transition-all hover:scale-105 active:scale-95"
@@ -4643,18 +4642,6 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             </div>
             <div className="text-[11px] font-semibold" style={{ color: "#8B6F1A" }}>
               {t.addLead || "Add lead"}
-            </div>
-          </button>
-          <button
-            onClick={() => setShowAddVendor(true)}
-            className="bg-white rounded-xl py-3 px-2 flex flex-col items-center justify-center card-shadow transition-all hover:scale-105 active:scale-95"
-            style={{ border: `1px solid ${BRAND_PURPLE}30` }}
-          >
-            <div className="w-8 h-8 rounded-full flex items-center justify-center mb-1" style={{ background: BRAND_PURPLE + "20" }}>
-              <UserPlus size={16} style={{ color: BRAND_PURPLE }} />
-            </div>
-            <div className="text-[11px] font-semibold" style={{ color: BRAND_PURPLE }}>
-              {t.addVendor || "Add vendor"}
             </div>
           </button>
         </div>
@@ -4832,14 +4819,6 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             setShowAddLead(false);
           }}
           onCancel={() => setShowAddLead(false)}
-        />
-      )}
-
-      {/* Add Vendor Info Modal — explains how to invite vendors via signup link */}
-      {showAddVendor && (
-        <AddVendorInfoModal
-          t={t}
-          onClose={() => setShowAddVendor(false)}
         />
       )}
     </div>
