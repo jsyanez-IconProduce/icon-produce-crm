@@ -226,6 +226,32 @@ const T = {
     shortPriceIssue: "Price",
     shortOther: "Other",
     shortSent: "Sent",
+    addClient: "Add client",
+    addLead: "Add lead",
+    addVendor: "Add vendor",
+    clientName: "Client name",
+    clientNamePlaceholder: "e.g. Sunrise Distribution",
+    clientPhonePlaceholder: "305-555-1234",
+    assignedVendor: "Assigned vendor",
+    vendorRequired: "Please assign a vendor",
+    nameRequired: "Name is required",
+    frequency: "Frequency",
+    frequencyDaily: "Daily",
+    frequencyWeekly: "Weekly",
+    frequencyBiweekly: "Biweekly",
+    frequencyMonthly: "Monthly",
+    notes: "Notes",
+    notesPlaceholder: "Optional context, preferences, etc.",
+    save: "Save",
+    cancel: "Cancel",
+    close: "Close",
+    leadName: "Lead name",
+    leadNamePlaceholder: "e.g. Mike's Pizza",
+    leadNotesPlaceholder: "Where did this lead come from? Any context?",
+    addLeadHelper: "Add a prospect that needs to be approved and assigned to a vendor.",
+    addVendorInfo1: "To add a new vendor to your team, share your CRM signup link with them:",
+    addVendorInfo2: "When they sign up, you'll get a notification in the home screen to approve them. After approval they'll appear in your vendor list and can start receiving clients.",
+    copySignupLink: "Copy signup link",
     generatedOn: "Generated on",
     page: "Page",
     order: "order",
@@ -766,6 +792,32 @@ const T = {
     shortPriceIssue: "Precio",
     shortOther: "Otro",
     shortSent: "Env.",
+    addClient: "Agregar cliente",
+    addLead: "Agregar lead",
+    addVendor: "Agregar vendedor",
+    clientName: "Nombre del cliente",
+    clientNamePlaceholder: "ej. Distribuidora Sunrise",
+    clientPhonePlaceholder: "305-555-1234",
+    assignedVendor: "Vendedor asignado",
+    vendorRequired: "Por favor asigna un vendedor",
+    nameRequired: "El nombre es obligatorio",
+    frequency: "Frecuencia",
+    frequencyDaily: "Diaria",
+    frequencyWeekly: "Semanal",
+    frequencyBiweekly: "Quincenal",
+    frequencyMonthly: "Mensual",
+    notes: "Notas",
+    notesPlaceholder: "Contexto opcional, preferencias, etc.",
+    save: "Guardar",
+    cancel: "Cancelar",
+    close: "Cerrar",
+    leadName: "Nombre del lead",
+    leadNamePlaceholder: "ej. Pizzería Mike's",
+    leadNotesPlaceholder: "¿De dónde vino este lead? ¿Algún contexto?",
+    addLeadHelper: "Agrega un prospecto que necesita ser aprobado y asignado a un vendedor.",
+    addVendorInfo1: "Para agregar un nuevo vendedor a tu equipo, comparte tu link de registro:",
+    addVendorInfo2: "Cuando se registren, recibirás una notificación en la pantalla principal para aprobarlos. Después de aprobarlos aparecerán en tu lista de vendedores y podrán empezar a recibir clientes.",
+    copySignupLink: "Copiar link de registro",
     generatedOn: "Generado el",
     page: "Página",
     order: "pedido",
@@ -3608,7 +3660,24 @@ export default function App() {
       )}
 
       {currentUser?.role === "admin" && adminView === "home" && (
-        <AdminHome t={t} currentUser={currentUser} leads={leads} tasks={tasks} pendingProfiles={pendingProfiles} reminders={reminders} clients={clients} vendors={vendors} onCreateTask={createTask} onPick={setAdminView} />
+        <AdminHome
+          t={t}
+          currentUser={currentUser}
+          leads={leads}
+          tasks={tasks}
+          pendingProfiles={pendingProfiles}
+          reminders={reminders}
+          clients={clients}
+          vendors={vendors}
+          onCreateTask={createTask}
+          onCreateClient={(c) => updateClients([...clients, c])}
+          onCreateLead={(payload) => createLead({
+            ...payload,
+            createdBy: `manager:${currentUser.id}`,
+            status: "pending",
+          })}
+          onPick={setAdminView}
+        />
       )}
       {currentUser?.role === "admin" && adminView === "approvals" && (
         <ApprovalsView
@@ -4389,8 +4458,11 @@ function FindEmailPanel({ t, onLookupEmail }) {
 }
 
 // ---------- ADMIN HOME ----------
-function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, onCreateTask, onPick }) {
+function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, onCreateTask, onCreateClient, onCreateLead, onPick }) {
   const [showQuickTask, setShowQuickTask] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddLead, setShowAddLead] = useState(false);
+  const [showAddVendor, setShowAddVendor] = useState(false);
   const pendingCount = (leads || []).filter((l) => l.status === "pending").length;
   const pendingUsersCount = (pendingProfiles || []).length;
   const todayKeyStr = todayKey();
@@ -4520,6 +4592,46 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           </div>
           <ChevronRight size={18} className="opacity-70" />
         </button>
+
+        {/* Quick action row — fast access to common manager tasks */}
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            onClick={() => setShowAddClient(true)}
+            className="bg-white rounded-xl py-3 px-2 flex flex-col items-center justify-center card-shadow transition-all hover:scale-105 active:scale-95"
+            style={{ border: `1px solid ${BRAND_GREEN}30` }}
+          >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center mb-1" style={{ background: BRAND_GREEN + "20" }}>
+              <Plus size={16} style={{ color: BRAND_GREEN }} />
+            </div>
+            <div className="text-[11px] font-semibold" style={{ color: BRAND_GREEN }}>
+              {t.addClient || "Add client"}
+            </div>
+          </button>
+          <button
+            onClick={() => setShowAddLead(true)}
+            className="bg-white rounded-xl py-3 px-2 flex flex-col items-center justify-center card-shadow transition-all hover:scale-105 active:scale-95"
+            style={{ border: "1px solid #F5D78580" }}
+          >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center mb-1" style={{ background: "#FFF5D6" }}>
+              <ClipboardList size={16} style={{ color: "#8B6F1A" }} />
+            </div>
+            <div className="text-[11px] font-semibold" style={{ color: "#8B6F1A" }}>
+              {t.addLead || "Add lead"}
+            </div>
+          </button>
+          <button
+            onClick={() => setShowAddVendor(true)}
+            className="bg-white rounded-xl py-3 px-2 flex flex-col items-center justify-center card-shadow transition-all hover:scale-105 active:scale-95"
+            style={{ border: `1px solid ${BRAND_PURPLE}30` }}
+          >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center mb-1" style={{ background: BRAND_PURPLE + "20" }}>
+              <UserPlus size={16} style={{ color: BRAND_PURPLE }} />
+            </div>
+            <div className="text-[11px] font-semibold" style={{ color: BRAND_PURPLE }}>
+              {t.addVendor || "Add vendor"}
+            </div>
+          </button>
+        </div>
 
         <button
           onClick={() => onPick("insights")}
@@ -4697,6 +4809,39 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           onCancel={() => setShowQuickTask(false)}
         />
       )}
+
+      {/* Quick Add Client Modal */}
+      {showAddClient && (
+        <AddClientModal
+          t={t}
+          vendors={vendors || []}
+          onSave={async (payload) => {
+            if (onCreateClient) await onCreateClient(payload);
+            setShowAddClient(false);
+          }}
+          onCancel={() => setShowAddClient(false)}
+        />
+      )}
+
+      {/* Quick Add Lead Modal */}
+      {showAddLead && (
+        <AddLeadModal
+          t={t}
+          onSave={async (payload) => {
+            if (onCreateLead) await onCreateLead(payload);
+            setShowAddLead(false);
+          }}
+          onCancel={() => setShowAddLead(false)}
+        />
+      )}
+
+      {/* Add Vendor Info Modal — explains how to invite vendors via signup link */}
+      {showAddVendor && (
+        <AddVendorInfoModal
+          t={t}
+          onClose={() => setShowAddVendor(false)}
+        />
+      )}
     </div>
   );
 }
@@ -4819,6 +4964,303 @@ function QuickTaskModal({ t, vendors, clients, onSave, onCancel }) {
               {submitting ? (t.saving || "Saving…") : (t.createTask || "Create task")}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// AddClientModal — quick-add client form (compact, complete fields)
+// ============================================
+function AddClientModal({ t, vendors, onSave, onCancel }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
+  const [frequency, setFrequency] = useState("weekly");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit() {
+    if (!name.trim()) { setError(t.nameRequired || "Name is required"); return; }
+    if (!vendorId) { setError(t.vendorRequired || "Please assign a vendor"); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSave({
+        id: `c_${Date.now()}`,
+        name: name.trim(),
+        phone: phone.trim(),
+        vendorId,
+        frequency,
+        tags: [],
+        longNote: notes.trim(),
+      });
+    } catch (e) {
+      setError(e?.message || "Failed to save");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onCancel}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5" style={{ color: BRAND_GREEN }}>
+              <Plus size={12} /> {t.addClient || "Add client"}
+            </div>
+            <button onClick={onCancel} className="text-stone-400 hover:text-stone-700 p-1">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.clientName || "Client name"} *</div>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t.clientNamePlaceholder || "e.g. Sunrise Distribution"}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.phone || "Phone"}</div>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder={t.clientPhonePlaceholder || "305-555-1234"}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.assignedVendor || "Assigned vendor"} *</div>
+            <select
+              value={vendorId}
+              onChange={(e) => setVendorId(e.target.value)}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm bg-white focus:outline-none focus:border-stone-400"
+            >
+              {vendors.length === 0 && <option value="">{t.noVendorsYet || "No vendors yet"}</option>}
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.frequency || "Frequency"}</div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { key: "daily", label: t.frequencyDaily || "Daily" },
+                { key: "weekly", label: t.frequencyWeekly || "Weekly" },
+                { key: "biweekly", label: t.frequencyBiweekly || "Biweekly" },
+                { key: "monthly", label: t.frequencyMonthly || "Monthly" },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setFrequency(f.key)}
+                  className="py-2 rounded-lg text-xs font-semibold transition-all"
+                  style={{
+                    background: frequency === f.key ? BRAND_GREEN : "white",
+                    color: frequency === f.key ? "white" : "#3D3733",
+                    border: `1px solid ${frequency === f.key ? BRAND_GREEN : "rgba(0,0,0,0.1)"}`,
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.notes || "Notes"}</div>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={t.notesPlaceholder || "Optional context, preferences, etc."}
+              rows={2}
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400 resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="mb-3 px-3 py-2 rounded-lg text-xs" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={onCancel}
+              className="flex-1 py-2.5 rounded-lg text-sm font-semibold border border-stone-200 text-stone-700"
+            >
+              {t.cancel || "Cancel"}
+            </button>
+            <button
+              onClick={submit}
+              disabled={submitting || !name.trim() || !vendorId}
+              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: BRAND_GREEN }}
+            >
+              {submitting ? "…" : (t.save || "Save")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// AddLeadModal — quick-add lead form (just name + phone + note)
+// ============================================
+function AddLeadModal({ t, onSave, onCancel }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit() {
+    if (!name.trim()) { setError(t.nameRequired || "Name is required"); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSave({
+        name: name.trim(),
+        phone: phone.trim(),
+        note: note.trim(),
+      });
+    } catch (e) {
+      setError(e?.message || "Failed to save");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onCancel}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#8B6F1A" }}>
+              <ClipboardList size={12} /> {t.addLead || "Add lead"}
+            </div>
+            <button onClick={onCancel} className="text-stone-400 hover:text-stone-700 p-1">
+              <X size={16} />
+            </button>
+          </div>
+
+          <p className="text-[11px] text-stone-500 mb-4">{t.addLeadHelper || "Add a prospect that needs to be approved and assigned to a vendor."}</p>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.leadName || "Lead name"} *</div>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t.leadNamePlaceholder || "e.g. Mike's Pizza"}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.phone || "Phone"}</div>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder={t.clientPhonePlaceholder || "305-555-1234"}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.notes || "Notes"}</div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={t.leadNotesPlaceholder || "Where did this lead come from? Any context?"}
+              rows={2}
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400 resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="mb-3 px-3 py-2 rounded-lg text-xs" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg text-sm font-semibold border border-stone-200 text-stone-700">
+              {t.cancel || "Cancel"}
+            </button>
+            <button
+              onClick={submit}
+              disabled={submitting || !name.trim()}
+              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: "#8B6F1A" }}
+            >
+              {submitting ? "…" : (t.save || "Save")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// AddVendorInfoModal — informational only (vendors must self-signup)
+// ============================================
+function AddVendorInfoModal({ t, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: BRAND_PURPLE }}>
+              <UserPlus size={12} /> {t.addVendor || "Add vendor"}
+            </div>
+            <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="rounded-2xl p-4 mb-4" style={{ background: BRAND_PURPLE + "10" }}>
+            <p className="text-sm text-stone-700 leading-relaxed mb-3">
+              {t.addVendorInfo1 || "To add a new vendor to your team, share your CRM signup link with them:"}
+            </p>
+            <div className="bg-white rounded-lg px-3 py-2 mb-3 text-xs font-mono text-stone-700 break-all border border-stone-200">
+              {window.location.origin + "/signup"}
+            </div>
+            <p className="text-[12px] text-stone-600 leading-relaxed">
+              {t.addVendorInfo2 || "When they sign up, you'll get a notification in the home screen to approve them. After approval they'll appear in your vendor list and can start receiving clients."}
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              navigator.clipboard?.writeText(window.location.origin + "/signup");
+            }}
+            className="w-full py-2.5 rounded-lg text-sm font-semibold text-white mb-2"
+            style={{ background: BRAND_PURPLE }}
+          >
+            {t.copySignupLink || "Copy signup link"}
+          </button>
+
+          <button onClick={onClose} className="w-full py-2.5 rounded-lg text-sm font-semibold border border-stone-200 text-stone-700">
+            {t.close || "Close"}
+          </button>
         </div>
       </div>
     </div>
