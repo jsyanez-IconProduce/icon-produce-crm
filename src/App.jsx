@@ -116,6 +116,18 @@ const T = {
     yourPhoneNumber: "Your phone number",
     noPhoneSet: "No phone set",
     phoneUsedForReminders: "Used for reminders from your manager",
+    contactProcess: "Contact process",
+    callDone: "Call done",
+    callPending: "Call pending",
+    textDone: "Text done",
+    textPending: "Text pending",
+    emailDone: "Email done",
+    emailPending: "Email pending",
+    contactCompleteOrdered: "Contact complete — order placed",
+    contactCompleteCallback: "Contact complete — callback scheduled",
+    editClient: "Edit client",
+    edit: "Edit",
+    delete: "Delete",
     addPhone: "Add phone",
     saving: "Saving…",
 
@@ -240,6 +252,18 @@ const T = {
     frequencyWeekly: "Weekly",
     frequencyBiweekly: "Biweekly",
     frequencyMonthly: "Monthly",
+    purchaseDays: "Purchase days",
+    selectAtLeastOneDay: "Select at least one day",
+    everyDay: "Every day",
+    monFri: "Mon - Fri",
+    buys: "Buys",
+    todayLabel: "Today",
+    declaredVsReal: "Declared vs real",
+    declared: "Declared",
+    real: "Real",
+    notEnoughDataYet: "Not enough data yet",
+    matchesPattern: "Matches declared pattern",
+    patternMismatch: "Differs from declared pattern",
     notes: "Notes",
     notesPlaceholder: "Optional context, preferences, etc.",
     save: "Save",
@@ -389,7 +413,6 @@ const T = {
     credentialsTab: "Login",
     repsCredentials: "Sales rep accounts",
     adminCredentials: "Admin account",
-    edit: "Edit",
     showPassword: "Show",
     hidePassword: "Hide",
     save: "Save",
@@ -682,6 +705,16 @@ const T = {
     yourPhoneNumber: "Tu número de teléfono",
     noPhoneSet: "Sin teléfono",
     phoneUsedForReminders: "Para recordatorios de tu manager",
+    contactProcess: "Proceso de contacto",
+    callDone: "Llamada hecha",
+    callPending: "Llamada pendiente",
+    textDone: "Texto enviado",
+    textPending: "Texto pendiente",
+    emailDone: "Email enviado",
+    emailPending: "Email pendiente",
+    contactCompleteOrdered: "Contacto completo — pedido logrado",
+    contactCompleteCallback: "Contacto completo — devolución agendada",
+    editClient: "Editar cliente",
     addPhone: "Agregar teléfono",
     saving: "Guardando…",
 
@@ -806,6 +839,18 @@ const T = {
     frequencyWeekly: "Semanal",
     frequencyBiweekly: "Quincenal",
     frequencyMonthly: "Mensual",
+    purchaseDays: "Días de compra",
+    selectAtLeastOneDay: "Selecciona al menos un día",
+    everyDay: "Todos los días",
+    monFri: "Lun - Vie",
+    buys: "Compra",
+    todayLabel: "Hoy",
+    declaredVsReal: "Declarado vs real",
+    declared: "Declarado",
+    real: "Real",
+    notEnoughDataYet: "Aún no hay suficientes datos",
+    matchesPattern: "Coincide con patrón declarado",
+    patternMismatch: "Difiere del patrón declarado",
     notes: "Notas",
     notesPlaceholder: "Contexto opcional, preferencias, etc.",
     save: "Guardar",
@@ -952,6 +997,7 @@ const T = {
     repsCredentials: "Cuentas de vendedores",
     adminCredentials: "Cuenta del Jefe",
     edit: "Editar",
+    delete: "Eliminar",
     showPassword: "Ver",
     hidePassword: "Ocultar",
     save: "Guardar",
@@ -1203,6 +1249,28 @@ function freqLabel(f, t) {
   };
   return map[f] || f;
 }
+
+// Format an array of day-of-week numbers (0=Sun..6=Sat) into a short readable string.
+// Examples:
+//   [0,1,2,3,4,5,6] → "Every day"
+//   [1,4]           → "Mon · Thu"
+//   [1,2,3,4,5]     → "Mon - Fri"  (consecutive weekdays)
+//   null/[]         → returns null (caller decides what to render)
+function purchaseDaysLabel(days, t) {
+  if (!days || days.length === 0) return null;
+  const sorted = [...days].sort();
+  if (sorted.length === 7) return t.everyDay || "Every day";
+  // Detect Mon-Fri specifically (common business pattern)
+  if (sorted.length === 5 && sorted.every((d, i) => d === i + 1)) return t.monFri || "Mon - Fri";
+  const labels = t.dowShortNames || ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return sorted.map((d) => labels[d]).join(" · ");
+}
+
+// Check if today is one of the client's declared purchase days
+function isPurchaseDayToday(purchaseDays) {
+  if (!purchaseDays || purchaseDays.length === 0) return false;
+  return purchaseDays.includes(new Date().getDay());
+}
 function chOf(i) { return i.channel || "call"; }
 function subtractMin(timeStr, mins) {
   if (!timeStr) return "";
@@ -1297,6 +1365,7 @@ function clientFromDb(row) {
     phone: row.phone,
     vendorId: row.vendor_id,
     frequency: row.frequency,
+    purchaseDays: row.purchase_days || null, // array of day-of-week numbers (0=Sun, 1=Mon, ..., 6=Sat); null = legacy
     tags: row.tags || [],
     longNote: row.long_note,
     convertedFromLead: row.converted_from_lead,
@@ -1315,6 +1384,7 @@ function clientToDb(c) {
   if (c.phone !== undefined) out.phone = c.phone;
   if (c.vendorId !== undefined) out.vendor_id = c.vendorId;
   if (c.frequency !== undefined) out.frequency = c.frequency;
+  if (c.purchaseDays !== undefined) out.purchase_days = c.purchaseDays;
   if (c.tags !== undefined) out.tags = c.tags;
   if (c.longNote !== undefined) out.long_note = c.longNote;
   if (c.convertedFromLead !== undefined) out.converted_from_lead = c.convertedFromLead;
@@ -4950,13 +5020,123 @@ function QuickTaskModal({ t, vendors, clients, onSave, onCancel }) {
 }
 
 // ============================================
-// AddClientModal — quick-add client form (compact, complete fields)
+// PurchaseDaysPicker — reusable picker for client's order days
 // ============================================
+//
+// User flow per spec:
+//   - Two top-level options: "Daily" or "Biweekly"
+//   - When "Daily": purchaseDays = [0,1,2,3,4,5,6] (every day)
+//   - When "Biweekly": shows 7 day toggle pills (Mon-Sun), user picks specific days
+//
+// Props:
+//   value: { frequency: "daily" | "biweekly", purchaseDays: number[] | null }
+//   onChange: (newValue) => void
+//
+// The component manages its own UI but delegates persistence to parent via onChange.
+function PurchaseDaysPicker({ t, value, onChange }) {
+  const frequency = value?.frequency || "daily";
+  const purchaseDays = value?.purchaseDays || (frequency === "daily" ? [0, 1, 2, 3, 4, 5, 6] : []);
+
+  const dayLabels = t.dowShortNames || ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  // Order the day pills Mon, Tue, Wed, Thu, Fri, Sat, Sun (week starts Monday for business UX)
+  const orderedDays = [1, 2, 3, 4, 5, 6, 0];
+
+  function setFrequency(newFreq) {
+    if (newFreq === "daily") {
+      // Daily implies all 7 days
+      onChange({ frequency: "daily", purchaseDays: [0, 1, 2, 3, 4, 5, 6] });
+    } else {
+      // Biweekly: keep existing day picks if any, otherwise empty (force user to choose)
+      const existingDays = (purchaseDays && purchaseDays.length > 0 && purchaseDays.length < 7)
+        ? purchaseDays
+        : [];
+      onChange({ frequency: "biweekly", purchaseDays: existingDays });
+    }
+  }
+
+  function toggleDay(dow) {
+    const set = new Set(purchaseDays);
+    if (set.has(dow)) set.delete(dow);
+    else set.add(dow);
+    onChange({ frequency: "biweekly", purchaseDays: Array.from(set).sort() });
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-1.5 mb-2">
+        <button
+          type="button"
+          onClick={() => setFrequency("daily")}
+          className="py-2 rounded-lg text-xs font-semibold transition-all"
+          style={{
+            background: frequency === "daily" ? BRAND_PURPLE : "white",
+            color: frequency === "daily" ? "white" : "#3D3733",
+            border: `1px solid ${frequency === "daily" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
+          }}
+        >
+          {t.frequencyDaily || "Daily"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setFrequency("biweekly")}
+          className="py-2 rounded-lg text-xs font-semibold transition-all"
+          style={{
+            background: frequency === "biweekly" ? BRAND_PURPLE : "white",
+            color: frequency === "biweekly" ? "white" : "#3D3733",
+            border: `1px solid ${frequency === "biweekly" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
+          }}
+        >
+          {t.frequencyBiweekly || "Biweekly"}
+        </button>
+      </div>
+
+      {frequency === "biweekly" && (
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1.5">
+            {t.purchaseDays || "Purchase days"} *
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {orderedDays.map((dow) => {
+              const isSelected = purchaseDays.includes(dow);
+              return (
+                <button
+                  type="button"
+                  key={dow}
+                  onClick={() => toggleDay(dow)}
+                  className="py-2 rounded-md text-[11px] font-semibold transition-all"
+                  style={{
+                    background: isSelected ? BRAND_GREEN : "white",
+                    color: isSelected ? "white" : "#3D3733",
+                    border: `1px solid ${isSelected ? BRAND_GREEN : "rgba(0,0,0,0.1)"}`,
+                  }}
+                >
+                  {dayLabels[dow][0]}
+                </button>
+              );
+            })}
+          </div>
+          {purchaseDays.length === 0 && (
+            <div className="text-[10px] text-stone-400 mt-1.5 italic">
+              {t.selectAtLeastOneDay || "Select at least one day"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function AddClientModal({ t, vendors, onSave, onCancel }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
-  const [frequency, setFrequency] = useState("weekly");
+  // Frequency + purchaseDays managed together via PurchaseDaysPicker
+  const [scheduleConfig, setScheduleConfig] = useState({
+    frequency: "daily",
+    purchaseDays: [0, 1, 2, 3, 4, 5, 6], // default = every day
+  });
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -4964,6 +5144,10 @@ function AddClientModal({ t, vendors, onSave, onCancel }) {
   async function submit() {
     if (!name.trim()) { setError(t.nameRequired || "Name is required"); return; }
     if (!vendorId) { setError(t.vendorRequired || "Please assign a vendor"); return; }
+    if (scheduleConfig.frequency === "biweekly" && scheduleConfig.purchaseDays.length === 0) {
+      setError(t.selectAtLeastOneDay || "Please select at least one purchase day");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -4972,7 +5156,8 @@ function AddClientModal({ t, vendors, onSave, onCancel }) {
         name: name.trim(),
         phone: phone.trim(),
         vendorId,
-        frequency,
+        frequency: scheduleConfig.frequency,
+        purchaseDays: scheduleConfig.purchaseDays,
         tags: [],
         longNote: notes.trim(),
       });
@@ -5034,28 +5219,12 @@ function AddClientModal({ t, vendors, onSave, onCancel }) {
           </div>
 
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.frequency || "Frequency"}</div>
-            <div className="grid grid-cols-4 gap-1.5">
-              {[
-                { key: "daily", label: t.frequencyDaily || "Daily" },
-                { key: "weekly", label: t.frequencyWeekly || "Weekly" },
-                { key: "biweekly", label: t.frequencyBiweekly || "Biweekly" },
-                { key: "monthly", label: t.frequencyMonthly || "Monthly" },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setFrequency(f.key)}
-                  className="py-2 rounded-lg text-xs font-semibold transition-all"
-                  style={{
-                    background: frequency === f.key ? BRAND_GREEN : "white",
-                    color: frequency === f.key ? "white" : "#3D3733",
-                    border: `1px solid ${frequency === f.key ? BRAND_GREEN : "rgba(0,0,0,0.1)"}`,
-                  }}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.frequency || "Frequency"} *</div>
+            <PurchaseDaysPicker
+              t={t}
+              value={scheduleConfig}
+              onChange={setScheduleConfig}
+            />
           </div>
 
           <div className="mb-4">
@@ -5794,7 +5963,6 @@ function VendorPhoneCard({ t, currentPhone, onUpdate }) {
               <div className="text-sm mt-0.5">
                 {currentPhone || <span className="italic text-stone-400">{t.noPhoneSet}</span>}
               </div>
-              <div className="text-[10px] text-stone-500 mt-0.5">{t.phoneUsedForReminders}</div>
               <button onClick={() => setEditing(true)} className="text-[11px] mt-1.5 px-2 py-0.5 rounded-md font-semibold" style={{ background: BRAND_PURPLE + "15", color: BRAND_PURPLE }}>
                 {currentPhone ? <><Pencil size={10} className="inline mr-1" />{t.edit}</> : <><Plus size={10} className="inline mr-1" />{t.addPhone}</>}
               </button>
@@ -6625,6 +6793,7 @@ function SalesInsightsView({ t, vendorId, clients, vendorInteractions, onBack })
         map.set(i.clientId, {
           clientId: i.clientId,
           ordersByDow: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
+          weeksByDow: { 0: new Set(), 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set() },
           orderDates: new Set(),
           lastOrderTimestamp: 0,
           totalOrders: 0,
@@ -6637,16 +6806,25 @@ function SalesInsightsView({ t, vendorId, clients, vendorInteractions, onBack })
         p.orderDates.add(dateKey);
         p.totalOrders += 1;
       }
+      // Track distinct weeks per dow for "real pattern" detection (used in declared vs real)
+      const weekKey = `${d.getFullYear()}-W${Math.floor((Math.floor((d - new Date(d.getFullYear(), 0, 1)) / (24 * 60 * 60 * 1000)) + new Date(d.getFullYear(), 0, 1).getDay()) / 7)}`;
+      p.weeksByDow[dow].add(weekKey);
       if ((i.timestamp || 0) > p.lastOrderTimestamp) {
         p.lastOrderTimestamp = i.timestamp;
       }
     });
 
-    // Compute days since last order
+    // Compute days since last order + convert week sets to counts
     map.forEach((p) => {
       p.daysSinceLastOrder = p.lastOrderTimestamp
         ? Math.floor((today.getTime() - p.lastOrderTimestamp) / (24 * 60 * 60 * 1000))
         : null;
+      // Replace Sets with counts for easier consumption downstream
+      const weekCounts = {};
+      for (let d = 0; d < 7; d++) {
+        weekCounts[d] = p.weeksByDow[d].size;
+      }
+      p.weeksByDow = weekCounts;
     });
 
     return map;
@@ -7036,6 +7214,48 @@ function CustomerInsightCard({ t, item, status }) {
       </button>
       {expanded && pattern && (
         <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid rgba(0,0,0,0.04)" }}>
+          {/* Declared vs Real comparison */}
+          {client.purchaseDays && client.purchaseDays.length > 0 && (
+            <div className="mb-3 p-2 rounded-lg" style={{ background: "#F8F4ED" }}>
+              <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">
+                {t.declaredVsReal || "Declared vs real"}
+              </div>
+              <div className="text-[11px] flex items-center gap-1.5 mb-0.5">
+                <span className="font-medium" style={{ color: BRAND_PURPLE }}>{t.declared || "Declared"}:</span>
+                <span className="text-stone-700">{purchaseDaysLabel(client.purchaseDays, t)}</span>
+              </div>
+              {(() => {
+                // Compute "real" pattern: days where this client ordered ≥2 weeks
+                const realDays = [];
+                if (pattern.weeksByDow) {
+                  for (let d = 0; d < 7; d++) {
+                    if ((pattern.weeksByDow[d] || 0) >= 2) realDays.push(d);
+                  }
+                } else {
+                  // Fallback: derive from ordersByDow if any orders exist
+                  for (let d = 0; d < 7; d++) {
+                    if ((pattern.ordersByDow[d] || 0) >= 2) realDays.push(d);
+                  }
+                }
+                const declared = new Set(client.purchaseDays);
+                const real = new Set(realDays);
+                const allMatch = real.size > 0 && [...real].every((d) => declared.has(d)) && [...declared].every((d) => real.has(d));
+                return (
+                  <>
+                    <div className="text-[11px] flex items-center gap-1.5">
+                      <span className="font-medium" style={{ color: "#73A626" }}>{t.real || "Real"}:</span>
+                      <span className="text-stone-700">{realDays.length > 0 ? purchaseDaysLabel(realDays, t) : (t.notEnoughDataYet || "Not enough data yet")}</span>
+                    </div>
+                    {realDays.length > 0 && (
+                      <div className="text-[10px] mt-1.5 italic" style={{ color: allMatch ? "#73A626" : "#B8860B" }}>
+                        {allMatch ? `✓ ${t.matchesPattern || "Matches declared pattern"}` : `⚠ ${t.patternMismatch || "Differs from declared pattern"}`}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
           <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2 mt-1">{t.last4Weeks || "Last 4 weeks"}</div>
           <div className="grid grid-cols-7 gap-1 mb-2">
             {[0, 1, 2, 3, 4, 5, 6].map((dow) => {
@@ -7715,6 +7935,23 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
   const textInt = interactions.find((i) => chOf(i) === "text");
   const emailInt = interactions.find((i) => chOf(i) === "email");
 
+  // ---------- CONTACT WORKFLOW ----------
+  // Establish a clear contact process: call → text → email
+  // The vendor must exhaust all 3 modalities for pending clients UNLESS
+  // they get an Order or a Callback (both are "effective contact").
+  // Compute flags from today's interactions for THIS client (already in `interactions` prop).
+  const hasCalledToday = !!callInt;
+  const hasTextedToday = !!textInt;
+  const hasEmailedToday = !!emailInt;
+  // Find most recent call status today
+  const todayCallSorted = (interactions || []).filter((i) => chOf(i) === "call").sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  const latestCallStatus = todayCallSorted[0]?.status;
+  const isContactComplete = latestCallStatus === "ordered" || latestCallStatus === "callback";
+  // Show workflow tracker:
+  //  - Always when not yet complete (no Order/Callback)
+  //  - Hidden once contact is "effective"
+  const showWorkflow = !isContactComplete && !(hasCalledToday && hasTextedToday && hasEmailedToday);
+
   const [showHistory, setShowHistory] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showTemplate, setShowTemplate] = useState(null); // null | "text" | "email"
@@ -7782,11 +8019,72 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
         <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5">
           <Phone size={11} />{client.phone}<span className="text-stone-300">·</span><span>{freqLabel(client.frequency, t)}</span>
         </div>
+        {/* Declared purchase days — shows the manager-defined ordering pattern */}
+        {client.purchaseDays && client.purchaseDays.length > 0 && client.purchaseDays.length < 7 && (
+          <div className="text-xs flex items-center gap-1 mt-1" style={{ color: BRAND_PURPLE }}>
+            <Calendar size={11} />
+            <span className="font-medium">{t.buys || "Buys"}: {purchaseDaysLabel(client.purchaseDays, t)}</span>
+            {isPurchaseDayToday(client.purchaseDays) && (
+              <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white" style={{ background: BRAND_PURPLE }}>
+                {t.todayLabel || "Today"}
+              </span>
+            )}
+          </div>
+        )}
         {clientTags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {clientTags.map((tg) => <TagBadge key={tg.id} tag={tg} />)}
           </div>
         )}
+
+        {/* Contact workflow tracker — shows which of the 3 modalities have been used today.
+            Appears when client is still pending (no Order/Callback yet today). */}
+        {showWorkflow && (
+          <div className="mt-2 px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-2" style={{ background: "#F8F4ED", border: "1px solid rgba(95,47,157,0.15)" }}>
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: BRAND_PURPLE }}>
+              {t.contactProcess || "Contact process"}:
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-1" title={hasCalledToday ? (t.callDone || "Call done") : (t.callPending || "Call pending")}>
+                <Phone size={11} style={{ color: hasCalledToday ? "#73A626" : "#A8A29E" }} />
+                {hasCalledToday ? (
+                  <Check size={10} style={{ color: "#73A626", strokeWidth: 3 }} />
+                ) : (
+                  <X size={10} style={{ color: "#A8A29E" }} />
+                )}
+              </div>
+              <div className="flex items-center gap-1" title={hasTextedToday ? (t.textDone || "Text done") : (t.textPending || "Text pending")}>
+                <MessageSquare size={11} style={{ color: hasTextedToday ? "#73A626" : "#A8A29E" }} />
+                {hasTextedToday ? (
+                  <Check size={10} style={{ color: "#73A626", strokeWidth: 3 }} />
+                ) : (
+                  <X size={10} style={{ color: "#A8A29E" }} />
+                )}
+              </div>
+              <div className="flex items-center gap-1" title={hasEmailedToday ? (t.emailDone || "Email done") : (t.emailPending || "Email pending")}>
+                <Mail size={11} style={{ color: hasEmailedToday ? "#73A626" : "#A8A29E" }} />
+                {hasEmailedToday ? (
+                  <Check size={10} style={{ color: "#73A626", strokeWidth: 3 }} />
+                ) : (
+                  <X size={10} style={{ color: "#A8A29E" }} />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* "Contact complete" green badge when Order or Callback achieved — positive reinforcement */}
+        {isContactComplete && (
+          <div className="mt-2 px-2.5 py-1 rounded-lg flex items-center gap-1.5" style={{ background: "#E8F2D5", border: "1px solid rgba(115,166,38,0.3)" }}>
+            <CheckCircle2 size={11} style={{ color: "#73A626" }} />
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#5A7E1F" }}>
+              {latestCallStatus === "ordered"
+                ? (t.contactCompleteOrdered || "Contact complete — order placed")
+                : (t.contactCompleteCallback || "Contact complete — callback scheduled")}
+            </span>
+          </div>
+        )}
+
         {notInterestedCount === 2 && (
           <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
             <AlertCircle size={10} />
@@ -10538,11 +10836,32 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
-  const [frequency, setFrequency] = useState("daily");
+  const [scheduleConfig, setScheduleConfig] = useState({
+    frequency: "daily",
+    purchaseDays: [0, 1, 2, 3, 4, 5, 6],
+  });
   const [filter, setFilter] = useState("all");
-  function add() { if (!name.trim() || !vendorId) return; updateClients([...clients, { id: `c_${Date.now()}`, name: name.trim(), phone: phone.trim(), vendorId, frequency }]); setName(""); setPhone(""); }
+  const [editingClient, setEditingClient] = useState(null);
+  function add() {
+    if (!name.trim() || !vendorId) return;
+    if (scheduleConfig.frequency === "biweekly" && scheduleConfig.purchaseDays.length === 0) return;
+    updateClients([...clients, {
+      id: `c_${Date.now()}`,
+      name: name.trim(),
+      phone: phone.trim(),
+      vendorId,
+      frequency: scheduleConfig.frequency,
+      purchaseDays: scheduleConfig.purchaseDays,
+    }]);
+    setName("");
+    setPhone("");
+  }
   function remove(id) { updateClients(clients.filter((c) => c.id !== id)); }
   function reassign(id, newVendorId) { updateClients(clients.map((c) => (c.id === id ? { ...c, vendorId: newVendorId } : c))); }
+  function saveEdit(updatedClient) {
+    updateClients(clients.map((c) => (c.id === updatedClient.id ? { ...c, ...updatedClient } : c)));
+    setEditingClient(null);
+  }
   const visible = filter === "all" ? clients : clients.filter((c) => c.vendorId === filter);
 
   return (
@@ -10550,17 +10869,10 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
       <div className="bg-white rounded-2xl p-4 card-shadow mb-4 space-y-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.clientName} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none" />
         <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.phone} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none" />
-        <div className="grid grid-cols-2 gap-2">
-          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
-            {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
-          </select>
-          <select value={frequency} onChange={(e) => setFrequency(e.target.value)} className="bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
-            <option value="daily">{t.daily}</option>
-            <option value="twiceweek">{t.twiceweek}</option>
-            <option value="weekly">{t.weekly}</option>
-            <option value="biweekly">{t.biweekly}</option>
-          </select>
-        </div>
+        <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
+          {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
+        </select>
+        <PurchaseDaysPicker t={t} value={scheduleConfig} onChange={setScheduleConfig} />
         <button onClick={add} className="w-full py-2 rounded-lg text-sm font-medium text-white flex items-center justify-center gap-1" style={{ background: "#5F2F9D" }}><Plus size={14} /> {t.add}</button>
       </div>
       <select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full mb-3 bg-white rounded-xl px-3 py-2 text-sm outline-none card-shadow">
@@ -10577,9 +10889,174 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
             <select value={c.vendorId} onChange={(e) => reassign(c.id, e.target.value)} className="bg-stone-50 rounded-lg px-2 py-1 text-xs outline-none">
               {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
             </select>
-            <button onClick={() => remove(c.id)} className="text-stone-400 hover:text-red-600 p-1"><Trash2 size={14} /></button>
+            <button
+              onClick={() => setEditingClient(c)}
+              className="text-stone-400 hover:text-blue-600 p-1"
+              title={t.edit || "Edit"}
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={() => remove(c.id)}
+              className="text-stone-400 hover:text-red-600 p-1"
+              title={t.delete || "Delete"}
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
         ))}
+      </div>
+
+      {/* Edit Client Modal */}
+      {editingClient && (
+        <EditClientModal
+          t={t}
+          client={editingClient}
+          vendors={vendors}
+          onSave={saveEdit}
+          onCancel={() => setEditingClient(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// EditClientModal — edit existing client (name, phone, vendor, frequency, notes)
+// ============================================
+function EditClientModal({ t, client, vendors, onSave, onCancel }) {
+  const [name, setName] = useState(client.name || "");
+  const [phone, setPhone] = useState(client.phone || "");
+  const [vendorId, setVendorId] = useState(client.vendorId || vendors[0]?.id || "");
+  // Initialize scheduleConfig from client's existing data, with sane defaults for legacy clients
+  const [scheduleConfig, setScheduleConfig] = useState(() => {
+    const existingDays = client.purchaseDays;
+    if (client.frequency === "daily" || (existingDays && existingDays.length === 7)) {
+      return { frequency: "daily", purchaseDays: [0, 1, 2, 3, 4, 5, 6] };
+    }
+    if (existingDays && existingDays.length > 0 && existingDays.length < 7) {
+      return { frequency: "biweekly", purchaseDays: existingDays };
+    }
+    // Legacy client without purchaseDays — default to daily for backward compatibility
+    return { frequency: "daily", purchaseDays: [0, 1, 2, 3, 4, 5, 6] };
+  });
+  const [longNote, setLongNote] = useState(client.longNote || "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit() {
+    if (!name.trim()) { setError(t.nameRequired || "Name is required"); return; }
+    if (!vendorId) { setError(t.vendorRequired || "Please assign a vendor"); return; }
+    if (scheduleConfig.frequency === "biweekly" && scheduleConfig.purchaseDays.length === 0) {
+      setError(t.selectAtLeastOneDay || "Please select at least one purchase day");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSave({
+        ...client,
+        name: name.trim(),
+        phone: phone.trim(),
+        vendorId,
+        frequency: scheduleConfig.frequency,
+        purchaseDays: scheduleConfig.purchaseDays,
+        longNote: longNote.trim(),
+      });
+    } catch (e) {
+      setError(e?.message || "Failed to save");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onCancel}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5" style={{ color: BRAND_PURPLE }}>
+              <Pencil size={12} /> {t.editClient || "Edit client"}
+            </div>
+            <button onClick={onCancel} className="text-stone-400 hover:text-stone-700 p-1">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.clientName || "Client name"} *</div>
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.phone || "Phone"}</div>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.assignedVendor || "Assigned vendor"} *</div>
+            <select
+              value={vendorId}
+              onChange={(e) => setVendorId(e.target.value)}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm bg-white focus:outline-none focus:border-stone-400"
+            >
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.frequency || "Frequency"} *</div>
+            <PurchaseDaysPicker
+              t={t}
+              value={scheduleConfig}
+              onChange={setScheduleConfig}
+            />
+          </div>
+
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.notes || "Notes"}</div>
+            <textarea
+              value={longNote}
+              onChange={(e) => setLongNote(e.target.value)}
+              placeholder={t.notesPlaceholder || "Optional context, preferences, etc."}
+              rows={2}
+              className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400 resize-none"
+            />
+          </div>
+
+          {error && (
+            <div className="mb-3 px-3 py-2 rounded-lg text-xs" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button onClick={onCancel} className="flex-1 py-2.5 rounded-lg text-sm font-semibold border border-stone-200 text-stone-700">
+              {t.cancel || "Cancel"}
+            </button>
+            <button
+              onClick={submit}
+              disabled={submitting || !name.trim() || !vendorId}
+              className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: BRAND_PURPLE }}
+            >
+              {submitting ? "…" : (t.save || "Save")}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
