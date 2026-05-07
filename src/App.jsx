@@ -2635,6 +2635,50 @@ export default function App() {
   const [authView, setAuthView] = useState("login"); // "login" | "signup" | "forgot"
   const [loginError, setLoginError] = useState("");
 
+  // ============================================
+  // BROWSER BACK BUTTON INTEGRATION
+  // ============================================
+  // Goal: pressing the browser Back button should navigate within the CRM
+  // (close a subview, go back to home) instead of leaving the app.
+  //
+  // Strategy:
+  //   - Each time we navigate INTO a subview, push a state onto window.history
+  //   - Listen for "popstate" events (fired when user clicks Back/Forward)
+  //   - In the popstate handler, set our React state to match what's on the new top of history
+  //
+  // The history.state object has shape: { adminView: "home" | "insights" | ... }
+  // Initial mount seeds the home state without adding extra entries.
+  //
+  // navigateToAdminView(view) is a thin wrapper around setAdminView that ALSO
+  // pushes a history entry so that Back returns to the previous view.
+  function navigateToAdminView(newView) {
+    setAdminView(newView);
+    if (typeof window !== "undefined") {
+      // Avoid double-push if we're already at this view (idempotent navigation)
+      if (window.history.state?.adminView !== newView) {
+        window.history.pushState({ adminView: newView }, "");
+      }
+    }
+  }
+
+  // Seed the initial history state once on mount + listen for browser Back/Forward
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Seed the current state so the FIRST popstate has something to fall back to
+    if (!window.history.state || !window.history.state.adminView) {
+      window.history.replaceState({ adminView: "home" }, "");
+    }
+
+    function handlePopState(event) {
+      // event.state is whatever we pushed; null means user went BEFORE the seeded state
+      const targetView = event.state?.adminView || "home";
+      setAdminView(targetView);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => setSplashDone(true), 1600);
     return () => clearTimeout(timer);
@@ -3775,7 +3819,7 @@ export default function App() {
             createdBy: `manager:${currentUser.id}`,
             status: "pending",
           })}
-          onPick={setAdminView}
+          onPick={navigateToAdminView}
         />
       )}
       {currentUser?.role === "admin" && adminView === "approvals" && (
@@ -3784,11 +3828,11 @@ export default function App() {
           pendingProfiles={pendingProfiles}
           onApprove={approveProfile}
           onReject={rejectProfile}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
       {currentUser?.role === "admin" && adminView === "admin" && (
-        <AdminView t={t} vendors={vendors} clients={clients} leads={leads} interactions={interactions} quotas={quotas} onBack={() => setAdminView("home")} />
+        <AdminView t={t} vendors={vendors} clients={clients} leads={leads} interactions={interactions} quotas={quotas} onBack={() => window.history.back()} />
       )}
       {currentUser?.role === "admin" && adminView === "leads" && (
         <LeadsView
@@ -3802,7 +3846,7 @@ export default function App() {
           onReject={rejectLead}
           onUpdate={updateLead}
           onDelete={deleteLead}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
       {currentUser?.role === "admin" && adminView === "tasks" && (
@@ -3814,7 +3858,7 @@ export default function App() {
           onCreateTask={createTask}
           onUpdateTask={updateTask}
           onDeleteTask={deleteTask}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
       {currentUser?.role === "admin" && adminView === "reminders" && (
@@ -3828,7 +3872,7 @@ export default function App() {
           onCancel={cancelReminder}
           onDelete={deleteReminder}
           onMarkSent={markReminderSent}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
       {currentUser?.role === "admin" && adminView === "archived" && (
@@ -3838,7 +3882,7 @@ export default function App() {
           vendors={vendors}
           interactions={interactions}
           onUnarchive={(clientId) => setClientArchived(clientId, false)}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
       {currentUser?.role === "admin" && adminView === "removal-requests" && (
@@ -3849,7 +3893,7 @@ export default function App() {
           interactions={interactions}
           onApprove={approveRemovalRequest}
           onReject={rejectRemovalRequest}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
       {currentUser?.role === "admin" && adminView === "insights" && (
@@ -3858,7 +3902,7 @@ export default function App() {
           vendors={vendors}
           clients={clients}
           interactions={interactions}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
       {currentUser?.role === "admin" && adminView === "setup" && (
@@ -3879,7 +3923,7 @@ export default function App() {
           setQuotaForVendor={setQuotaForVendor}
           adminCreds={adminCreds}
           changeAdminCreds={changeAdminCreds}
-          onBack={() => setAdminView("home")}
+          onBack={() => window.history.back()}
         />
       )}
     </div>
@@ -7546,6 +7590,40 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const [rankingInts, setRankingInts] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(true);
 
+  // Browser-back integration for Sales Insights:
+  // - When user opens Insights, push a history entry tagged { vendorView: "insights" }
+  // - When user clicks the in-app Back button, we call window.history.back() instead
+  //   of setShowInsights(false) directly — popstate then closes Insights.
+  // - When user clicks the BROWSER Back button while in Insights, popstate fires
+  //   and closes Insights without leaving the app.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function handlePopState(event) {
+      // If the new history state is NOT the insights view, close insights
+      if (event.state?.vendorView !== "insights") {
+        setShowInsights(false);
+      }
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  function openInsights() {
+    setShowInsights(true);
+    if (typeof window !== "undefined") {
+      window.history.pushState({ vendorView: "insights" }, "");
+    }
+  }
+
+  function closeInsights() {
+    // Use browser back to keep history in sync with React state
+    if (typeof window !== "undefined" && window.history.state?.vendorView === "insights") {
+      window.history.back();
+    } else {
+      setShowInsights(false);
+    }
+  }
+
   // Load ALL historical interactions for Sales Insights (full history)
   const [insightsInts, setInsightsInts] = useState([]);
   useEffect(() => {
@@ -7595,7 +7673,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         vendorId={vendorId}
         clients={clients}
         vendorInteractions={insightsInts}
-        onBack={() => setShowInsights(false)}
+        onBack={closeInsights}
       />
     );
   }
@@ -7617,7 +7695,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
       {/* Sales Insights — analyze ordering patterns by day */}
       <button
-        onClick={() => setShowInsights(true)}
+        onClick={openInsights}
         className="w-full text-left rounded-2xl p-4 mb-4 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
         style={{ background: "linear-gradient(135deg, #5F2F9D 0%, #7B4DBF 100%)", color: "white" }}
       >
