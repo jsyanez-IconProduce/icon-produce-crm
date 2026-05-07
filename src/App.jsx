@@ -239,6 +239,19 @@ const T = {
     shortOther: "Other",
     shortSent: "Sent",
     addClient: "Add client",
+    addClientHelper: "Register a recurring buyer",
+    addLeadHelper: "Add a prospect to the queue",
+    iAmA: "I am a",
+    salesRep: "Sales rep",
+    dataEntry: "Data entry",
+    salesRepDescription: "Calls clients, logs orders, manages assigned clients",
+    dataEntryDescription: "Adds new clients and leads only",
+    dataEntryHomeSubtitle: "Add new clients and leads",
+    addedThisSession: "Added this session",
+    client: "client",
+    clients: "clients",
+    lead: "lead",
+    leadsLabel: "leads",
     addLead: "Add lead",
     addVendor: "Add vendor",
     clientName: "Client name",
@@ -828,6 +841,19 @@ const T = {
     shortOther: "Otro",
     shortSent: "Env.",
     addClient: "Agregar cliente",
+    addClientHelper: "Registrar un comprador recurrente",
+    addLeadHelper: "Agregar un prospecto a la cola",
+    iAmA: "Soy un",
+    salesRep: "Vendedor",
+    dataEntry: "Data Entry",
+    salesRepDescription: "Llama a clientes, registra pedidos, maneja clientes asignados",
+    dataEntryDescription: "Solo agrega nuevos clientes y leads",
+    dataEntryHomeSubtitle: "Agrega nuevos clientes y leads",
+    addedThisSession: "Agregados en esta sesión",
+    client: "cliente",
+    clients: "clientes",
+    lead: "lead",
+    leadsLabel: "leads",
     addLead: "Agregar lead",
     addVendor: "Agregar vendedor",
     clientName: "Nombre del cliente",
@@ -2967,11 +2993,13 @@ export default function App() {
     setLoginError("");
   }
 
-  async function signUp({ name, phone, email, password }) {
+  async function signUp({ name, phone, email, password, role }) {
     const cleanEmail = (email || "").trim().toLowerCase();
     if (!name?.trim()) return { success: false, error: t.nameRequired };
     if (!cleanEmail) return { success: false, error: t.emailRequired };
     if (!password || password.length < 6) return { success: false, error: t.passwordTooShort };
+    // Default to "vendor" if no role passed (backward compat)
+    const requestedRole = role === "data_entry" ? "data_entry" : "vendor";
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -2981,6 +3009,7 @@ export default function App() {
           data: {
             full_name: name.trim(),
             phone: (phone || "").trim(),
+            requested_role: requestedRole,
           },
         },
       });
@@ -3792,13 +3821,17 @@ export default function App() {
       )}
 
       {currentUser?.role === "data_entry" && (
-        <DataEntryView
+        <DataEntryHome
           t={t}
           currentUser={currentUser}
           vendors={vendors}
-          leads={leads}
-          onCreate={(payload) => createLead({ ...payload, createdBy: `data_entry:${currentUser.id}`, status: "pending" })}
-          onUpdateLead={updateLead}
+          onCreateClient={(c) => updateClients([...clients, c])}
+          onCreateLead={(payload) => createLead({
+            ...payload,
+            createdBy: `data_entry:${currentUser.id}`,
+            status: "pending",
+          })}
+          onLogout={handleLogout}
         />
       )}
 
@@ -4222,6 +4255,7 @@ function SignUp({ t, onSignUp, onBackToLogin }) {
   const [password, setPassword] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [role, setRole] = useState("vendor"); // "vendor" | "data_entry"
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -4233,7 +4267,7 @@ function SignUp({ t, onSignUp, onBackToLogin }) {
     if (password.length < 6) { setError(t.passwordTooShort); return; }
     if (password !== confirmPwd) { setError(t.passwordsDontMatch); return; }
     setSubmitting(true);
-    const result = await onSignUp({ name, phone, email, password });
+    const result = await onSignUp({ name, phone, email, password, role });
     setSubmitting(false);
     if (!result.success) setError(result.error);
   }
@@ -4267,6 +4301,44 @@ function SignUp({ t, onSignUp, onBackToLogin }) {
                 autoFocus
                 className="w-full bg-stone-50 rounded-lg px-3 py-2.5 text-sm outline-none"
               />
+            </div>
+
+            {/* Role selector — pick between Sales Rep and Data Entry */}
+            <div>
+              <label className="text-[10px] uppercase tracking-widest text-stone-500 mb-1.5 block">
+                {t.iAmA || "I am a"}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setRole("vendor"); if (error) setError(""); }}
+                  className="py-2.5 rounded-lg text-sm font-semibold transition-all"
+                  style={{
+                    background: role === "vendor" ? BRAND_PURPLE : "white",
+                    color: role === "vendor" ? "white" : "#3D3733",
+                    border: `1px solid ${role === "vendor" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
+                  }}
+                >
+                  {t.salesRep || "Sales rep"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setRole("data_entry"); if (error) setError(""); }}
+                  className="py-2.5 rounded-lg text-sm font-semibold transition-all"
+                  style={{
+                    background: role === "data_entry" ? BRAND_PURPLE : "white",
+                    color: role === "data_entry" ? "white" : "#3D3733",
+                    border: `1px solid ${role === "data_entry" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
+                  }}
+                >
+                  {t.dataEntry || "Data entry"}
+                </button>
+              </div>
+              <p className="text-[10px] text-stone-400 mt-1.5">
+                {role === "vendor"
+                  ? (t.salesRepDescription || "Calls clients, logs orders, manages assigned clients")
+                  : (t.dataEntryDescription || "Adds new clients and leads only")}
+              </p>
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-widest text-stone-500 mb-1.5 block">{t.email}</label>
@@ -4601,6 +4673,137 @@ function FindEmailPanel({ t, onLookupEmail }) {
 }
 
 // ---------- ADMIN HOME ----------
+// ============================================
+// DATA ENTRY HOME (overseas data entry team)
+// ============================================
+//
+// This is a minimal home screen for users with role = 'data_entry'.
+// Their job is exclusively to create new clients and leads — they cannot
+// see any client/lead lists, interactions, reports, settings, or vendor stats.
+// RLS policies enforce the same restrictions server-side.
+function DataEntryHome({ t, currentUser, vendors, onCreateClient, onCreateLead, onLogout }) {
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddLead, setShowAddLead] = useState(false);
+  // Track recently-added counts for positive feedback (in-memory only)
+  const [todayCounts, setTodayCounts] = useState({ clients: 0, leads: 0 });
+
+  const firstName = (currentUser?.name || "").split(" ")[0] || "";
+
+  return (
+    <div className="max-w-md mx-auto px-5 pt-12 pb-24">
+      {/* Header — name + logout */}
+      <div className="mb-10 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-widest text-stone-500 mb-2">{prettyDate(t.locale)}</div>
+          <h1 className="display text-5xl leading-none mb-2">
+            {t.welcomeUser(firstName || (t.dataEntry || "Data entry"))}
+          </h1>
+          <p className="text-stone-600 text-sm font-mono">{currentUser.email}</p>
+          <p className="text-stone-500 text-sm mt-3">{t.dataEntryHomeSubtitle || "Add new clients and leads"}</p>
+        </div>
+        <button
+          onClick={onLogout}
+          className="flex-shrink-0 mt-2 p-2 rounded-lg text-stone-500 hover:bg-stone-100"
+          title={t.logout || "Log out"}
+        >
+          <LogOut size={18} />
+        </button>
+      </div>
+
+      {/* Today's counts — positive feedback for completed work */}
+      {(todayCounts.clients > 0 || todayCounts.leads > 0) && (
+        <div className="mb-6 bg-white rounded-2xl p-4 card-shadow">
+          <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-2">
+            {t.addedThisSession || "Added this session"}
+          </div>
+          <div className="flex items-center gap-4">
+            {todayCounts.clients > 0 && (
+              <div>
+                <div className="text-2xl font-bold" style={{ color: BRAND_GREEN }}>{todayCounts.clients}</div>
+                <div className="text-[11px] text-stone-500">
+                  {todayCounts.clients === 1 ? (t.client || "client") : (t.clients || "clients")}
+                </div>
+              </div>
+            )}
+            {todayCounts.leads > 0 && (
+              <div>
+                <div className="text-2xl font-bold" style={{ color: "#8B6F1A" }}>{todayCounts.leads}</div>
+                <div className="text-[11px] text-stone-500">
+                  {todayCounts.leads === 1 ? (t.lead || "lead") : (t.leadsLabel || "leads")}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Two big action buttons */}
+      <div className="space-y-3">
+        <button
+          onClick={() => setShowAddClient(true)}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: BRAND_GREEN, color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <Plus size={22} />
+            </div>
+            <div>
+              <div className="font-semibold text-base">{t.addClient || "Add client"}</div>
+              <div className="text-xs opacity-80">{t.addClientHelper || "Register a recurring buyer"}</div>
+            </div>
+          </div>
+          <ChevronRight size={20} className="opacity-90" />
+        </button>
+
+        <button
+          onClick={() => setShowAddLead(true)}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "#8B6F1A", color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <ClipboardList size={22} />
+            </div>
+            <div>
+              <div className="font-semibold text-base">{t.addLead || "Add lead"}</div>
+              <div className="text-xs opacity-80">{t.addLeadHelper || "Add a prospect to the queue"}</div>
+            </div>
+          </div>
+          <ChevronRight size={20} className="opacity-90" />
+        </button>
+      </div>
+
+      {/* Modal: Add Client */}
+      {showAddClient && (
+        <AddClientModal
+          t={t}
+          vendors={vendors || []}
+          onSave={async (payload) => {
+            if (onCreateClient) await onCreateClient(payload);
+            setTodayCounts((prev) => ({ ...prev, clients: prev.clients + 1 }));
+            setShowAddClient(false);
+          }}
+          onCancel={() => setShowAddClient(false)}
+        />
+      )}
+
+      {/* Modal: Add Lead */}
+      {showAddLead && (
+        <AddLeadModal
+          t={t}
+          onSave={async (payload) => {
+            if (onCreateLead) await onCreateLead(payload);
+            setTodayCounts((prev) => ({ ...prev, leads: prev.leads + 1 }));
+            setShowAddLead(false);
+          }}
+          onCancel={() => setShowAddLead(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, onCreateTask, onCreateClient, onCreateLead, onPick }) {
   const [showQuickTask, setShowQuickTask] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
@@ -6239,7 +6442,19 @@ function PendingUserCard({ profile, onApprove, onReject }) {
     <div className="bg-white rounded-2xl p-4 card-shadow" style={{ borderLeft: `3px solid ${BRAND_PURPLE}` }}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex-1 min-w-0">
-          <div className="font-semibold truncate">{profile.full_name}</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-semibold truncate">{profile.full_name}</div>
+            {/* Role badge — helps manager see what kind of access they're granting */}
+            {profile.role === "data_entry" ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
+                <ClipboardList size={9} /> Data entry
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" style={{ background: BRAND_PURPLE + "20", color: BRAND_PURPLE }}>
+                <Phone size={9} /> Sales rep
+              </span>
+            )}
+          </div>
           <div className="text-xs text-stone-500 truncate font-mono mt-0.5">{profile.email}</div>
           {profile.phone && <div className="text-xs text-stone-500 mt-0.5">{profile.phone}</div>}
           <div className="text-[10px] text-stone-400 mt-1">
