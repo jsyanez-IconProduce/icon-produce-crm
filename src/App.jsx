@@ -4061,20 +4061,30 @@ function Splash() {
 function TopBar({ t, lang, onChangeLang, currentUser, onLogout }) {
   return (
     <>
-      {/* Brand symbol — top-left, present on all pages so the brand is always visible */}
+      {/* Brand symbol — top-left, present on all pages so the brand is always visible.
+          Clicking opens https://iconproduce.com in a new tab so the user doesn't lose
+          their CRM session. rel attributes prevent reverse-tabnabbing security risks. */}
       {currentUser && (
         <div className="fixed top-3 left-4 z-40">
-          <img
-            src={LOGO_SYMBOL}
-            alt="Icon Produce"
-            draggable={false}
-            className="rounded-lg"
-            style={{
-              width: 32,
-              height: 32,
-              boxShadow: "0 2px 6px rgba(95,47,157,0.18)",
-            }}
-          />
+          <a
+            href="https://iconproduce.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Visit iconproduce.com"
+            className="block transition-transform hover:scale-105 active:scale-95"
+          >
+            <img
+              src={LOGO_SYMBOL}
+              alt="Icon Produce"
+              draggable={false}
+              className="rounded-lg"
+              style={{
+                width: 32,
+                height: 32,
+                boxShadow: "0 2px 6px rgba(95,47,157,0.18)",
+              }}
+            />
+          </a>
         </div>
       )}
 
