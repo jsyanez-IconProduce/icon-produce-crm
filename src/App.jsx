@@ -243,7 +243,9 @@ const T = {
     addVendor: "Add vendor",
     clientName: "Client name",
     clientNamePlaceholder: "e.g. Sunrise Distribution",
-    clientPhonePlaceholder: "305-555-1234",
+    clientPhonePlaceholder: "(305) 555-1234",
+    clientEmailPlaceholder: "client@example.com",
+    invalidEmail: "Please enter a valid email or leave it empty",
     assignedVendor: "Assigned vendor",
     vendorRequired: "Please assign a vendor",
     nameRequired: "Name is required",
@@ -830,7 +832,9 @@ const T = {
     addVendor: "Agregar vendedor",
     clientName: "Nombre del cliente",
     clientNamePlaceholder: "ej. Distribuidora Sunrise",
-    clientPhonePlaceholder: "305-555-1234",
+    clientPhonePlaceholder: "(305) 555-1234",
+    clientEmailPlaceholder: "cliente@ejemplo.com",
+    invalidEmail: "Ingresa un correo válido o déjalo vacío",
     assignedVendor: "Vendedor asignado",
     vendorRequired: "Por favor asigna un vendedor",
     nameRequired: "El nombre es obligatorio",
@@ -1271,6 +1275,29 @@ function isPurchaseDayToday(purchaseDays) {
   if (!purchaseDays || purchaseDays.length === 0) return false;
   return purchaseDays.includes(new Date().getDay());
 }
+
+// Format a phone number string in US style as the user types.
+// Examples:
+//   "3"         → "(3"
+//   "305"       → "(305) "
+//   "3055551234" → "(305) 555-1234"
+//   "13055551234" → "1 (305) 555-1234"
+// Strips non-digits first, then formats.
+function formatPhoneUS(input) {
+  if (!input) return "";
+  const digits = String(input).replace(/\D/g, "");
+  if (digits.length === 0) return "";
+  // 11-digit numbers starting with 1 (US country code)
+  if (digits.length === 11 && digits.startsWith("1")) {
+    const rest = digits.slice(1);
+    return `1 (${rest.slice(0, 3)}) ${rest.slice(3, 6)}-${rest.slice(6, 10)}`;
+  }
+  // Cap at 10 digits for the standard US format
+  const d = digits.slice(0, 10);
+  if (d.length < 4) return `(${d}`;
+  if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6, 10)}`;
+}
 function chOf(i) { return i.channel || "call"; }
 function subtractMin(timeStr, mins) {
   if (!timeStr) return "";
@@ -1363,6 +1390,7 @@ function clientFromDb(row) {
     id: row.id,
     name: row.name,
     phone: row.phone,
+    email: row.email || "",
     vendorId: row.vendor_id,
     frequency: row.frequency,
     purchaseDays: row.purchase_days || null, // array of day-of-week numbers (0=Sun, 1=Mon, ..., 6=Sat); null = legacy
@@ -1382,6 +1410,7 @@ function clientToDb(c) {
   const out = {};
   if (c.name !== undefined) out.name = c.name;
   if (c.phone !== undefined) out.phone = c.phone;
+  if (c.email !== undefined) out.email = c.email;
   if (c.vendorId !== undefined) out.vendor_id = c.vendorId;
   if (c.frequency !== undefined) out.frequency = c.frequency;
   if (c.purchaseDays !== undefined) out.purchase_days = c.purchaseDays;
@@ -5131,6 +5160,7 @@ function PurchaseDaysPicker({ t, value, onChange }) {
 function AddClientModal({ t, vendors, onSave, onCancel }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
   // Frequency + purchaseDays managed together via PurchaseDaysPicker
   const [scheduleConfig, setScheduleConfig] = useState({
@@ -5148,6 +5178,11 @@ function AddClientModal({ t, vendors, onSave, onCancel }) {
       setError(t.selectAtLeastOneDay || "Please select at least one purchase day");
       return;
     }
+    // Light email validation: only check format if user typed something
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError(t.invalidEmail || "Please enter a valid email or leave it empty");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -5155,6 +5190,7 @@ function AddClientModal({ t, vendors, onSave, onCancel }) {
         id: `c_${Date.now()}`,
         name: name.trim(),
         phone: phone.trim(),
+        email: email.trim(),
         vendorId,
         frequency: scheduleConfig.frequency,
         purchaseDays: scheduleConfig.purchaseDays,
@@ -5198,8 +5234,19 @@ function AddClientModal({ t, vendors, onSave, onCancel }) {
             <input
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder={t.clientPhonePlaceholder || "305-555-1234"}
+              onChange={(e) => setPhone(formatPhoneUS(e.target.value))}
+              placeholder={t.clientPhonePlaceholder || "(305) 555-1234"}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.email || "Email"}</div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t.clientEmailPlaceholder || "client@example.com"}
               className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
             />
           </div>
@@ -10835,6 +10882,7 @@ function VendorsManager({ t, vendors, updateVendors }) {
 function ClientsManager({ t, clients, vendors, updateClients }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
   const [scheduleConfig, setScheduleConfig] = useState({
     frequency: "daily",
@@ -10849,12 +10897,14 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
       id: `c_${Date.now()}`,
       name: name.trim(),
       phone: phone.trim(),
+      email: email.trim(),
       vendorId,
       frequency: scheduleConfig.frequency,
       purchaseDays: scheduleConfig.purchaseDays,
     }]);
     setName("");
     setPhone("");
+    setEmail("");
   }
   function remove(id) { updateClients(clients.filter((c) => c.id !== id)); }
   function reassign(id, newVendorId) { updateClients(clients.map((c) => (c.id === id ? { ...c, vendorId: newVendorId } : c))); }
@@ -10868,7 +10918,20 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
     <div>
       <div className="bg-white rounded-2xl p-4 card-shadow mb-4 space-y-2">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.clientName} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none" />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.phone} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none" />
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(formatPhoneUS(e.target.value))}
+          placeholder={t.clientPhonePlaceholder || "(305) 555-1234"}
+          className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t.clientEmailPlaceholder || "client@example.com"}
+          className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
+        />
         <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
           {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
         </select>
@@ -10926,7 +10989,9 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
 // ============================================
 function EditClientModal({ t, client, vendors, onSave, onCancel }) {
   const [name, setName] = useState(client.name || "");
-  const [phone, setPhone] = useState(client.phone || "");
+  // Initialize phone with auto-format applied so legacy unformatted numbers look clean immediately
+  const [phone, setPhone] = useState(formatPhoneUS(client.phone || ""));
+  const [email, setEmail] = useState(client.email || "");
   const [vendorId, setVendorId] = useState(client.vendorId || vendors[0]?.id || "");
   // Initialize scheduleConfig from client's existing data, with sane defaults for legacy clients
   const [scheduleConfig, setScheduleConfig] = useState(() => {
@@ -10951,6 +11016,10 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
       setError(t.selectAtLeastOneDay || "Please select at least one purchase day");
       return;
     }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError(t.invalidEmail || "Please enter a valid email or leave it empty");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -10958,6 +11027,7 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
         ...client,
         name: name.trim(),
         phone: phone.trim(),
+        email: email.trim(),
         vendorId,
         frequency: scheduleConfig.frequency,
         purchaseDays: scheduleConfig.purchaseDays,
@@ -10999,7 +11069,18 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
             <input
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(formatPhoneUS(e.target.value))}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.email || "Email"}</div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t.clientEmailPlaceholder || "client@example.com"}
               className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
             />
           </div>
