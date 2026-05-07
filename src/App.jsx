@@ -1430,6 +1430,8 @@ function clientFromDb(row) {
     removalRequested: row.removal_requested || false,
     removalRequestedAt: row.removal_requested_at ? new Date(row.removal_requested_at).getTime() : null,
     removalRequestedBy: row.removal_requested_by || null,
+    createdBy: row.created_by || null,
+    createdByRole: row.created_by_role || null,
   };
 }
 function clientToDb(c) {
@@ -1449,6 +1451,8 @@ function clientToDb(c) {
   if (c.removalRequested !== undefined) out.removal_requested = c.removalRequested;
   if (c.removalRequestedAt !== undefined) out.removal_requested_at = c.removalRequestedAt ? new Date(c.removalRequestedAt).toISOString() : null;
   if (c.removalRequestedBy !== undefined) out.removal_requested_by = c.removalRequestedBy;
+  if (c.createdBy !== undefined) out.created_by = c.createdBy;
+  if (c.createdByRole !== undefined) out.created_by_role = c.createdByRole;
   return out;
 }
 
@@ -3448,7 +3452,13 @@ export default function App() {
     // Added
     for (const c of nextClients) {
       if (!prevById.has(c.id)) {
-        const dbRow = clientToDb(c);
+        // Auto-stamp who created this client (used by RLS for data_entry visibility)
+        const cWithCreator = {
+          ...c,
+          createdBy: c.createdBy || currentUser?.id || null,
+          createdByRole: c.createdByRole || currentUser?.role || null,
+        };
+        const dbRow = clientToDb(cWithCreator);
         // If the local id looks generated (starts with "c_" or non-uuid), let DB generate one
         const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c.id || "");
         if (looksLikeUuid) dbRow.id = c.id;
