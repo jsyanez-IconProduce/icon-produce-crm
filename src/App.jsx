@@ -219,6 +219,7 @@ const T = {
     convertLeadHelper: "This will turn the lead into a regular client. Set how often they order so they appear in your daily list.",
     alreadyOrderedInPast: "Already ordered in the past",
     converting: "Converting…",
+    conversionFailed: "Conversion failed. Please try again.",
     purchaseDaysRequired: "Select at least one purchase day",
     managerBadge: "Manager",
     backToManager: "Back to Manager",
@@ -843,6 +844,7 @@ const T = {
     convertLeadHelper: "Esto convertirá el lead en un cliente regular. Define cada cuánto ordena para que aparezca en tu lista diaria.",
     alreadyOrderedInPast: "Ya ordenó en el pasado",
     converting: "Convirtiendo…",
+    conversionFailed: "La conversión falló. Intenta de nuevo.",
     purchaseDaysRequired: "Selecciona al menos un día de compra",
     managerBadge: "Manager",
     backToManager: "Volver al Manager",
@@ -3537,23 +3539,46 @@ export default function App() {
   //  - Manually when vendor clicks "Convert to client" on a lead card
   // `config` is optional: { frequency, purchaseDays } — if not provided, defaults apply.
   async function convertLeadToCustomer(lead, config = {}) {
+    if (!lead || !lead.id) {
+      console.error("convertLeadToCustomer: invalid lead", lead);
+      return { success: false, error: "Invalid lead" };
+    }
+
     const frequency = config.frequency || "daily";
     const purchaseDays = config.purchaseDays || [0, 1, 2, 3, 4, 5, 6];
 
-    // Insert client (using lead's id so existing interactions continue to match)
-    const { error: cErr } = await supabase.from("clients").insert({
-      id: lead.id,
-      name: lead.name,
-      phone: lead.phone,
-      vendor_id: lead.assignedVendorId,
-      frequency,
-      purchase_days: purchaseDays,
-      converted_from_lead: true,
-      converted_at: new Date().toISOString(),
-    });
-    if (cErr) {
-      console.error("Failed to create client from lead:", cErr);
-      return { success: false, error: cErr.message };
+    // Defensive: if no vendor assigned, fall back to current user (vendor's own context)
+    const assignedVendorId = lead.assignedVendorId || currentUser?.id;
+    if (!assignedVendorId) {
+      console.error("convertLeadToCustomer: no vendor id available", lead);
+      return { success: false, error: "No vendor assigned" };
+    }
+
+    // Check if a client with this id already exists (e.g., auto-conversion already ran)
+    // If so, skip the insert but still mark the lead as converted to keep state consistent.
+    const existingClient = clients.find((c) => c.id === lead.id);
+
+    if (!existingClient) {
+      // Insert client (using lead's id so existing interactions continue to match)
+      const { error: cErr } = await supabase.from("clients").insert({
+        id: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        vendor_id: assignedVendorId,
+        frequency,
+        purchase_days: purchaseDays,
+        converted_from_lead: true,
+        converted_at: new Date().toISOString(),
+      });
+      if (cErr) {
+        // Postgres duplicate-key error code is 23505; treat that as "already converted"
+        const isDuplicateKey = cErr.code === "23505" || /duplicate key/i.test(cErr.message || "");
+        if (!isDuplicateKey) {
+          console.error("Failed to create client from lead:", cErr);
+          return { success: false, error: cErr.message };
+        }
+        console.warn("Client already exists for this lead — skipping insert", lead.id);
+      }
     }
 
     // Mark lead as converted
@@ -3575,7 +3600,7 @@ export default function App() {
       name: lead.name,
       phone: lead.phone,
       email: "",
-      vendorId: lead.assignedVendorId,
+      vendorId: assignedVendorId,
       frequency,
       purchaseDays,
       tags: [],
@@ -3596,7 +3621,7 @@ export default function App() {
       skipUntil: null,
     };
     setClients((prev) => {
-      // Avoid duplicates if auto-conversion already ran
+      // Avoid duplicates if client already exists (auto-conversion already ran)
       if (prev.some((c) => c.id === newClient.id)) return prev;
       return [...prev, newClient];
     });
@@ -6028,12 +6053,19 @@ function ConvertLeadModal({ t, lead, onConfirm, onCancel }) {
     setSubmitting(true);
     setError(null);
     try {
-      await onConfirm(scheduleConfig);
+      // onConfirm may return a result object or throw. Either way, we must always
+      // reset submitting state (via finally) so the button doesn't hang on "Converting…".
+      const result = await onConfirm(scheduleConfig);
+      // If wrapper returned an explicit failure, show error and stop
+      if (result && result.success === false) {
+        setError(result.error || (t.conversionFailed || "Conversion failed. Please try again."));
+      }
+      // On success the parent will unmount this modal — no further action needed
     } catch (e) {
-      setError(e?.message || "Failed to convert");
+      setError(e?.message || (t.conversionFailed || "Conversion failed. Please try again."));
+    } finally {
       setSubmitting(false);
     }
-    // No need to setSubmitting(false) on success — modal will unmount
   }
 
   return (
@@ -8837,8 +8869,12 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       )}
 
-      {/* Request new lead button */}
-      <RequestLeadButton t={t} onRequestLead={onRequestLead} />
+      {/* Request new lead button — only for regular vendors.
+          Managers in "My Sales" already have the "Add Lead" quick action button at the top
+          which auto-approves; they don't need the "request" flow. */}
+      {!isManagerMode && (
+        <RequestLeadButton t={t} onRequestLead={onRequestLead} />
+      )}
 
       {/* MY GROWTH */}
       <div className="mt-10 pt-6" style={{ borderTop: "1px solid rgba(28,27,26,0.08)" }}>
@@ -8903,9 +8939,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           lead={convertingLead}
           onConfirm={async (config) => {
             const result = await onConvertLead(convertingLead, config);
-            if (result?.success !== false) {
+            // Only close on success; on failure, leave modal open so user sees the error
+            if (result?.success === true) {
               setConvertingLead(null);
             }
+            return result;
           }}
           onCancel={() => setConvertingLead(null)}
         />
