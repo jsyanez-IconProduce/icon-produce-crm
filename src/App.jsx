@@ -216,6 +216,8 @@ const T = {
     mySales: "My Sales",
     mySalesSub: "Your own assigned clients",
     managerBadge: "Manager",
+    backToManager: "Back to Manager",
+    myManagerSalesMode: "My Sales (Manager mode)",
     salesInsightsTagline: "See who orders on which days",
     salesInsightsSub: "Track your customer ordering patterns across all history",
     salesInsightsTeamSub: "Team-wide ordering patterns",
@@ -833,6 +835,8 @@ const T = {
     mySales: "Mis Ventas",
     mySalesSub: "Tus propios clientes asignados",
     managerBadge: "Manager",
+    backToManager: "Volver al Manager",
+    myManagerSalesMode: "Mis Ventas (Modo Manager)",
     salesInsightsTagline: "Ver quién ordena qué días",
     salesInsightsSub: "Sigue los patrones de pedidos de tus clientes en todo el historial",
     salesInsightsTeamSub: "Patrones de pedidos del equipo completo",
@@ -4132,6 +4136,7 @@ export default function App() {
           onCancelRemovalRequest={cancelClientRemovalRequest}
           onRequestSkipWeek={requestSkipWeek}
           onCancelSkipRequest={cancelSkipRequest}
+          isManagerMode={true}
           onBack={() => window.history.back()}
         />
       )}
@@ -8098,7 +8103,7 @@ function TrendsTab({ t, dowLabels, dowLabelsLong, trends, totalOrders }) {
 
 
 // ---------- VENDOR VIEW (main vendor home screen) ----------
-function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, onBack }) {
+function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, isManagerMode, onBack }) {
   const [view, setView] = useState("home"); // "home" | "insights"
   const [searchQuery, setSearchQuery] = useState("");
   // Active tab for client status sections. Default to "to_contact" — the most actionable group today.
@@ -8269,9 +8274,28 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     <div className="max-w-7xl mx-auto px-5 xl:px-8 pt-6 pb-24">
       {/* Narrow column for personal/account sections */}
       <div className="max-w-md mx-auto">
+      {/* Back to Manager button — visible only when manager is in "My Sales" mode.
+          Lets the manager return to the Manager Dashboard easily without using browser back. */}
+      {isManagerMode && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm mb-4 px-3 py-1.5 rounded-lg transition-colors"
+          style={{ background: BRAND_PURPLE + "15", color: BRAND_PURPLE }}
+        >
+          <ArrowLeft size={14} />
+          <span className="font-semibold">{t.backToManager || "Back to Manager"}</span>
+        </button>
+      )}
       <div className="mb-6">
         <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
         <h1 className="display text-3xl leading-tight">{vendor?.name}</h1>
+        {/* Manager mode indicator — small caption below name */}
+        {isManagerMode && (
+          <div className="text-xs mt-1 font-medium" style={{ color: BRAND_PURPLE }}>
+            <Crown size={11} className="inline mr-1" />
+            {t.myManagerSalesMode || "My Sales (Manager mode)"}
+          </div>
+        )}
       </div>
 
       {/* Phone number setting */}
