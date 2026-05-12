@@ -215,6 +215,11 @@ const T = {
     salesInsights: "Sales Insights",
     mySales: "My Sales",
     mySalesSub: "Your own assigned clients",
+    convertToClient: "Convert to client",
+    convertLeadHelper: "This will turn the lead into a regular client. Set how often they order so they appear in your daily list.",
+    alreadyOrderedInPast: "Already ordered in the past",
+    converting: "Converting…",
+    purchaseDaysRequired: "Select at least one purchase day",
     managerBadge: "Manager",
     backToManager: "Back to Manager",
     myManagerSalesMode: "My Sales (Manager mode)",
@@ -834,6 +839,11 @@ const T = {
     salesInsights: "Análisis de Ventas",
     mySales: "Mis Ventas",
     mySalesSub: "Tus propios clientes asignados",
+    convertToClient: "Convertir a cliente",
+    convertLeadHelper: "Esto convertirá el lead en un cliente regular. Define cada cuánto ordena para que aparezca en tu lista diaria.",
+    alreadyOrderedInPast: "Ya ordenó en el pasado",
+    converting: "Convirtiendo…",
+    purchaseDaysRequired: "Selecciona al menos un día de compra",
     managerBadge: "Manager",
     backToManager: "Volver al Manager",
     myManagerSalesMode: "Mis Ventas (Modo Manager)",
@@ -3522,20 +3532,28 @@ export default function App() {
   }
 
 
-  async function convertLeadToCustomer(lead) {
+  // Converts a lead into a regular client. Used both:
+  //  - Automatically when first "ordered" interaction is logged against a lead
+  //  - Manually when vendor clicks "Convert to client" on a lead card
+  // `config` is optional: { frequency, purchaseDays } — if not provided, defaults apply.
+  async function convertLeadToCustomer(lead, config = {}) {
+    const frequency = config.frequency || "daily";
+    const purchaseDays = config.purchaseDays || [0, 1, 2, 3, 4, 5, 6];
+
     // Insert client (using lead's id so existing interactions continue to match)
     const { error: cErr } = await supabase.from("clients").insert({
       id: lead.id,
       name: lead.name,
       phone: lead.phone,
       vendor_id: lead.assignedVendorId,
-      frequency: "weekly",
+      frequency,
+      purchase_days: purchaseDays,
       converted_from_lead: true,
       converted_at: new Date().toISOString(),
     });
     if (cErr) {
       console.error("Failed to create client from lead:", cErr);
-      return;
+      return { success: false, error: cErr.message };
     }
 
     // Mark lead as converted
@@ -3546,7 +3564,47 @@ export default function App() {
         converted_at: new Date().toISOString(),
       })
       .eq("id", lead.id);
-    if (lErr) console.error("Failed to mark lead as converted:", lErr);
+    if (lErr) {
+      console.error("Failed to mark lead as converted:", lErr);
+      return { success: false, error: lErr.message };
+    }
+
+    // Optimistic local state update — add the new client and remove the lead from active list
+    const newClient = {
+      id: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      email: "",
+      vendorId: lead.assignedVendorId,
+      frequency,
+      purchaseDays,
+      tags: [],
+      longNote: "",
+      convertedFromLead: true,
+      convertedAt: Date.now(),
+      archived: false,
+      archivedAt: null,
+      archiveReason: null,
+      removalRequested: false,
+      removalRequestedAt: null,
+      removalRequestedBy: null,
+      createdBy: null,
+      createdByRole: null,
+      skipRequestPending: false,
+      skipRequestedAt: null,
+      skipRequestedBy: null,
+      skipUntil: null,
+    };
+    setClients((prev) => {
+      // Avoid duplicates if auto-conversion already ran
+      if (prev.some((c) => c.id === newClient.id)) return prev;
+      return [...prev, newClient];
+    });
+    setLeads((prev) => prev.map((l) =>
+      l.id === lead.id ? { ...l, status: "converted", convertedAt: Date.now() } : l
+    ));
+
+    return { success: true };
   }
 
   async function deleteInteraction(id) {
@@ -3633,7 +3691,7 @@ export default function App() {
   }
 
   // ----- LEAD MANAGEMENT -----
-  async function createLead({ name, phone, note, createdBy, status = "pending" }) {
+  async function createLead({ name, phone, note, createdBy, status = "pending", assignedVendorId, approvedAt }) {
     if (!name?.trim()) return { success: false, error: t.nameRequired };
 
     let createdByRole = "manager";
@@ -3652,6 +3710,9 @@ export default function App() {
       created_by: createdById,
       created_by_role: createdByRole,
     };
+    // Optional fields for auto-approved leads (manager-created)
+    if (assignedVendorId) newLead.assigned_vendor_id = assignedVendorId;
+    if (approvedAt) newLead.approved_at = new Date(approvedAt).toISOString();
 
     const { data, error } = await supabase
       .from("leads")
@@ -3981,6 +4042,7 @@ export default function App() {
           onCancelRemovalRequest={cancelClientRemovalRequest}
           onRequestSkipWeek={requestSkipWeek}
           onCancelSkipRequest={cancelSkipRequest}
+          onConvertLead={convertLeadToCustomer}
           onBack={handleLogout}
         />
       )}
@@ -4015,7 +4077,11 @@ export default function App() {
           onCreateLead={(payload) => createLead({
             ...payload,
             createdBy: `manager:${currentUser.id}`,
-            status: "pending",
+            // Manager-created leads are auto-approved (no need for self-approval).
+            // Default vendor = the manager themselves if no assignedVendorId provided.
+            status: "active",
+            assignedVendorId: payload.assignedVendorId || currentUser.id,
+            approvedAt: Date.now(),
           })}
           onPick={navigateToAdminView}
         />
@@ -4039,7 +4105,15 @@ export default function App() {
           dataEntryUsers={dataEntryUsers}
           leads={leads}
           currentUser={currentUser}
-          onCreate={(payload) => createLead({ ...payload, createdBy: `manager:${currentUser.id}`, status: "pending" })}
+          onCreate={(payload) => createLead({
+            ...payload,
+            createdBy: `manager:${currentUser.id}`,
+            // Manager-created leads auto-approve. assignedVendorId comes from the form's
+            // vendor selector (defaults to manager but can be changed).
+            status: "active",
+            assignedVendorId: payload.assignedVendorId || currentUser.id,
+            approvedAt: Date.now(),
+          })}
           onApprove={approveLead}
           onReject={rejectLead}
           onUpdate={updateLead}
@@ -4127,7 +4201,14 @@ export default function App() {
           onUndo={deleteInteraction}
           onUpdate={updateInteraction}
           onCloseCallback={closeCallback}
-          onRequestLead={(payload) => createLead({ ...payload, createdBy: `manager:${currentUser.id}`, status: "pending" })}
+          onRequestLead={(payload) => createLead({
+            ...payload,
+            createdBy: `manager:${currentUser.id}`,
+            // Manager auto-approves their own leads, defaulting to themselves as vendor.
+            status: "active",
+            assignedVendorId: payload.assignedVendorId || currentUser.id,
+            approvedAt: Date.now(),
+          })}
           onCreateTask={createTask}
           onUpdateTask={updateTask}
           onDeleteTask={deleteTask}
@@ -4136,7 +4217,18 @@ export default function App() {
           onCancelRemovalRequest={cancelClientRemovalRequest}
           onRequestSkipWeek={requestSkipWeek}
           onCancelSkipRequest={cancelSkipRequest}
+          onConvertLead={convertLeadToCustomer}
           isManagerMode={true}
+          // Quick action handlers exclusively for manager in "My Sales" view.
+          // They mirror the AdminHome quick actions: auto-assign to manager, no approval needed.
+          onCreateClientDirect={(c) => updateClients([...clients, c])}
+          onCreateLeadDirect={(payload) => createLead({
+            ...payload,
+            createdBy: `manager:${currentUser.id}`,
+            status: "active",
+            assignedVendorId: payload.assignedVendorId || currentUser.id,
+            approvedAt: Date.now(),
+          })}
           onBack={() => window.history.back()}
         />
       )}
@@ -5658,11 +5750,11 @@ function PurchaseDaysPicker({ t, value, onChange }) {
 }
 
 
-function AddClientModal({ t, vendors, onSave, onCancel }) {
+function AddClientModal({ t, vendors, onSave, onCancel, defaultVendorId }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [vendorId, setVendorId] = useState(vendors[0]?.id || "");
+  const [vendorId, setVendorId] = useState(defaultVendorId || vendors[0]?.id || "");
   // Frequency + purchaseDays managed together via PurchaseDaysPicker
   const [scheduleConfig, setScheduleConfig] = useState({
     frequency: "daily",
@@ -5907,6 +5999,91 @@ function AddLeadModal({ t, onSave, onCancel }) {
               style={{ background: "#8B6F1A" }}
             >
               {submitting ? "…" : (t.save || "Save")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// ConvertLeadModal — converts a lead into a regular client
+// Asks for frequency + purchase days. Vendor remains the same.
+// ============================================
+function ConvertLeadModal({ t, lead, onConfirm, onCancel }) {
+  const [scheduleConfig, setScheduleConfig] = useState({
+    frequency: "daily",
+    purchaseDays: [0, 1, 2, 3, 4, 5, 6],
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit() {
+    // Validate: biweekly requires at least one purchase day
+    if (scheduleConfig.frequency === "biweekly" && (!scheduleConfig.purchaseDays || scheduleConfig.purchaseDays.length === 0)) {
+      setError(t.purchaseDaysRequired || "Select at least one purchase day");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onConfirm(scheduleConfig);
+    } catch (e) {
+      setError(e?.message || "Failed to convert");
+      setSubmitting(false);
+    }
+    // No need to setSubmitting(false) on success — modal will unmount
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onCancel}>
+      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-xs uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#5C8519" }}>
+              <UserPlus size={12} /> {t.convertToClient || "Convert to client"}
+            </div>
+            <button onClick={onCancel} className="text-stone-400 hover:text-stone-700 p-1">
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Show lead summary */}
+          <div className="bg-stone-50 rounded-xl p-3 mb-4">
+            <div className="font-semibold text-sm">{lead.name}</div>
+            {lead.phone && <div className="text-xs text-stone-500 mt-0.5">{lead.phone}</div>}
+          </div>
+
+          <p className="text-[11px] text-stone-500 mb-3">
+            {t.convertLeadHelper || "This will turn the lead into a regular client. Set how often they order so they appear in your daily list."}
+          </p>
+
+          {/* Frequency + purchase days picker */}
+          <div className="mb-4">
+            <PurchaseDaysPicker t={t} value={scheduleConfig} onChange={setScheduleConfig} />
+          </div>
+
+          {error && (
+            <div className="text-xs text-red-600 mb-3">{error}</div>
+          )}
+
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={onCancel}
+              disabled={submitting}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+              style={{ background: "#F0EAE0", color: "#8B7355" }}
+            >
+              {t.cancel || "Cancel"}
+            </button>
+            <button
+              onClick={submit}
+              disabled={submitting}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+              style={{ background: submitting ? "#999" : "#73A626" }}
+            >
+              {submitting ? (t.converting || "Converting…") : (t.convertToClient || "Convert")}
             </button>
           </div>
         </div>
@@ -8103,11 +8280,16 @@ function TrendsTab({ t, dowLabels, dowLabelsLong, trends, totalOrders }) {
 
 
 // ---------- VENDOR VIEW (main vendor home screen) ----------
-function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, isManagerMode, onBack }) {
+function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, onConvertLead, isManagerMode, onCreateClientDirect, onCreateLeadDirect, onBack }) {
   const [view, setView] = useState("home"); // "home" | "insights"
   const [searchQuery, setSearchQuery] = useState("");
   // Active tab for client status sections. Default to "to_contact" — the most actionable group today.
   const [activeTab, setActiveTab] = useState("to_contact");
+  // Manager-mode only: state for the "Add client" / "Add lead" quick action modals
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [showAddLead, setShowAddLead] = useState(false);
+  // Lead-to-client conversion: holds the lead currently being converted, or null
+  const [convertingLead, setConvertingLead] = useState(null);
   const vendor = vendors.find((v) => v.id === vendorId);
 
   // Hide clients whose skip period is still active (skip_until > now).
@@ -8298,6 +8480,38 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         )}
       </div>
 
+      {/* Quick action row — only visible in manager mode.
+          Manager can add clients/leads directly from My Sales without going back to dashboard.
+          These are auto-approved (no pending state) and default-assigned to the manager themselves. */}
+      {isManagerMode && onCreateClientDirect && onCreateLeadDirect && (
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <button
+            onClick={() => setShowAddClient(true)}
+            className="bg-white rounded-xl py-3 px-2 flex flex-col items-center justify-center card-shadow transition-all hover:scale-105 active:scale-95"
+            style={{ border: `1px solid ${BRAND_GREEN}30` }}
+          >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center mb-1" style={{ background: BRAND_GREEN + "20" }}>
+              <Plus size={16} style={{ color: BRAND_GREEN }} />
+            </div>
+            <div className="text-[11px] font-semibold" style={{ color: BRAND_GREEN }}>
+              {t.addClient || "Add client"}
+            </div>
+          </button>
+          <button
+            onClick={() => setShowAddLead(true)}
+            className="bg-white rounded-xl py-3 px-2 flex flex-col items-center justify-center card-shadow transition-all hover:scale-105 active:scale-95"
+            style={{ border: "1px solid #F5D78580" }}
+          >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center mb-1" style={{ background: "#FFF5D6" }}>
+              <ClipboardList size={16} style={{ color: "#8B6F1A" }} />
+            </div>
+            <div className="text-[11px] font-semibold" style={{ color: "#8B6F1A" }}>
+              {t.addLead || "Add lead"}
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Phone number setting */}
       {onUpdatePhone && (
         <VendorPhoneCard t={t} currentPhone={myPhone} onUpdate={onUpdatePhone} />
@@ -8464,6 +8678,26 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
               return (
                 <div key={lead.id} style={{ borderLeft: "3px solid #F5D785", borderRadius: "16px" }}>
                   <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
+                  {/* Convert to client — turns a lead into a regular client.
+                      Opens modal to choose frequency + purchase days.
+                      After conversion, lead disappears from leads list and client appears with
+                      "Already ordered in the past" badge. */}
+                  {onConvertLead && (
+                    <div className="px-4 pb-3 -mt-1">
+                      <button
+                        onClick={() => setConvertingLead(lead)}
+                        className="w-full text-center text-[11px] py-1.5 rounded-md font-medium flex items-center justify-center gap-1.5 transition-colors"
+                        style={{
+                          background: "rgba(115, 166, 38, 0.10)",
+                          color: "#5C8519",
+                          border: "1px dashed rgba(115, 166, 38, 0.35)",
+                        }}
+                      >
+                        <UserPlus size={12} />
+                        {t.convertToClient || "Convert to client"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -8636,6 +8870,46 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       </div>
       </div>
       {/* End bottom narrow column */}
+
+      {/* Manager-mode quick-action modals — only rendered when isManagerMode and handlers exist.
+          On save, modal calls the direct handler (auto-approve, auto-assign to manager) and closes. */}
+      {isManagerMode && showAddClient && onCreateClientDirect && (
+        <AddClientModal
+          t={t}
+          vendors={vendors}
+          defaultVendorId={vendorId}
+          onSave={async (client) => {
+            await onCreateClientDirect(client);
+            setShowAddClient(false);
+          }}
+          onCancel={() => setShowAddClient(false)}
+        />
+      )}
+      {isManagerMode && showAddLead && onCreateLeadDirect && (
+        <AddLeadModal
+          t={t}
+          onSave={async (payload) => {
+            await onCreateLeadDirect(payload);
+            setShowAddLead(false);
+          }}
+          onCancel={() => setShowAddLead(false)}
+        />
+      )}
+
+      {/* Convert lead to client modal — asks for frequency + purchase days, then converts */}
+      {convertingLead && onConvertLead && (
+        <ConvertLeadModal
+          t={t}
+          lead={convertingLead}
+          onConfirm={async (config) => {
+            const result = await onConvertLead(convertingLead, config);
+            if (result?.success !== false) {
+              setConvertingLead(null);
+            }
+          }}
+          onCancel={() => setConvertingLead(null)}
+        />
+      )}
     </div>
   );
 }
@@ -8881,6 +9155,15 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
                 {t.todayLabel || "Today"}
               </span>
             )}
+          </div>
+        )}
+        {/* "Already ordered in the past" badge — shown for clients converted from a lead.
+            Helps the vendor remember this client has prior history (not a brand-new account). */}
+        {client.convertedFromLead && (
+          <div className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide mt-1.5 px-2 py-0.5 rounded-full"
+               style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
+            <History size={10} />
+            {t.alreadyOrderedInPast || "Already ordered in the past"}
           </div>
         )}
         {clientTags.length > 0 && (
