@@ -3538,6 +3538,15 @@ export default function App() {
   //  - Automatically when first "ordered" interaction is logged against a lead
   //  - Manually when vendor clicks "Convert to client" on a lead card
   // `config` is optional: { frequency, purchaseDays } — if not provided, defaults apply.
+  //
+  // IMPORTANT vendor assignment rule:
+  //   The new client gets assigned to the user PERFORMING the conversion (currentUser),
+  //   NOT necessarily the lead's assigned_vendor_id. Reasoning:
+  //   - If a vendor converts a lead they created/manage, they get the client (expected)
+  //   - If a manager converts a lead from another vendor, the manager gets it (also expected
+  //     in the my_sales flow). The lead.assignedVendorId is unreliable as a fallback.
+  //   - Also: the RLS policy on `clients` requires vendor_id = auth.uid() for INSERT by vendors,
+  //     so using lead.assignedVendorId could fail if they differ.
   async function convertLeadToCustomer(lead, config = {}) {
     if (!lead || !lead.id) {
       console.error("convertLeadToCustomer: invalid lead", lead);
@@ -3547,8 +3556,9 @@ export default function App() {
     const frequency = config.frequency || "daily";
     const purchaseDays = config.purchaseDays || [0, 1, 2, 3, 4, 5, 6];
 
-    // Defensive: if no vendor assigned, fall back to current user (vendor's own context)
-    const assignedVendorId = lead.assignedVendorId || currentUser?.id;
+    // The client gets assigned to the current user (vendor or manager).
+    // Fall back to lead's assigned vendor only if currentUser is missing (shouldn't happen in normal flow).
+    const assignedVendorId = currentUser?.id || lead.assignedVendorId;
     if (!assignedVendorId) {
       console.error("convertLeadToCustomer: no vendor id available", lead);
       return { success: false, error: "No vendor assigned" };
