@@ -168,6 +168,17 @@ const T = {
     requestRemoval: "Request removal",
     requestRemovalConfirm: "Request manager to remove this client?",
     removalPendingApproval: "Removal pending manager approval",
+    skipPendingApproval: "Skip pending manager approval",
+    alreadyOrderedThisWeek: "Already ordered this week",
+    skipWeekConfirm: "Mark this client as already ordered this week? They will be hidden for 48 hours after manager approval.",
+    skipWeekRequests: "Already-ordered requests",
+    skipWeekHelper: "Vendor reports client already ordered this week. Approving hides the client for 48 hours.",
+    permanentRemovalRequests: "Permanent removal requests",
+    approveSkip: "Approve skip",
+    willReturnAt: "Will return on",
+    searchClients: "Search clients and leads…",
+    noResultsFound: "No results found",
+    clear: "Clear",
     cancelRequest: "Cancel",
     removalRequests: "Removal requests",
     removalRequestsSub: "Vendors asking to remove clients from their list",
@@ -770,6 +781,17 @@ const T = {
     requestRemoval: "Pedir remoción",
     requestRemovalConfirm: "¿Pedir al manager remover este cliente?",
     removalPendingApproval: "Remoción pendiente de aprobación",
+    skipPendingApproval: "Pausa pendiente de aprobación",
+    alreadyOrderedThisWeek: "Ya ordenó esta semana",
+    skipWeekConfirm: "¿Marcar este cliente como ya ordenado esta semana? Se ocultará por 48 horas después de la aprobación del manager.",
+    skipWeekRequests: "Solicitudes de 'ya ordenó'",
+    skipWeekHelper: "El vendedor reporta que el cliente ya ordenó esta semana. Aprobar oculta al cliente por 48 horas.",
+    permanentRemovalRequests: "Solicitudes de remoción permanente",
+    approveSkip: "Aprobar pausa",
+    willReturnAt: "Volverá el",
+    searchClients: "Buscar clientes y leads…",
+    noResultsFound: "Sin resultados",
+    clear: "Limpiar",
     cancelRequest: "Cancelar",
     removalRequests: "Solicitudes de remoción",
     removalRequestsSub: "Vendedores pidiendo remover clientes de su lista",
@@ -1438,6 +1460,11 @@ function clientFromDb(row) {
     removalRequestedBy: row.removal_requested_by || null,
     createdBy: row.created_by || null,
     createdByRole: row.created_by_role || null,
+    // "Already ordered this week" skip mechanism
+    skipRequestPending: row.skip_request_pending || false,
+    skipRequestedAt: row.skip_requested_at ? new Date(row.skip_requested_at).getTime() : null,
+    skipRequestedBy: row.skip_requested_by || null,
+    skipUntil: row.skip_until ? new Date(row.skip_until).getTime() : null,
   };
 }
 function clientToDb(c) {
@@ -1459,6 +1486,11 @@ function clientToDb(c) {
   if (c.removalRequestedBy !== undefined) out.removal_requested_by = c.removalRequestedBy;
   if (c.createdBy !== undefined) out.created_by = c.createdBy;
   if (c.createdByRole !== undefined) out.created_by_role = c.createdByRole;
+  // Skip-week fields
+  if (c.skipRequestPending !== undefined) out.skip_request_pending = c.skipRequestPending;
+  if (c.skipRequestedAt !== undefined) out.skip_requested_at = c.skipRequestedAt ? new Date(c.skipRequestedAt).toISOString() : null;
+  if (c.skipRequestedBy !== undefined) out.skip_requested_by = c.skipRequestedBy;
+  if (c.skipUntil !== undefined) out.skip_until = c.skipUntil ? new Date(c.skipUntil).toISOString() : null;
   return out;
 }
 
@@ -3375,6 +3407,105 @@ export default function App() {
     ));
   }
 
+  // ============================================
+  // SKIP-WEEK REQUEST / APPROVAL FLOW
+  // ============================================
+  // Vendor requests "Already ordered this week" → manager approves → client hidden 48h.
+  // Time math: skip_until = skip_requested_at + 48h, so vendor knows exactly when it returns.
+
+  // Vendor requests skip
+  async function requestSkipWeek(clientId) {
+    if (!currentUser) return;
+    const now = new Date();
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        skip_request_pending: true,
+        skip_requested_at: now.toISOString(),
+        skip_requested_by: currentUser.id,
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to request skip:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, skipRequestPending: true, skipRequestedAt: now.getTime(), skipRequestedBy: currentUser.id }
+        : c
+    ));
+  }
+
+  // Vendor cancels their own skip request (before manager acts)
+  async function cancelSkipRequest(clientId) {
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        skip_request_pending: false,
+        skip_requested_at: null,
+        skip_requested_by: null,
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to cancel skip request:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, skipRequestPending: false, skipRequestedAt: null, skipRequestedBy: null }
+        : c
+    ));
+  }
+
+  // Manager approves skip request → set skip_until = skip_requested_at + 48h
+  async function approveSkipRequest(clientId) {
+    const client = clients.find((c) => c.id === clientId);
+    if (!client) return;
+    // Skip is 48h from when the vendor requested it (not from now)
+    const skipUntil = client.skipRequestedAt
+      ? new Date(client.skipRequestedAt + 48 * 60 * 60 * 1000)
+      : new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        skip_request_pending: false,
+        skip_until: skipUntil.toISOString(),
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to approve skip:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, skipRequestPending: false, skipUntil: skipUntil.getTime() }
+        : c
+    ));
+  }
+
+  // Manager rejects skip request → clears all skip fields, client stays active
+  async function rejectSkipRequest(clientId) {
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        skip_request_pending: false,
+        skip_requested_at: null,
+        skip_requested_by: null,
+        skip_until: null,
+      })
+      .eq("id", clientId);
+    if (error) {
+      console.error("Failed to reject skip:", error);
+      return;
+    }
+    setClients((prev) => prev.map((c) =>
+      c.id === clientId
+        ? { ...c, skipRequestPending: false, skipRequestedAt: null, skipRequestedBy: null, skipUntil: null }
+        : c
+    ));
+  }
+
+
   async function convertLeadToCustomer(lead) {
     // Insert client (using lead's id so existing interactions continue to match)
     const { error: cErr } = await supabase.from("clients").insert({
@@ -3832,6 +3963,8 @@ export default function App() {
           onUpdateClient={(id, updates) => updateClients(clients.map((c) => c.id === id ? { ...c, ...updates } : c))}
           onRequestRemoval={requestClientRemoval}
           onCancelRemovalRequest={cancelClientRemovalRequest}
+          onRequestSkipWeek={requestSkipWeek}
+          onCancelSkipRequest={cancelSkipRequest}
           onBack={handleLogout}
         />
       )}
@@ -3942,6 +4075,8 @@ export default function App() {
           interactions={interactions}
           onApprove={approveRemovalRequest}
           onReject={rejectRemovalRequest}
+          onApproveSkip={approveSkipRequest}
+          onRejectSkip={rejectSkipRequest}
           onBack={() => window.history.back()}
         />
       )}
@@ -4864,7 +4999,8 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
   const todayTasksCount = (tasks || []).filter((tk) => !tk.completed && tk.dueDate === todayKeyStr).length;
   const openTasksCount = (tasks || []).filter((tk) => !tk.completed).length;
   const archivedCount = (clients || []).filter((c) => c.archived).length;
-  const removalRequestsCount = (clients || []).filter((c) => c.removalRequested && !c.archived).length;
+  // Combined count: removal + skip-week requests both surface in the same panel
+  const removalRequestsCount = (clients || []).filter((c) => (c.removalRequested || c.skipRequestPending) && !c.archived).length;
 
   // Reminders due now (overdue + pending)
   const now = new Date();
@@ -6318,10 +6454,17 @@ function VendorPhoneCard({ t, currentPhone, onUpdate }) {
 }
 
 // ---------- REMOVAL REQUESTS VIEW (Manager — approve/reject vendor removal requests) ----------
-function RemovalRequestsView({ t, clients, vendors, interactions, onApprove, onReject, onBack }) {
+function RemovalRequestsView({ t, clients, vendors, interactions, onApprove, onReject, onApproveSkip, onRejectSkip, onBack }) {
   const requestedClients = (clients || [])
     .filter((c) => c.removalRequested && !c.archived)
     .sort((a, b) => (b.removalRequestedAt || 0) - (a.removalRequestedAt || 0));
+
+  // Skip-week requests: shown alongside removal requests in a separate section
+  const skipRequestedClients = (clients || [])
+    .filter((c) => c.skipRequestPending && !c.archived)
+    .sort((a, b) => (b.skipRequestedAt || 0) - (a.skipRequestedAt || 0));
+
+  const totalRequests = requestedClients.length + skipRequestedClients.length;
 
   return (
     <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
@@ -6337,55 +6480,133 @@ function RemovalRequestsView({ t, clients, vendors, interactions, onApprove, onR
         <p className="text-stone-500 text-sm mt-2">{t.removalRequestsSub}</p>
       </div>
 
-      {requestedClients.length === 0 ? (
+      {totalRequests === 0 ? (
         <div className="text-center py-12 text-stone-400 text-sm italic">{t.noRemovalRequests}</div>
       ) : (
-        <div className="space-y-2">
-          {requestedClients.map((c) => {
-            const vendor = vendors.find((v) => v.id === c.vendorId);
-            const requester = vendors.find((v) => v.id === c.removalRequestedBy);
-            const requestDate = c.removalRequestedAt ? new Date(c.removalRequestedAt).toLocaleString() : "";
-            const interactionCount = (interactions || []).filter((i) => i.clientId === c.id).length;
-            return (
-              <div key={c.id} className="bg-white rounded-2xl p-3 card-shadow" style={{ borderLeft: "3px solid #9C5757" }}>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{c.name}</div>
-                    <div className="text-xs text-stone-500 mt-0.5 truncate">
-                      {c.phone}{vendor ? ` · ${t.assignedTo || "Assigned to"}: ${vendor.name}` : ""}
-                    </div>
-                    <div className="text-[11px] text-stone-400 mt-1 flex items-center gap-1.5">
-                      <AlertCircle size={10} />
-                      {t.requestedBy || "Requested by"}: <span className="font-medium">{requester?.name || t.unknownVendor}</span>
-                      {requestDate && ` · ${requestDate}`}
-                    </div>
-                    {interactionCount > 0 && (
-                      <div className="text-[10px] text-stone-400 mt-0.5">
-                        {interactionCount} {interactionCount === 1 ? (t.interaction || "interaction") : (t.interactions || "interactions")} {t.onRecord || "on record"}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onReject(c.id)}
-                    className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1"
-                    style={{ background: "#F0EAE0", color: "#8B7355" }}
-                  >
-                    <X size={11} /> {t.reject || "Reject"}
-                  </button>
-                  <button
-                    onClick={() => onApprove(c.id)}
-                    className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1 text-white"
-                    style={{ background: "#9C5757" }}
-                  >
-                    <Check size={11} /> {t.approveRemoval || "Approve & archive"}
-                  </button>
-                </div>
+        <>
+          {/* SKIP-WEEK REQUESTS — shown first since they're time-sensitive */}
+          {skipRequestedClients.length > 0 && (
+            <div className="mb-6">
+              <div className="text-xs uppercase tracking-widest text-stone-500 mb-2 flex items-center gap-1.5">
+                <Clock size={11} />
+                {t.skipWeekRequests || "Already-ordered requests"}
+                <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
+                  {skipRequestedClients.length}
+                </span>
               </div>
-            );
-          })}
-        </div>
+              <p className="text-[11px] text-stone-400 italic mb-2">
+                {t.skipWeekHelper || "Vendor reports client already ordered this week. Approving hides the client for 48 hours."}
+              </p>
+              <div className="space-y-2">
+                {skipRequestedClients.map((c) => {
+                  const vendor = vendors.find((v) => v.id === c.vendorId);
+                  const requester = vendors.find((v) => v.id === c.skipRequestedBy);
+                  const requestDate = c.skipRequestedAt ? new Date(c.skipRequestedAt).toLocaleString() : "";
+                  const skipUntilApprox = c.skipRequestedAt ? new Date(c.skipRequestedAt + 48 * 60 * 60 * 1000).toLocaleString() : "";
+                  return (
+                    <div key={c.id} className="bg-white rounded-2xl p-3 card-shadow" style={{ borderLeft: "3px solid #8B6F1A" }}>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{c.name}</div>
+                          <div className="text-xs text-stone-500 mt-0.5 truncate">
+                            {c.phone}{vendor ? ` · ${t.assignedTo || "Assigned to"}: ${vendor.name}` : ""}
+                          </div>
+                          <div className="text-[11px] text-stone-400 mt-1 flex items-center gap-1.5">
+                            <Clock size={10} />
+                            {t.requestedBy || "Requested by"}: <span className="font-medium">{requester?.name || t.unknownVendor}</span>
+                            {requestDate && ` · ${requestDate}`}
+                          </div>
+                          {skipUntilApprox && (
+                            <div className="text-[10px] mt-0.5" style={{ color: "#8B6F1A" }}>
+                              {t.willReturnAt || "Will return on"}: {skipUntilApprox}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => onRejectSkip(c.id)}
+                          className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1"
+                          style={{ background: "#F0EAE0", color: "#8B7355" }}
+                        >
+                          <X size={11} /> {t.reject || "Reject"}
+                        </button>
+                        <button
+                          onClick={() => onApproveSkip(c.id)}
+                          className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1 text-white"
+                          style={{ background: "#8B6F1A" }}
+                        >
+                          <Check size={11} /> {t.approveSkip || "Approve skip"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* PERMANENT REMOVAL REQUESTS */}
+          {requestedClients.length > 0 && (
+            <div>
+              {skipRequestedClients.length > 0 && (
+                <div className="text-xs uppercase tracking-widest text-stone-500 mb-2 flex items-center gap-1.5">
+                  <Trash2 size={11} />
+                  {t.permanentRemovalRequests || "Permanent removal requests"}
+                  <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+                    {requestedClients.length}
+                  </span>
+                </div>
+              )}
+              <div className="space-y-2">
+                {requestedClients.map((c) => {
+                  const vendor = vendors.find((v) => v.id === c.vendorId);
+                  const requester = vendors.find((v) => v.id === c.removalRequestedBy);
+                  const requestDate = c.removalRequestedAt ? new Date(c.removalRequestedAt).toLocaleString() : "";
+                  const interactionCount = (interactions || []).filter((i) => i.clientId === c.id).length;
+                  return (
+                    <div key={c.id} className="bg-white rounded-2xl p-3 card-shadow" style={{ borderLeft: "3px solid #9C5757" }}>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{c.name}</div>
+                          <div className="text-xs text-stone-500 mt-0.5 truncate">
+                            {c.phone}{vendor ? ` · ${t.assignedTo || "Assigned to"}: ${vendor.name}` : ""}
+                          </div>
+                          <div className="text-[11px] text-stone-400 mt-1 flex items-center gap-1.5">
+                            <AlertCircle size={10} />
+                            {t.requestedBy || "Requested by"}: <span className="font-medium">{requester?.name || t.unknownVendor}</span>
+                            {requestDate && ` · ${requestDate}`}
+                          </div>
+                          {interactionCount > 0 && (
+                            <div className="text-[10px] text-stone-400 mt-0.5">
+                              {interactionCount} {interactionCount === 1 ? (t.interaction || "interaction") : (t.interactions || "interactions")} {t.onRecord || "on record"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => onReject(c.id)}
+                          className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1"
+                          style={{ background: "#F0EAE0", color: "#8B7355" }}
+                        >
+                          <X size={11} /> {t.reject || "Reject"}
+                        </button>
+                        <button
+                          onClick={() => onApprove(c.id)}
+                          className="flex-1 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-wide flex items-center justify-center gap-1 text-white"
+                          style={{ background: "#9C5757" }}
+                        >
+                          <Check size={11} /> {t.approveRemoval || "Approve & archive"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -7799,11 +8020,33 @@ function TrendsTab({ t, dowLabels, dowLabelsLong, trends, totalOrders }) {
 
 
 // ---------- VENDOR VIEW (main vendor home screen) ----------
-function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onBack }) {
+function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, onBack }) {
   const [view, setView] = useState("home"); // "home" | "insights"
+  const [searchQuery, setSearchQuery] = useState("");
   const vendor = vendors.find((v) => v.id === vendorId);
-  const myClients = clients.filter((c) => c.vendorId === vendorId && !c.archived);
+
+  // Hide clients whose skip period is still active (skip_until > now).
+  // Approved skip = invisible until 48h elapse. Pending skip = also hidden (we trust the vendor).
+  const nowMs = Date.now();
+  const myClients = clients.filter((c) => {
+    if (c.vendorId !== vendorId) return false;
+    if (c.archived) return false;
+    // Hide if there's a pending skip request OR an active approved skip
+    if (c.skipRequestPending) return false;
+    if (c.skipUntil && c.skipUntil > nowMs) return false;
+    return true;
+  });
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
+
+  // Apply search filter (only by client/lead name, case-insensitive).
+  // Search affects both clients and leads — vendor types one query and finds anything.
+  const searchLower = searchQuery.trim().toLowerCase();
+  const filteredClients = searchLower
+    ? myClients.filter((c) => (c.name || "").toLowerCase().includes(searchLower))
+    : myClients;
+  const filteredLeads = searchLower
+    ? myLeads.filter((l) => (l.name || "").toLowerCase().includes(searchLower))
+    : myLeads;
   const myRecentRejected = (leads || []).filter((l) => {
     if (l.status !== "rejected") return false;
     if (!l.createdBy?.startsWith(`vendor:${vendorId}`)) return false;
@@ -7820,8 +8063,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const textedIds = new Set(textInts.map((i) => i.clientId));
   const emailedIds = new Set(emailInts.map((i) => i.clientId));
 
-  const pending = myClients.filter((c) => !calledIds.has(c.id));
-  const contacted = myClients.filter((c) => calledIds.has(c.id));
+  const pending = filteredClients.filter((c) => !calledIds.has(c.id));
+  const contacted = filteredClients.filter((c) => calledIds.has(c.id));
   const orderedCount = callInts.filter((i) => i.status === "ordered").length;
 
   // Group contacted clients by their MOST RECENT call status (today)
@@ -8069,17 +8312,45 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       )}
 
+      {/* Search bar — filter clients and leads by name in real time */}
+      <div className="mb-4 mt-2">
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t.searchClients || "Search clients and leads…"}
+            className="w-full pl-9 pr-9 py-2.5 bg-white rounded-xl text-sm outline-none card-shadow"
+            style={{ border: "1px solid rgba(28,27,26,0.06)" }}
+          />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+          </div>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+              title={t.clear || "Clear"}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Active Leads section */}
-      {myLeads.length > 0 && (
+      {filteredLeads.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-3 mt-2">
             <div className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5">
               <ClipboardList size={11} /> {t.myLeads}
             </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>{myLeads.length}</div>
+            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>{filteredLeads.length}</div>
           </div>
           <div className="space-y-3 mb-6">
-            {myLeads.map((lead) => {
+            {filteredLeads.map((lead) => {
               // Adapt lead shape to ClientCard interface
               const asClient = { id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead" };
               return (
@@ -8102,44 +8373,46 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {/* Pending — clients not yet called today */}
       <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={pending}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
       />
 
       {/* Contacted — grouped by most recent call status, visually distinctive */}
       <VendorStatusSection t={t} title={t.statusOrdered} icon={CheckCircle2} color="#73A626" bg="#E8F2D5" lightBg="#F4F9E8" clientList={contactedOrdered}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
       />
       <VendorStatusSection t={t} title={t.statusCallback} icon={Clock} color="#5A6B85" bg="#E5EAF2" lightBg="#F2F5F9" clientList={contactedCallback}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
       />
       <VendorStatusSection t={t} title={t.statusNoAnswer} icon={PhoneOff} color="#8B7355" bg="#F0EAE0" lightBg="#FAF6EE" clientList={contactedNoAnswer}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
       />
       <VendorStatusSection t={t} title={t.statusPriceIssue} icon={DollarSign} color="#B8860B" bg="#FFF5D6" lightBg="#FFFBEC" clientList={contactedPriceIssue}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
       />
       <VendorStatusSection t={t} title={t.statusNotInterested} icon={XCircle} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={contactedNotInterested}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
       />
       <VendorStatusSection t={t} title={t.statusOther || "Other"} icon={X} color="#5A4A6B" bg="#EAE3F0" lightBg="#F4EFF7" clientList={contactedOther}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
       />
 
-      {pending.length === 0 && contacted.length === 0 && myLeads.length === 0 && (
-        <div className="text-center py-12 text-stone-500 text-sm">{t.noClients}</div>
+      {pending.length === 0 && contacted.length === 0 && filteredLeads.length === 0 && (
+        <div className="text-center py-12 text-stone-500 text-sm">
+          {searchQuery ? (t.noResultsFound || "No results found") : t.noClients}
+        </div>
       )}
 
       {/* Request new lead button */}
@@ -8319,7 +8592,7 @@ function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientL
   );
 }
 
-function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient, onRequestRemoval, onCancelRemovalRequest }) {
+function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest }) {
   const callInt = interactions.find((i) => chOf(i) === "call");
   const textInt = interactions.find((i) => chOf(i) === "text");
   const emailInt = interactions.find((i) => chOf(i) === "email");
@@ -8521,6 +8794,43 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
           onTemplate={templates && templates.length > 0 ? () => setShowTemplate("email") : null}
         />
       </div>
+
+      {/* "Already ordered this week" — escape from contact process for clients who already ordered.
+          Only shown for clients (not leads), only when not already pending.
+          Only when there's no terminal status today (Order/Callback already complete). */}
+      {onRequestSkipWeek && client.frequency !== "lead" && !client.removalRequested && !isContactComplete && (
+        <div className="mt-3 pt-3" style={{ borderTop: "1px dashed rgba(0,0,0,0.08)" }}>
+          {client.skipRequestPending ? (
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-[11px]" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
+              <div className="flex items-center gap-1 font-semibold flex-1 min-w-0">
+                <Clock size={11} className="flex-shrink-0" />
+                <span className="truncate">{t.skipPendingApproval || "Skip pending manager approval"}</span>
+              </div>
+              {onCancelSkipRequest && (
+                <button
+                  onClick={() => onCancelSkipRequest(client.id)}
+                  className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
+                  style={{ background: "rgba(255,255,255,0.7)", color: "#8B6F1A" }}
+                >
+                  {t.cancelRequest || "Cancel"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                if (window.confirm(t.skipWeekConfirm || "Mark this client as already ordered this week? They will be hidden for 48 hours after manager approval.")) {
+                  onRequestSkipWeek(client.id);
+                }
+              }}
+              className="w-full text-center text-[11px] py-1.5 rounded-md font-medium text-stone-500 hover:text-stone-800 hover:bg-stone-50 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <CheckCircle2 size={12} />
+              {t.alreadyOrderedThisWeek || "Already ordered this week"}
+            </button>
+          )}
+        </div>
+      )}
 
       {showHistory && allInteractions && (
         <ClientHistoryDrawer
