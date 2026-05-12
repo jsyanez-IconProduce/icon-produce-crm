@@ -8186,7 +8186,9 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   }
 
   return (
-    <div className="max-w-md mx-auto px-5 pt-6 pb-24">
+    <div className="max-w-7xl mx-auto px-5 xl:px-8 pt-6 pb-24">
+      {/* Narrow column for personal/account sections */}
+      <div className="max-w-md mx-auto">
       <div className="mb-6">
         <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
         <h1 className="display text-3xl leading-tight">{vendor?.name}</h1>
@@ -8339,6 +8341,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           )}
         </div>
       </div>
+      </div>
+      {/* End narrow column — leads + client sections span wide on desktop */}
 
       {/* Active Leads section */}
       {filteredLeads.length > 0 && (
@@ -8349,7 +8353,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             </div>
             <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>{filteredLeads.length}</div>
           </div>
-          <div className="space-y-3 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
             {filteredLeads.map((lead) => {
               // Adapt lead shape to ClientCard interface
               const asClient = { id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead" };
@@ -8365,7 +8369,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
       {/* Section header for customers */}
       {(pending.length > 0 || contacted.length > 0) && (
-        <div className="text-xs uppercase tracking-widest text-stone-500 mb-3 mt-2 flex items-center gap-1.5">
+        <div className="max-w-md mx-auto text-xs uppercase tracking-widest text-stone-500 mb-3 mt-2 flex items-center gap-1.5">
           <UserPlus size={11} /> {t.myCustomers}
         </div>
       )}
@@ -8409,6 +8413,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         )}
       />
 
+      {/* Bottom sections (empty state, request lead, growth, ranking) — narrow column */}
+      <div className="max-w-md mx-auto">
       {pending.length === 0 && contacted.length === 0 && filteredLeads.length === 0 && (
         <div className="text-center py-12 text-stone-500 text-sm">
           {searchQuery ? (t.noResultsFound || "No results found") : t.noClients}
@@ -8446,6 +8452,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           <ClientRankingList t={t} stats={clientRankingStats} />
         )}
       </div>
+      </div>
+      {/* End bottom narrow column */}
     </div>
   );
 }
@@ -8584,8 +8592,8 @@ function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientL
           {clientList.length}
         </div>
       </div>
-      {/* Client list */}
-      <div className="p-3 space-y-2.5">
+      {/* Client list — responsive grid: 1 col mobile, 2 col tablet, 4 col desktop */}
+      <div className="p-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
         {clientList.map((client) => renderClient(client))}
       </div>
     </div>
