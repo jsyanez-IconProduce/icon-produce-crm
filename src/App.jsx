@@ -213,6 +213,9 @@ const T = {
 
     // Sales Insights
     salesInsights: "Sales Insights",
+    mySales: "My Sales",
+    mySalesSub: "Your own assigned clients",
+    managerBadge: "Manager",
     salesInsightsTagline: "See who orders on which days",
     salesInsightsSub: "Track your customer ordering patterns across all history",
     salesInsightsTeamSub: "Team-wide ordering patterns",
@@ -827,6 +830,9 @@ const T = {
 
     // Sales Insights
     salesInsights: "Análisis de Ventas",
+    mySales: "Mis Ventas",
+    mySalesSub: "Tus propios clientes asignados",
+    managerBadge: "Manager",
     salesInsightsTagline: "Ver quién ordena qué días",
     salesInsightsSub: "Sigue los patrones de pedidos de tus clientes en todo el historial",
     salesInsightsTeamSub: "Patrones de pedidos del equipo completo",
@@ -1561,6 +1567,7 @@ function vendorFromProfile(row) {
     name: row.full_name,
     phone: row.phone || "",
     email: row.email,
+    role: row.role || "vendor", // "vendor" or "manager" — manager can also sell, but distinguished by badge
   };
 }
 
@@ -1833,6 +1840,7 @@ async function generateWeeklyReportPDF({
     const vClients = scopedClients.filter((c) => c.vendorId === v.id);
     return {
       name: v.name,
+      role: v.role || "vendor", // pass through so PDF/UI can show "(M)" badge for managers
       calls: vCalls.length,
       orders: vOrders.length,
       conversion: vCalls.length > 0 ? (vOrders.length / vCalls.length) * 100 : 0,
@@ -2108,7 +2116,9 @@ async function generateWeeklyReportPDF({
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.text(`#${idx + 1}`, margin + 8, y + 14);
-      doc.text(v.name.substring(0, 30), margin + 50, y + 14);
+      // Add (M) suffix for managers to distinguish them from regular vendors
+      const displayName = (v.role === "manager" ? `${v.name} (M)` : v.name).substring(0, 30);
+      doc.text(displayName, margin + 50, y + 14);
       doc.text(String(v.calls), margin + 230, y + 14);
       setColor(GREEN);
       doc.setFont("helvetica", "bold");
@@ -2816,7 +2826,7 @@ export default function App() {
           .from("profiles")
           .select("*")
           .eq("status", "active")
-          .eq("role", "vendor");
+          .in("role", ["vendor", "manager"]);
         if (!pErr && profiles) {
           setVendors(profiles.map(vendorFromProfile));
         }
@@ -2916,7 +2926,7 @@ export default function App() {
           .from("profiles")
           .select("*")
           .eq("status", "active")
-          .eq("role", "vendor");
+          .in("role", ["vendor", "manager"]);
         if (data) setVendors(data.map(vendorFromProfile));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "reminders" }, async () => {
@@ -4091,6 +4101,40 @@ export default function App() {
           onBack={() => window.history.back()}
         />
       )}
+
+      {/* My Sales: manager uses the same VendorView with their own ID as vendorId.
+          All RLS-respected data is loaded — clients assigned to the manager will show.
+          The Back button on VendorView triggers window.history.back() → returns to admin home. */}
+      {currentUser?.role === "admin" && adminView === "my_sales" && (
+        <VendorView
+          t={t}
+          vendorId={currentUser.id}
+          vendors={vendors}
+          clients={clients}
+          leads={leads}
+          interactions={interactions}
+          templates={templates}
+          tasks={tasks}
+          quotas={quotas}
+          tags={tags}
+          myPhone={myPhone}
+          onUpdatePhone={updateMyPhone}
+          onLog={logInteraction}
+          onUndo={deleteInteraction}
+          onUpdate={updateInteraction}
+          onCloseCallback={closeCallback}
+          onRequestLead={(payload) => createLead({ ...payload, createdBy: `manager:${currentUser.id}`, status: "pending" })}
+          onCreateTask={createTask}
+          onUpdateTask={updateTask}
+          onDeleteTask={deleteTask}
+          onUpdateClient={(id, updates) => updateClients(clients.map((c) => c.id === id ? { ...c, ...updates } : c))}
+          onRequestRemoval={requestClientRemoval}
+          onCancelRemovalRequest={cancelClientRemovalRequest}
+          onRequestSkipWeek={requestSkipWeek}
+          onCancelSkipRequest={cancelSkipRequest}
+          onBack={() => window.history.back()}
+        />
+      )}
       {currentUser?.role === "admin" && adminView === "setup" && (
         <SetupView
           t={t}
@@ -5151,6 +5195,24 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           tasks={tasks}
         />
 
+        {/* My Sales — manager's own selling view (their own assigned clients) */}
+        <button
+          onClick={() => onPick("my_sales")}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "linear-gradient(135deg, #73A626 0%, #8FBF3F 100%)", color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <UserPlus size={20} />
+            </div>
+            <div>
+              <div className="font-semibold">{t.mySales || "My Sales"}</div>
+              <div className="text-xs opacity-80">{t.mySalesSub || "Your own assigned clients"}</div>
+            </div>
+          </div>
+          <ChevronRight size={18} className="opacity-90" />
+        </button>
+
         {/* Quick action row — fast access to common manager tasks */}
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -5429,7 +5491,7 @@ function QuickTaskModal({ t, vendors, clients, onSave, onCancel }) {
             >
               <option value="">{t.unassigned || "Unassigned"}</option>
               {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
+                <option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>
               ))}
             </select>
           </div>
@@ -5694,7 +5756,7 @@ function AddClientModal({ t, vendors, onSave, onCancel }) {
             >
               {vendors.length === 0 && <option value="">{t.noVendorsYet || "No vendors yet"}</option>}
               {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
+                <option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>
               ))}
             </select>
           </div>
@@ -6993,7 +7055,7 @@ function PendingLeadCard({ t, lead, vendors, dataEntryUsers, currentUser, onAppr
         <div className="rounded-xl p-3 space-y-2" style={{ background: "#E8F0E9", color: "#2D5A3D" }}>
           <div className="text-xs font-semibold uppercase tracking-wide">{t.assignTo}</div>
           <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full bg-white/70 rounded-lg px-3 py-2 text-sm outline-none" style={{ color: "#1C1B1A" }}>
-            {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
+            {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>))}
           </select>
           <div className="flex gap-2 pt-1">
             <button onClick={() => setMode(null)} className="flex-1 py-2 rounded-lg bg-white/70 text-xs font-medium" style={{ color: "#1C1B1A" }}>{t.cancel}</button>
@@ -7281,12 +7343,12 @@ function ManagerInsightsView({ t, vendors, clients, interactions, onBack }) {
           >
             {t.allVendors || "All vendors"}
           </button>
-          {/* One pill per vendor */}
+          {/* One pill per vendor — managers get a small "M" badge to distinguish them */}
           {vendors.map((v) => (
             <button
               key={v.id}
               onClick={() => setSelectedVendorId(v.id)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap"
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5"
               style={{
                 background: selectedVendorId === v.id ? BRAND_PURPLE : "white",
                 color: selectedVendorId === v.id ? "white" : "#3D3733",
@@ -7294,6 +7356,20 @@ function ManagerInsightsView({ t, vendors, clients, interactions, onBack }) {
               }}
             >
               {v.name}
+              {v.role === "manager" && (
+                <span
+                  className="inline-flex items-center justify-center text-[9px] font-bold rounded-full"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    background: selectedVendorId === v.id ? "rgba(255,255,255,0.25)" : BRAND_PURPLE + "20",
+                    color: selectedVendorId === v.id ? "white" : BRAND_PURPLE,
+                  }}
+                  title={t.managerBadge || "Manager"}
+                >
+                  M
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -10740,7 +10816,7 @@ function TaskForm({ t, vendors, clients, defaultVendorId, onSave, onCancel, vend
       {!vendorScoped && (
         <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
           <option value="">{t.noClient}</option>
-          {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
+          {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>))}
         </select>
       )}
       <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
@@ -11675,7 +11751,7 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
           className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none"
         />
         <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full bg-stone-50 rounded-lg px-3 py-2 text-sm outline-none">
-          {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
+          {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>))}
         </select>
         <PurchaseDaysPicker t={t} value={scheduleConfig} onChange={setScheduleConfig} />
         <button onClick={add} className="w-full py-2 rounded-lg text-sm font-medium text-white flex items-center justify-center gap-1" style={{ background: "#5F2F9D" }}><Plus size={14} /> {t.add}</button>
@@ -11692,7 +11768,7 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
               <div className="text-xs text-stone-500 truncate">{c.phone} · {freqLabel(c.frequency, t)}</div>
             </div>
             <select value={c.vendorId} onChange={(e) => reassign(c.id, e.target.value)} className="bg-stone-50 rounded-lg px-2 py-1 text-xs outline-none">
-              {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
+              {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>))}
             </select>
             <button
               onClick={() => setEditingClient(c)}
@@ -11835,7 +11911,7 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
               className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm bg-white focus:outline-none focus:border-stone-400"
             >
               {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
+                <option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>
               ))}
             </select>
           </div>
