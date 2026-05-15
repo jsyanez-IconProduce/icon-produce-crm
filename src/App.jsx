@@ -56,7 +56,7 @@ const T = {
     managerDashboard: "Manager Dashboard",
     reportsSupervision: "Reports & supervision",
     settings: "Settings",
-    repsClients: "Reps & clients",
+    repsClients: "Reps & customers",
     back: "Back",
     contacted: "Called",
     orders: "Orders",
@@ -67,7 +67,7 @@ const T = {
     more: "more",
     toContact: "To contact",
     alreadyContacted: "Already called",
-    noClients: "No clients assigned. Go to Settings.",
+    noClients: "No customers assigned. Go to Settings.",
 
     // call statuses
     statusOrdered: "Ordered",
@@ -84,22 +84,22 @@ const T = {
 
     // Reminders (SMS scheduling)
     smsReminders: "SMS reminders",
-    smsRemindersSub: "Schedule reminders with pending client lists",
+    smsRemindersSub: "Schedule reminders with pending customer lists",
     newReminder: "New reminder",
     reminderVendor: "Send to",
-    noVendorsYet: "No vendors yet",
+    noVendorsYet: "No sales reps yet",
     noPhone: "no phone",
-    vendorNoPhoneWarning: "This vendor hasn't added their phone number yet",
+    vendorNoPhoneWarning: "This sales rep hasn't added their phone number yet",
     atSpecificTime: "At specific time",
     inXHours: "In X hours",
     date: "Date",
     time: "Time",
     hoursFromNow: "Hours from now",
     willBeSentAt: "Will be sent at",
-    includePendingClients: "Include pending clients",
-    includePendingClientsHelp: "Adds list of clients not called today",
+    includePendingClients: "Include pending customers",
+    includePendingClientsHelp: "Adds list of customers not called today",
     customMessageOptional: "Custom message (optional)",
-    customMessagePlaceholder: "Add an extra note for the vendor…",
+    customMessagePlaceholder: "Add an extra note for the sales rep…",
     messagePreview: "Preview",
     scheduleReminder: "Schedule",
     scheduling: "Scheduling…",
@@ -115,8 +115,8 @@ const T = {
     completedReminders: "Completed",
     twilioComingSoon: "Auto-send via Twilio coming soon.",
     manualSendForNowHelp: "For now, use the buttons to send manually when due.",
-    unknownVendor: "Unknown vendor",
-    vendorHasNoPhone: "This vendor doesn't have a phone number set",
+    unknownVendor: "Unknown sales rep",
+    vendorHasNoPhone: "This sales rep doesn't have a phone number set",
 
     // Vendor phone settings
     yourPhoneNumber: "Your phone number",
@@ -131,21 +131,21 @@ const T = {
     emailPending: "Email pending",
     contactCompleteOrdered: "Contact complete — order placed",
     contactCompleteCallback: "Contact complete — callback scheduled",
-    editClient: "Edit client",
+    editClient: "Edit customer",
     edit: "Edit",
     delete: "Delete",
     addPhone: "Add phone",
     saving: "Saving…",
 
     // Auto-archive feature
-    archivedClients: "Archived clients",
-    archivedClientsSub: "Clients auto-archived after 3 'not interested'",
-    noArchivedClients: "No archived clients",
+    archivedClients: "Archived customers",
+    archivedClientsSub: "Customers auto-archived after 3 'not interested'",
+    noArchivedClients: "No archived customers",
     archivedAuto: "Auto-archived",
     archivedManually: "Manually archived",
     restore: "Restore",
     notInterestedWarning: "2 of 3 'not interested' — will auto-archive next time",
-    clientArchived: "Client auto-archived",
+    clientArchived: "Customer auto-archived",
     archiveBadge: "Archived",
     statusOther: "Other note",
 
@@ -153,36 +153,36 @@ const T = {
     closeCallback: "Close callback",
     closeCallbackHelp: "What happened with this callback? The original is kept in history.",
     closeAsOrdered: "Already ordered",
-    closeAsOrderedHelp: "Client placed the order through another channel",
+    closeAsOrderedHelp: "Customer placed the order through another channel",
     closeAsPriceIssue: "Price issue",
-    closeAsPriceIssueHelp: "Client raised a price concern",
+    closeAsPriceIssueHelp: "Customer raised a price concern",
     closeAsNotInterested: "Not interested anymore",
-    closeAsNotInterestedHelp: "Client is no longer interested",
+    closeAsNotInterestedHelp: "Customer is no longer interested",
     closeAsCancel: "Cancel callback",
     closeAsCancelHelp: "Not contacted yet — just close it",
-    unknownClient: "Unknown client",
+    unknownClient: "Unknown customer",
     noActivityYet: "No activity yet",
     scheduledFor: "Scheduled",
 
     // Removal requests
     requestRemoval: "Request removal",
-    requestRemovalConfirm: "Request manager to remove this client?",
+    requestRemovalConfirm: "Request manager to remove this customer?",
     removalPendingApproval: "Removal pending manager approval",
     skipPendingApproval: "Skip pending manager approval",
     alreadyOrderedThisWeek: "Already ordered this week",
-    skipWeekConfirm: "Mark this client as already ordered this week? They will be hidden for 48 hours after manager approval.",
+    skipWeekConfirm: "Mark this customer as already ordered this week? They will be hidden for 48 hours after manager approval.",
     skipWeekRequests: "Already-ordered requests",
-    skipWeekHelper: "Vendor reports client already ordered this week. Approving hides the client for 48 hours.",
+    skipWeekHelper: "Sales rep reports customer already ordered this week. Approving hides the customer for 48 hours.",
     permanentRemovalRequests: "Permanent removal requests",
     approveSkip: "Approve skip",
     willReturnAt: "Will return on",
-    searchClients: "Search clients and leads…",
+    searchClients: "Search customers and leads…",
     noResultsFound: "No results found",
-    noClientsInTab: "No clients in this section",
+    noClientsInTab: "No customers in this section",
     clear: "Clear",
     cancelRequest: "Cancel",
     removalRequests: "Removal requests",
-    removalRequestsSub: "Vendors asking to remove clients from their list",
+    removalRequestsSub: "Sales reps asking to remove customers from their list",
     noRemovalRequests: "No removal requests pending",
     requestedBy: "Requested by",
     assignedTo: "Assigned to",
@@ -199,10 +199,10 @@ const T = {
     taskTitle: "Title",
     taskTitlePlaceholder: "Task title…",
     dueDate: "Due date",
-    assignToVendor: "Assign to vendor",
+    assignToVendor: "Assign to sales rep",
     optional: "optional",
     unassigned: "Unassigned",
-    relatedClient: "Related client",
+    relatedClient: "Related customer",
     noneSelected: "None",
     notesOptional: "Notes",
     taskNotePlaceholder: "Additional details…",
@@ -214,9 +214,9 @@ const T = {
     // Sales Insights
     salesInsights: "Sales Insights",
     mySales: "My Sales",
-    mySalesSub: "Your own assigned clients",
-    convertToClient: "Convert to client",
-    convertLeadHelper: "This will turn the lead into a regular client. Set how often they order so they appear in your daily list.",
+    mySalesSub: "Your own assigned customers",
+    convertToClient: "Convert to customer",
+    convertLeadHelper: "This will turn the lead into a regular customer. Set how often they order so they appear in your daily list.",
     alreadyOrderedInPast: "Already ordered in the past",
     converting: "Converting…",
     conversionFailed: "Conversion failed. Please try again.",
@@ -241,22 +241,22 @@ const T = {
     fewerOrders: "fewer orders",
     same: "same as last week",
     dayByDayActivity: "Day-by-day activity",
-    vendorRanking: "Vendor ranking",
-    topClients: "Top performing clients",
+    vendorRanking: "Sales rep ranking",
+    topClients: "Top performing customers",
     topClientsHelper: "Most orders placed this week",
-    atRiskClients: "At-risk clients",
+    atRiskClients: "At-risk customers",
     atRiskHelper: "Ordered last week but not this week — worth reaching out",
     outstandingTasks: "Outstanding tasks",
     overdue: "Overdue",
     dueToday: "Due today",
     upcoming: "Upcoming",
     interactionBreakdown: "Interaction breakdown",
-    clientActivityTitle: "Client Activity Appendix",
-    clientActivitySub: "Per-client breakdown for the week (sorted by orders)",
-    allClientsTable: "All clients summary",
+    clientActivityTitle: "Customer Activity Appendix",
+    clientActivitySub: "Per-customer breakdown for the week (sorted by orders)",
+    allClientsTable: "All customers summary",
     top10Detail: "Top 10 most active — detailed timeline",
     noActivity: "No activity",
-    noActiveClientsThisWeek: "No active clients this week",
+    noActiveClientsThisWeek: "No active customers this week",
     timeline: "Timeline",
     callSingular: "call",
     conversion: "conversion",
@@ -267,29 +267,29 @@ const T = {
     shortPriceIssue: "Price",
     shortOther: "Other",
     shortSent: "Sent",
-    addClient: "Add client",
+    addClient: "Add customer",
     addClientHelper: "Register a recurring buyer",
     addLeadHelper: "Add a prospect to the queue",
     iAmA: "I am a",
     salesRep: "Sales rep",
     dataEntry: "Data entry",
-    salesRepDescription: "Calls clients, logs orders, manages assigned clients",
-    dataEntryDescription: "Adds new clients and leads only",
-    dataEntryHomeSubtitle: "Add new clients and leads",
+    salesRepDescription: "Calls customers, logs orders, manages assigned customers",
+    dataEntryDescription: "Adds new customers and leads only",
+    dataEntryHomeSubtitle: "Add new customers and leads",
     addedThisSession: "Added this session",
-    client: "client",
-    clients: "clients",
+    client: "customer",
+    clients: "customers",
     lead: "lead",
     leadsLabel: "leads",
     addLead: "Add lead",
-    addVendor: "Add vendor",
-    clientName: "Client name",
+    addVendor: "Add sales rep",
+    clientName: "Customer name",
     clientNamePlaceholder: "e.g. Sunrise Distribution",
     clientPhonePlaceholder: "(305) 555-1234",
-    clientEmailPlaceholder: "client@example.com",
+    clientEmailPlaceholder: "customer@example.com",
     invalidEmail: "Please enter a valid email or leave it empty",
-    assignedVendor: "Assigned vendor",
-    vendorRequired: "Please assign a vendor",
+    assignedVendor: "Assigned sales rep",
+    vendorRequired: "Please assign a sales rep",
     nameRequired: "Name is required",
     frequency: "Frequency",
     frequencyDaily: "Daily",
@@ -316,15 +316,15 @@ const T = {
     leadName: "Lead name",
     leadNamePlaceholder: "e.g. Mike's Pizza",
     leadNotesPlaceholder: "Where did this lead come from? Any context?",
-    addLeadHelper: "Add a prospect that needs to be approved and assigned to a vendor.",
-    addVendorInfo1: "To add a new vendor to your team, share your CRM signup link with them:",
-    addVendorInfo2: "When they sign up, you'll get a notification in the home screen to approve them. After approval they'll appear in your vendor list and can start receiving clients.",
+    addLeadHelper: "Add a prospect that needs to be approved and assigned to a sales rep.",
+    addVendorInfo1: "To add a new sales rep to your team, share your CRM signup link with them:",
+    addVendorInfo2: "When they sign up, you'll get a notification in the home screen to approve them. After approval they'll appear in your sales rep list and can start receiving customers.",
     copySignupLink: "Copy signup link",
     generatedOn: "Generated on",
     page: "Page",
     order: "order",
     viewingFor: "Viewing for",
-    allVendors: "All vendors",
+    allVendors: "All sales reps",
     showingDataFor: "Showing data for",
     loading: "Loading…",
     notEnoughData: "Not enough data yet",
@@ -334,8 +334,8 @@ const T = {
     trends: "Trends",
     selectDay: "Select day",
     patternFor: "Pattern for",
-    recurringClient: "recurring client",
-    recurringClients: "recurring clients",
+    recurringClient: "recurring customer",
+    recurringClients: "recurring customers",
     noRecurringPatterns: "No patterns yet",
     todayProgress: "Today's progress",
     orderedToday: "Ordered today",
@@ -368,7 +368,7 @@ const T = {
 
     // not interested reasons
     whyNotInterested: "Why not interested?",
-    reasonHasVendor: "We already have a vendor",
+    reasonHasVendor: "We already have a sales rep",
     reasonDontSell: "We don't sell this product",
     reasonStocked: "Already stocked",
     reasonClosed: "Closed / on vacation",
@@ -377,6 +377,16 @@ const T = {
 
     // callback
     callbackTime: "Callback time",
+    date: "Date",
+    time: "Time",
+    contactName: "Contact name",
+    contactNamePlaceholder: "e.g. Mary, John",
+    optional: "optional",
+    ask: "Ask for",
+    duplicateClientFound: "A customer with this name already exists",
+    duplicateClientError: "A customer with this name already exists. Please review.",
+    view: "View",
+    assignedTo: "Assigned to",
     pickTime: "Pick time",
     reminderInfo: (t) => `Reminder will be sent at ${t} (5 min before)`,
     callbackAt: "Callback at",
@@ -385,10 +395,10 @@ const T = {
 
     // channels
     callChannel: "Call",
-    textChannel: "Text / WhatsApp",
-    emailChannel: "Email price list",
+    textChannel: "Text",
+    emailChannel: "Email",
     textedDone: "Texted ✓",
-    emailedDone: "Price list sent ✓",
+    emailedDone: "Email sent ✓",
 
     // stats / cards
     briefNote: "Brief note (optional)",
@@ -410,36 +420,36 @@ const T = {
     noneContactedYet: "No one called yet",
     allContacted: "All called ✓",
     repsTab: "Sales reps",
-    clientsTab: "Clients",
+    clientsTab: "Customers",
     repName: "Rep name",
     phoneSms: "Phone (for SMS)",
     add: "Add",
     noPhone: "No phone",
-    clientName: "Client name",
+    clientName: "Customer name",
     phone: "Phone",
     daily: "Daily",
     twiceweek: "2x / week",
     weekly: "Weekly",
     biweekly: "Bi-weekly",
-    allClients: "All clients",
+    allClients: "All customers",
     ordersWord: "orders",
     contactsWord: "contacts",
     today: "Today",
     thisWeek: "This week",
     thisMonth: "This month",
     bestSeller: "Top performer",
-    recurrentClients: "Recurrent clients",
-    recurrentRanking: "Most recurrent clients",
-    recurrentDef: "* A recurrent client placed 2 or more orders in this period.",
+    recurrentClients: "Recurrent customers",
+    recurrentRanking: "Most recurrent customers",
+    recurrentDef: "* A recurrent customer placed 2 or more orders in this period.",
     activeReps: "Active reps",
-    totalCalled: "Clients called",
-    clientRanking: "Client ranking",
+    totalCalled: "Customers called",
+    clientRanking: "Customer ranking",
     clientRankingSub: "Best to worst, by orders in period",
     inactiveClient: "Inactive",
-    bestClients: "Best clients",
-    worstClients: "Hardest clients",
-    repBestWorst: "Best & hardest clients by rep",
-    repBestWorstSub: "Tap a rep to see their top performers and the clients who haven't ordered despite contact",
+    bestClients: "Best customers",
+    worstClients: "Hardest customers",
+    repBestWorst: "Best & hardest customers by rep",
+    repBestWorstSub: "Tap a rep to see their top performers and the customers who haven't ordered despite contact",
 
     // Login / auth
     welcomeBack: "Welcome back",
@@ -514,7 +524,7 @@ const T = {
     reject: "Reject",
     approveAndAssign: "Approve & assign",
     assignTo: "Assign to",
-    pickVendor: "Choose vendor",
+    pickVendor: "Choose sales rep",
     rejectLead: "Reject lead",
     rejectReason: "Reason (visible to creator)",
     confirmReject: "Confirm rejection",
@@ -534,7 +544,7 @@ const T = {
     noActiveLeads: "No active leads",
     noRejected: "No rejected leads",
     addLead: "Add lead",
-    leadAddedDirect: "Lead added — assign to a vendor when ready",
+    leadAddedDirect: "Lead added — assign to a sales rep when ready",
     convertNotice: (name) => `${name} placed an order — converted to customer`,
 
     // Roles
@@ -575,7 +585,7 @@ const T = {
     growthLoading: "Loading data…",
     week: "Week",
     month: "Month",
-    topClient: "Top client",
+    topClient: "Top customer",
     loadingReport: "Loading report…",
     noActivity: "No activity yet",
 
@@ -588,7 +598,7 @@ const T = {
     addTemplate: "Add template",
     editTemplate: "Edit template",
     deleteTemplate: "Delete",
-    templatePlaceholderName: "Use {name} for the client's name",
+    templatePlaceholderName: "Use {name} for the customer's name",
     sendTemplate: "Send",
     pickTemplate: "Pick a template",
     sendVia: "Send via",
@@ -609,7 +619,7 @@ const T = {
     addTask: "Add task",
     newTask: "New task",
     taskTitle: "What to do",
-    taskClient: "Related client (optional)",
+    taskClient: "Related customer (optional)",
     taskDate: "Due date",
     taskTime: "Due time (optional)",
     taskNote: "Note (optional)",
@@ -620,8 +630,8 @@ const T = {
     noUpcoming: "No upcoming tasks",
     taskFor: "Task for",
     taskOverdue: "Overdue",
-    pickClient: "Pick client",
-    noClient: "No client (general task)",
+    pickClient: "Pick customer",
+    noClient: "No customer (general task)",
     taskCreated: "Task created",
     nDueToday: (n) => `${n} due today`,
     nOverdue: (n) => `${n} overdue`,
@@ -633,7 +643,7 @@ const T = {
     addNote: "Add note",
     saveNote: "Save",
     longNote: "Note",
-    longNotePlaceholder: "Write a longer note about this client…",
+    longNotePlaceholder: "Write a longer note about this customer…",
     quickNotes: "Quick notes",
     notesAndHistory: "Notes & history",
 
@@ -662,7 +672,7 @@ const T = {
     // Tags (Priority 5)
     tags: "Tags",
     tagsTab: "Tags",
-    tagsSub: "Custom labels for clients",
+    tagsSub: "Custom labels for customers",
     addTag: "Add tag",
     tagLabel: "Label",
     tagColor: "Color",
@@ -923,6 +933,12 @@ const T = {
     frequencyMonthly: "Mensual",
     purchaseDays: "Días de compra",
     selectAtLeastOneDay: "Selecciona al menos un día",
+    dowMonday: "Lunes",
+    dowTuesday: "Martes",
+    dowWednesday: "Miércoles",
+    dowThursday: "Jueves",
+    dowFriday: "Viernes",
+    dowSaturday: "Sábado",
     everyDay: "Todos los días",
     monFri: "Lun - Vie",
     buys: "Compra",
@@ -1000,6 +1016,16 @@ const T = {
     writeReason: "Escribe la razón…",
 
     callbackTime: "Hora para llamar",
+    date: "Fecha",
+    time: "Hora",
+    contactName: "Nombre de contacto",
+    contactNamePlaceholder: "ej. Mary, John",
+    optional: "opcional",
+    ask: "Preguntar por",
+    duplicateClientFound: "Ya existe un cliente con este nombre",
+    duplicateClientError: "Ya existe un cliente con este nombre. Por favor revisa.",
+    view: "Ver",
+    assignedTo: "Asignado a",
     pickTime: "Elige la hora",
     reminderInfo: (t) => `Recordatorio se enviará a las ${t} (5 min antes)`,
     callbackAt: "Llamar a las",
@@ -1007,10 +1033,10 @@ const T = {
     reminderAt: "Recordatorio a las",
 
     callChannel: "Llamada",
-    textChannel: "Mensaje / WhatsApp",
-    emailChannel: "Email lista de precios",
+    textChannel: "Mensaje",
+    emailChannel: "Email",
     textedDone: "Mensaje ✓",
-    emailedDone: "Lista enviada ✓",
+    emailedDone: "Email ✓",
 
     briefNote: "Detalle breve (opcional)",
     cancel: "Cancelar",
@@ -1423,7 +1449,7 @@ const SEED_TAGS = [
 
 // ---------- STORAGE ----------
 const KEYS = {
-  vendors: "crm:vendors", clients: "crm:clients", lang: "crm:lang",
+  vendors: "crm:sales reps", clients: "crm:clients", lang: "crm:lang",
   seeded: "crm:seeded_v3",
   adminCreds: "crm:adminCreds",
   adminPin: "crm:adminPin", // legacy, kept for migration
@@ -2590,7 +2616,7 @@ async function seedHistoricalIfNeeded(vendors, clients) {
         else if (r < lo * 0.7 + 0.18) status = "price_issue";
         else status = "not_interested";
         dayInts.push({
-          id: `s_${dateKey}_${client.id}_c`,
+          id: `s_${dateKey}_${customer.id}_c`,
           clientId: client.id, vendorId: client.vendorId,
           channel: "call", status, note: "",
           subReason: status === "not_interested" ? ["has_vendor", "stocked", "closed"][Math.floor(Math.random() * 3)] : null,
@@ -2600,7 +2626,7 @@ async function seedHistoricalIfNeeded(vendors, clients) {
       }
       if (Math.random() < 0.55 * growthFactor) {
         dayInts.push({
-          id: `s_${dateKey}_${client.id}_t`,
+          id: `s_${dateKey}_${customer.id}_t`,
           clientId: client.id, vendorId: client.vendorId,
           channel: "text", status: "sent", note: "",
           timestamp: baseTime + idx * 60000 + 30000,
@@ -2608,7 +2634,7 @@ async function seedHistoricalIfNeeded(vendors, clients) {
       }
       if (Math.random() < 0.42 * growthFactor) {
         dayInts.push({
-          id: `s_${dateKey}_${client.id}_e`,
+          id: `s_${dateKey}_${customer.id}_e`,
           clientId: client.id, vendorId: client.vendorId,
           channel: "email", status: "sent", note: "",
           timestamp: baseTime + idx * 60000 + 60000,
@@ -3396,7 +3422,7 @@ export default function App() {
       .update({
         archived: true,
         archived_at: new Date().toISOString(),
-        archive_reason: "vendor request",
+        archive_reason: "sales rep request",
         removal_requested: false,
         removal_requested_at: null,
         removal_requested_by: null,
@@ -3408,7 +3434,7 @@ export default function App() {
     }
     setClients((prev) => prev.map((c) =>
       c.id === clientId
-        ? { ...c, archived: true, archivedAt: Date.now(), archiveReason: "vendor request",
+        ? { ...c, archived: true, archivedAt: Date.now(), archiveReason: "sales rep request",
             removalRequested: false, removalRequestedAt: null, removalRequestedBy: null }
         : c
     ));
@@ -4087,6 +4113,7 @@ export default function App() {
           t={t}
           currentUser={currentUser}
           vendors={vendors}
+          clients={clients}
           onCreateClient={(c) => updateClients([...clients, c])}
           onCreateLead={(payload) => createLead({
             ...payload,
@@ -4109,6 +4136,7 @@ export default function App() {
           vendors={vendors}
           onCreateTask={createTask}
           onCreateClient={(c) => updateClients([...clients, c])}
+          onUpdateClient={(id, updates) => updateClients(clients.map((c) => c.id === id ? { ...c, ...updates } : c))}
           onCreateLead={(payload) => createLead({
             ...payload,
             createdBy: `manager:${currentUser.id}`,
@@ -4678,7 +4706,7 @@ function SignUp({ t, onSignUp, onBackToLogin }) {
                   style={{
                     background: role === "vendor" ? BRAND_PURPLE : "white",
                     color: role === "vendor" ? "white" : "#3D3733",
-                    border: `1px solid ${role === "vendor" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
+                    border: `1px solid ${role === "sales rep" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
                   }}
                 >
                   {t.salesRep || "Sales rep"}
@@ -5043,7 +5071,7 @@ function FindEmailPanel({ t, onLookupEmail }) {
 // Their job is exclusively to create new clients and leads — they cannot
 // see any client/lead lists, interactions, reports, settings, or vendor stats.
 // RLS policies enforce the same restrictions server-side.
-function DataEntryHome({ t, currentUser, vendors, onCreateClient, onCreateLead, onLogout }) {
+function DataEntryHome({ t, currentUser, vendors, clients, onCreateClient, onCreateLead, onLogout }) {
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
   // Track recently-added counts for positive feedback (in-memory only)
@@ -5141,12 +5169,32 @@ function DataEntryHome({ t, currentUser, vendors, onCreateClient, onCreateLead, 
         <AddClientModal
           t={t}
           vendors={vendors || []}
+          existingClients={clients || []}
           onSave={async (payload) => {
             if (onCreateClient) await onCreateClient(payload);
             setTodayCounts((prev) => ({ ...prev, clients: prev.clients + 1 }));
             setShowAddClient(false);
           }}
           onCancel={() => setShowAddClient(false)}
+          onViewClient={(c) => {
+            // Close Add modal, open Edit modal for the existing duplicate
+            setShowAddClient(false);
+            setViewingDuplicate(c);
+          }}
+        />
+      )}
+
+      {/* Edit modal — opens when manager clicks "View" on a duplicate */}
+      {viewingDuplicate && (
+        <EditClientModal
+          t={t}
+          client={viewingDuplicate}
+          vendors={vendors || []}
+          onSave={async (updates) => {
+            if (onUpdateClient) await onUpdateClient(viewingDuplicate.id, updates);
+            setViewingDuplicate(null);
+          }}
+          onCancel={() => setViewingDuplicate(null)}
         />
       )}
 
@@ -5166,10 +5214,12 @@ function DataEntryHome({ t, currentUser, vendors, onCreateClient, onCreateLead, 
   );
 }
 
-function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, onCreateTask, onCreateClient, onCreateLead, onPick }) {
+function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, onCreateTask, onCreateClient, onCreateLead, onUpdateClient, onPick }) {
   const [showQuickTask, setShowQuickTask] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
+  // When user clicks "View" on a duplicate, this holds the existing client to open in Edit modal
+  const [viewingDuplicate, setViewingDuplicate] = useState(null);
   const pendingCount = (leads || []).filter((l) => l.status === "pending").length;
   const pendingUsersCount = (pendingProfiles || []).length;
   const todayKeyStr = todayKey();
@@ -5529,6 +5579,7 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
         <AddClientModal
           t={t}
           vendors={vendors || []}
+          existingClients={clients || []}
           onSave={async (payload) => {
             if (onCreateClient) await onCreateClient(payload);
             setShowAddClient(false);
@@ -5691,93 +5742,65 @@ function QuickTaskModal({ t, vendors, clients, onSave, onCancel }) {
 //
 // The component manages its own UI but delegates persistence to parent via onChange.
 function PurchaseDaysPicker({ t, value, onChange }) {
-  const frequency = value?.frequency || "daily";
-  const purchaseDays = value?.purchaseDays || (frequency === "daily" ? [0, 1, 2, 3, 4, 5, 6] : []);
+  // Frequency is always implicit now: it's determined by how many days the user selects.
+  //   All 6 days (Mon-Sat) → daily
+  //   Subset of days       → biweekly (means "specific days only")
+  // We hide the toggle. The user only sees Mon-Sat pills and picks the ones they want.
+  const purchaseDays = value?.purchaseDays || [1, 2, 3, 4, 5, 6]; // default: all business days
 
-  const dayLabels = t.dowShortNames || ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  // Order the day pills Mon, Tue, Wed, Thu, Fri, Sat, Sun (week starts Monday for business UX)
-  const orderedDays = [1, 2, 3, 4, 5, 6, 0];
-
-  function setFrequency(newFreq) {
-    if (newFreq === "daily") {
-      // Daily implies all 7 days
-      onChange({ frequency: "daily", purchaseDays: [0, 1, 2, 3, 4, 5, 6] });
-    } else {
-      // Biweekly: keep existing day picks if any, otherwise empty (force user to choose)
-      const existingDays = (purchaseDays && purchaseDays.length > 0 && purchaseDays.length < 7)
-        ? purchaseDays
-        : [];
-      onChange({ frequency: "biweekly", purchaseDays: existingDays });
-    }
-  }
+  // Day pills: Monday to Saturday (no Sunday — produce business doesn't operate Sundays)
+  // Each day uses a short 1-2 letter label for compactness
+  const businessDays = [
+    { dow: 1, label: "M",  name: t.dowMonday    || "Monday" },
+    { dow: 2, label: "T",  name: t.dowTuesday   || "Tuesday" },
+    { dow: 3, label: "W",  name: t.dowWednesday || "Wednesday" },
+    { dow: 4, label: "Th", name: t.dowThursday  || "Thursday" },
+    { dow: 5, label: "F",  name: t.dowFriday    || "Friday" },
+    { dow: 6, label: "S",  name: t.dowSaturday  || "Saturday" },
+  ];
 
   function toggleDay(dow) {
     const set = new Set(purchaseDays);
     if (set.has(dow)) set.delete(dow);
     else set.add(dow);
-    onChange({ frequency: "biweekly", purchaseDays: Array.from(set).sort() });
+    const newDays = Array.from(set).sort();
+    // Infer frequency: all 6 business days → daily, otherwise biweekly
+    const isAllBusinessDays = newDays.length === 6 && [1, 2, 3, 4, 5, 6].every((d) => newDays.includes(d));
+    onChange({
+      frequency: isAllBusinessDays ? "daily" : "biweekly",
+      purchaseDays: newDays,
+    });
   }
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-1.5 mb-2">
-        <button
-          type="button"
-          onClick={() => setFrequency("daily")}
-          className="py-2 rounded-lg text-xs font-semibold transition-all"
-          style={{
-            background: frequency === "daily" ? BRAND_PURPLE : "white",
-            color: frequency === "daily" ? "white" : "#3D3733",
-            border: `1px solid ${frequency === "daily" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
-          }}
-        >
-          {t.frequencyDaily || "Daily"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setFrequency("biweekly")}
-          className="py-2 rounded-lg text-xs font-semibold transition-all"
-          style={{
-            background: frequency === "biweekly" ? BRAND_PURPLE : "white",
-            color: frequency === "biweekly" ? "white" : "#3D3733",
-            border: `1px solid ${frequency === "biweekly" ? BRAND_PURPLE : "rgba(0,0,0,0.1)"}`,
-          }}
-        >
-          {t.frequencyBiweekly || "Biweekly"}
-        </button>
+      <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1.5">
+        {t.purchaseDays || "Purchase days"} *
       </div>
-
-      {frequency === "biweekly" && (
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1.5">
-            {t.purchaseDays || "Purchase days"} *
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {orderedDays.map((dow) => {
-              const isSelected = purchaseDays.includes(dow);
-              return (
-                <button
-                  type="button"
-                  key={dow}
-                  onClick={() => toggleDay(dow)}
-                  className="py-2 rounded-md text-[11px] font-semibold transition-all"
-                  style={{
-                    background: isSelected ? BRAND_GREEN : "white",
-                    color: isSelected ? "white" : "#3D3733",
-                    border: `1px solid ${isSelected ? BRAND_GREEN : "rgba(0,0,0,0.1)"}`,
-                  }}
-                >
-                  {dayLabels[dow][0]}
-                </button>
-              );
-            })}
-          </div>
-          {purchaseDays.length === 0 && (
-            <div className="text-[10px] text-stone-400 mt-1.5 italic">
-              {t.selectAtLeastOneDay || "Select at least one day"}
-            </div>
-          )}
+      <div className="grid grid-cols-6 gap-1">
+        {businessDays.map(({ dow, label, name }) => {
+          const isSelected = purchaseDays.includes(dow);
+          return (
+            <button
+              type="button"
+              key={dow}
+              onClick={() => toggleDay(dow)}
+              title={name}
+              className="py-2.5 rounded-md text-xs font-bold transition-all"
+              style={{
+                background: isSelected ? BRAND_GREEN : "white",
+                color: isSelected ? "white" : "#3D3733",
+                border: `1px solid ${isSelected ? BRAND_GREEN : "rgba(0,0,0,0.1)"}`,
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {purchaseDays.length === 0 && (
+        <div className="text-[10px] text-stone-400 mt-1.5 italic">
+          {t.selectAtLeastOneDay || "Select at least one day"}
         </div>
       )}
     </div>
@@ -5785,23 +5808,48 @@ function PurchaseDaysPicker({ t, value, onChange }) {
 }
 
 
-function AddClientModal({ t, vendors, onSave, onCancel, defaultVendorId }) {
+function AddClientModal({ t, vendors, onSave, onCancel, defaultVendorId, existingClients, onViewClient }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [vendorId, setVendorId] = useState(defaultVendorId || vendors[0]?.id || "");
   // Frequency + purchaseDays managed together via PurchaseDaysPicker
+  // Default = all business days (Monday-Saturday). No Sunday since produce doesn't operate then.
   const [scheduleConfig, setScheduleConfig] = useState({
     frequency: "daily",
-    purchaseDays: [0, 1, 2, 3, 4, 5, 6], // default = every day
+    purchaseDays: [1, 2, 3, 4, 5, 6],
   });
+  // Optional contact name (e.g., "Ask for John" or "Owner: Maria")
+  const [contactName, setContactName] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // Duplicate detection: if a client with the same name (case-insensitive) exists,
+  // show a warning with the existing client info so the vendor can decide what to do.
+  const [duplicateClient, setDuplicateClient] = useState(null);
+
+  // Re-check duplicates whenever the name field changes (live preview, no API call needed)
+  useEffect(() => {
+    const trimmedName = name.trim().toLowerCase();
+    if (!trimmedName || !existingClients || existingClients.length === 0) {
+      setDuplicateClient(null);
+      return;
+    }
+    // Find first non-archived client with matching name (case-insensitive)
+    const match = existingClients.find(
+      (c) => !c.archived && (c.name || "").trim().toLowerCase() === trimmedName
+    );
+    setDuplicateClient(match || null);
+  }, [name, existingClients]);
 
   async function submit() {
     if (!name.trim()) { setError(t.nameRequired || "Name is required"); return; }
     if (!vendorId) { setError(t.vendorRequired || "Please assign a vendor"); return; }
+    // BLOCK creation if a duplicate exists — vendor must resolve via "View" or "Cancel"
+    if (duplicateClient) {
+      setError(t.duplicateClientError || "A client with this name already exists. Please review.");
+      return;
+    }
     if (scheduleConfig.frequency === "biweekly" && scheduleConfig.purchaseDays.length === 0) {
       setError(t.selectAtLeastOneDay || "Please select at least one purchase day");
       return;
@@ -5817,6 +5865,7 @@ function AddClientModal({ t, vendors, onSave, onCancel, defaultVendorId }) {
       await onSave({
         id: `c_${Date.now()}`,
         name: name.trim(),
+        contactName: contactName.trim(), // Use proper DB column (added in Tanda 1)
         phone: phone.trim(),
         email: email.trim(),
         vendorId,
@@ -5846,13 +5895,75 @@ function AddClientModal({ t, vendors, onSave, onCancel, defaultVendorId }) {
           </div>
 
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.clientName || "Client name"} *</div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.clientName || "Customer name"} *</div>
             <input
               autoFocus
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t.clientNamePlaceholder || "e.g. Sunrise Distribution"}
+              className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none"
+              style={{
+                borderColor: duplicateClient ? "#D97757" : undefined,
+                background: duplicateClient ? "#FEF2EE" : "white",
+              }}
+            />
+            {/* Duplicate warning — blocks creation, shows existing client and offers View/Cancel */}
+            {duplicateClient && (
+              <div className="mt-2 p-2.5 rounded-lg" style={{ background: "#FEF2EE", border: "1px solid #D97757" }}>
+                <div className="flex items-start gap-2">
+                  <AlertCircle size={14} style={{ color: "#9C5757", flexShrink: 0, marginTop: 2 }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold" style={{ color: "#9C5757" }}>
+                      {t.duplicateClientFound || "A client with this name already exists"}
+                    </div>
+                    <div className="text-[11px] text-stone-600 mt-1 truncate">
+                      <strong>{duplicateClient.name}</strong>
+                      {duplicateClient.phone && ` · ${duplicateClient.phone}`}
+                    </div>
+                    {duplicateClient.vendorId && (
+                      <div className="text-[10px] text-stone-500 mt-0.5">
+                        {t.assignedTo || "Assigned to"}: {vendors.find((v) => v.id === duplicateClient.vendorId)?.name || "—"}
+                      </div>
+                    )}
+                    {/* View / Cancel actions — let user decide between viewing the existing client or cancelling */}
+                    <div className="flex gap-2 mt-2">
+                      {onViewClient && (
+                        <button
+                          type="button"
+                          onClick={() => onViewClient(duplicateClient)}
+                          className="px-2.5 py-1 rounded text-[11px] font-semibold text-white"
+                          style={{ background: "#9C5757" }}
+                        >
+                          {t.view || "View"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={onCancel}
+                        className="px-2.5 py-1 rounded text-[11px] font-semibold"
+                        style={{ background: "white", color: "#9C5757", border: "1px solid #9C5757" }}
+                      >
+                        {t.cancel || "Cancel"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Contact name — OPTIONAL. e.g., "Ask for John" or "Owner: Maria".
+              Stored in longNote as "Contact: <name>" to avoid a new DB column. */}
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">
+              {t.contactName || "Contact name"} <span className="normal-case text-stone-400">({t.optional || "optional"})</span>
+            </div>
+            <input
+              type="text"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder={t.contactNamePlaceholder || "e.g. John (owner), Maria"}
               className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
             />
           </div>
@@ -8332,17 +8443,28 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const [showAddLead, setShowAddLead] = useState(false);
   // Lead-to-client conversion: holds the lead currently being converted, or null
   const [convertingLead, setConvertingLead] = useState(null);
+  // When manager clicks "View" on a duplicate, this holds the existing client to view/edit
+  const [viewingDuplicate, setViewingDuplicate] = useState(null);
   const vendor = vendors.find((v) => v.id === vendorId);
 
   // Hide clients whose skip period is still active (skip_until > now).
   // Approved skip = invisible until 48h elapse. Pending skip = also hidden (we trust the vendor).
+  // Also hide customers whose assigned purchase days don't include TODAY.
+  // Legacy customers (purchaseDays = null) are always visible since they predate the day system.
   const nowMs = Date.now();
+  const todayDow = new Date().getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
   const myClients = clients.filter((c) => {
     if (c.vendorId !== vendorId) return false;
     if (c.archived) return false;
     // Hide if there's a pending skip request OR an active approved skip
     if (c.skipRequestPending) return false;
     if (c.skipUntil && c.skipUntil > nowMs) return false;
+    // Filter by assigned contact day: customer only appears on its configured days.
+    // null/undefined purchaseDays = legacy data, always show. Empty array = hide.
+    if (Array.isArray(c.purchaseDays)) {
+      if (c.purchaseDays.length === 0) return false;
+      if (!c.purchaseDays.includes(todayDow)) return false;
+    }
     return true;
   });
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
@@ -8372,23 +8494,45 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const textedIds = new Set(textInts.map((i) => i.clientId));
   const emailedIds = new Set(emailInts.map((i) => i.clientId));
 
-  const pending = filteredClients.filter((c) => !calledIds.has(c.id));
-  const contacted = filteredClients.filter((c) => calledIds.has(c.id));
-  const orderedCount = callInts.filter((i) => i.status === "ordered").length;
-
-  // Group contacted clients by their MOST RECENT call status (today)
-  // This lets us split the "Already called" section into buckets like Orders, Callbacks, etc.
+  // Build no_answer counts per customer (today only) BEFORE pending/contacted logic
+  // because pending depends on it: customers with <3 no_answer stay in pending so vendor retries.
+  const noAnswerCountByClient = new Map();
+  // Track most recent call status too (used for tab grouping below)
   const lastStatusByClient = new Map();
-  // callInts is sorted oldest to newest (or unspecified order). Use timestamp to find most recent.
   callInts.forEach((i) => {
+    if (i.status === "no_answer") {
+      noAnswerCountByClient.set(i.clientId, (noAnswerCountByClient.get(i.clientId) || 0) + 1);
+    }
     const prev = lastStatusByClient.get(i.clientId);
     if (!prev || (i.timestamp || 0) > (prev.timestamp || 0)) {
       lastStatusByClient.set(i.clientId, i);
     }
   });
+
+  // A customer is "contacted" if they have a meaningful outcome today.
+  // No-answer attempts under the 3-strike threshold do NOT count as contacted —
+  // those customers stay in "to_contact" so the vendor keeps trying.
+  function isMeaningfullyContacted(clientId) {
+    if (!calledIds.has(clientId)) return false;
+    const lastStatus = lastStatusByClient.get(clientId)?.status;
+    if (lastStatus !== "no_answer") return true; // ordered/callback/etc. always count
+    // For no_answer: only counts after 3+ attempts today
+    return (noAnswerCountByClient.get(clientId) || 0) >= 3;
+  }
+
+  const pending = filteredClients.filter((c) => !isMeaningfullyContacted(c.id));
+  const contacted = filteredClients.filter((c) => isMeaningfullyContacted(c.id));
+  const orderedCount = callInts.filter((i) => i.status === "ordered").length;
+
+  // Group contacted customers by their MOST RECENT call status (today).
+  // lastStatusByClient and noAnswerCountByClient were computed above.
   const contactedOrdered = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "ordered");
   const contactedCallback = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "callback");
-  const contactedNoAnswer = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "no_answer");
+  // No-answer tab only includes customers with 3+ failed attempts today (matches isMeaningfullyContacted).
+  const contactedNoAnswer = contacted.filter((c) => {
+    const lastStatus = lastStatusByClient.get(c.id)?.status;
+    return lastStatus === "no_answer" && (noAnswerCountByClient.get(c.id) || 0) >= 3;
+  });
   const contactedNotInterested = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "not_interested");
   const contactedPriceIssue = contacted.filter((c) => lastStatusByClient.get(c.id)?.status === "price_issue");
   const contactedOther = contacted.filter((c) => {
@@ -8495,20 +8639,23 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-5 xl:px-8 pt-6 pb-24">
+    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"}`}>
       {/* Narrow column for personal/account sections */}
       <div className="max-w-md mx-auto">
       {/* Back to Manager button — visible only when manager is in "My Sales" mode.
-          Lets the manager return to the Manager Dashboard easily without using browser back. */}
+          Lets the manager return to the Manager Dashboard easily without using browser back.
+          Right-aligned + extra top padding above to avoid overlap with the fixed top-left logo. */}
       {isManagerMode && (
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm mb-4 px-3 py-1.5 rounded-lg transition-colors"
-          style={{ background: BRAND_PURPLE + "15", color: BRAND_PURPLE }}
-        >
-          <ArrowLeft size={14} />
-          <span className="font-semibold">{t.backToManager || "Back to Manager"}</span>
-        </button>
+        <div className="flex justify-end mb-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors"
+            style={{ background: BRAND_PURPLE + "15", color: BRAND_PURPLE }}
+          >
+            <ArrowLeft size={14} />
+            <span className="font-semibold">{t.backToManager || "Back to Manager"}</span>
+          </button>
+        </div>
       )}
       <div className="mb-6">
         <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
@@ -8585,7 +8732,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         <WeeklyReportButton
           t={t}
           scope="vendor"
-          scopeName={vendor?.name || "Vendor"}
+          scopeName={vendor?.name || "Sales rep"}
           vendors={vendors}
           clients={clients}
           tasks={tasks}
@@ -8923,12 +9070,32 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         <AddClientModal
           t={t}
           vendors={vendors}
+          existingClients={clients || []}
           defaultVendorId={vendorId}
           onSave={async (client) => {
             await onCreateClientDirect(client);
             setShowAddClient(false);
           }}
           onCancel={() => setShowAddClient(false)}
+          onViewClient={(c) => {
+            // Close Add modal, open Edit modal for the existing duplicate
+            setShowAddClient(false);
+            setViewingDuplicate(c);
+          }}
+        />
+      )}
+
+      {/* Edit modal — opens when manager clicks "View" on a duplicate in My Sales */}
+      {isManagerMode && viewingDuplicate && onUpdateClient && (
+        <EditClientModal
+          t={t}
+          client={viewingDuplicate}
+          vendors={vendors}
+          onSave={async (updates) => {
+            await onUpdateClient(viewingDuplicate.id, updates);
+            setViewingDuplicate(null);
+          }}
+          onCancel={() => setViewingDuplicate(null)}
         />
       )}
       {isManagerMode && showAddLead && onCreateLeadDirect && (
@@ -9193,18 +9360,6 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
         <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5">
           <Phone size={11} />{client.phone}<span className="text-stone-300">·</span><span>{freqLabel(client.frequency, t)}</span>
         </div>
-        {/* Declared purchase days — shows the manager-defined ordering pattern */}
-        {client.purchaseDays && client.purchaseDays.length > 0 && client.purchaseDays.length < 7 && (
-          <div className="text-xs flex items-center gap-1 mt-1" style={{ color: BRAND_PURPLE }}>
-            <Calendar size={11} />
-            <span className="font-medium">{t.buys || "Buys"}: {purchaseDaysLabel(client.purchaseDays, t)}</span>
-            {isPurchaseDayToday(client.purchaseDays) && (
-              <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white" style={{ background: BRAND_PURPLE }}>
-                {t.todayLabel || "Today"}
-              </span>
-            )}
-          </div>
-        )}
         {/* "Already ordered in the past" badge — shown for clients converted from a lead.
             Helps the vendor remember this client has prior history (not a brand-new account). */}
         {client.convertedFromLead && (
@@ -9217,6 +9372,19 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
         {clientTags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {clientTags.map((tg) => <TagBadge key={tg.id} tag={tg} />)}
+          </div>
+        )}
+
+        {/* Yellow note strip — always visible when client has notes.
+            Replaces the hidden-behind-modal approach. Vendor sees important info immediately. */}
+        {client.longNote && client.longNote.trim().length > 0 && (
+          <div
+            className="mt-2 px-2.5 py-1.5 rounded-md text-[11px] leading-snug flex items-start gap-1.5"
+            style={{ background: "#FFFCE8", borderLeft: "3px solid #FFED13", color: "#6B5300" }}
+            title={client.longNote}
+          >
+            <span className="text-[10px] mt-0.5">📝</span>
+            <span className="flex-1 line-clamp-2 whitespace-pre-wrap">{client.longNote}</span>
           </div>
         )}
 
@@ -9392,9 +9560,22 @@ function CallSection({ t, client, vendorId, interaction, onLog, onUndo, onCloseC
   // flow: null | "callback" | "price_issue" | "other" | "not_interested" | "not_interested_other"
   const [note, setNote] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
+  // For callbacks: schedule date (defaults to today). User can pick future dates.
+  const [scheduledDate, setScheduledDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
   const [reasonText, setReasonText] = useState("");
 
-  function reset() { setFlow(null); setNote(""); setScheduledTime(""); setReasonText(""); }
+  function reset() {
+    setFlow(null);
+    setNote("");
+    setScheduledTime("");
+    // Reset date to today
+    const d = new Date();
+    setScheduledDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    setReasonText("");
+  }
 
   if (interaction) {
     return <CallStatusDisplay t={t} interaction={interaction} onUndo={() => onUndo(interaction.id)} onCloseCallback={onCloseCallback} />;
@@ -9427,11 +9608,32 @@ function CallSection({ t, client, vendorId, interaction, onLog, onUndo, onCloseC
   // ---------- callback flow ----------
   if (flow === "callback") {
     const reminderTime = scheduledTime ? subtractMin(scheduledTime, 5) : "";
+    // Calculate today's date string for min attribute (no past dates)
+    const todayStr = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
     return (
       <div className="rounded-xl p-3 space-y-2" style={{ background: STATUS_META.callback.bg, color: STATUS_META.callback.color }}>
-        <div className="text-xs font-medium uppercase tracking-wide">{t.callbackTime}</div>
-        <input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} autoFocus
-          className="w-full bg-white/70 rounded-lg px-3 py-2 text-sm outline-none" style={{ color: "#1C1B1A" }} />
+        <div className="text-xs font-medium uppercase tracking-wide">{t.callbackDateTime || "Callback date & time"}</div>
+        {/* Date input — defaults to today, must be today or future */}
+        <input
+          type="date"
+          value={scheduledDate}
+          min={todayStr}
+          onChange={(e) => setScheduledDate(e.target.value)}
+          className="w-full bg-white/70 rounded-lg px-3 py-2 text-sm outline-none"
+          style={{ color: "#1C1B1A" }}
+        />
+        {/* Time input */}
+        <input
+          type="time"
+          value={scheduledTime}
+          onChange={(e) => setScheduledTime(e.target.value)}
+          autoFocus
+          className="w-full bg-white/70 rounded-lg px-3 py-2 text-sm outline-none"
+          style={{ color: "#1C1B1A" }}
+        />
         {scheduledTime && (
           <div className="text-[11px] flex items-center gap-1 opacity-90">
             <Bell size={11} /> {t.reminderInfo(reminderTime)}
@@ -9440,10 +9642,20 @@ function CallSection({ t, client, vendorId, interaction, onLog, onUndo, onCloseC
         <div className="flex gap-2 pt-1">
           <button onClick={reset} className="flex-1 py-2 rounded-lg bg-white/70 text-xs font-medium" style={{ color: "#1C1B1A" }}>{t.cancel}</button>
           <button onClick={async () => {
-            if (!scheduledTime) return;
-            await onLog({ clientId: client.id, vendorId, channel: "call", status: "callback", scheduledTime });
+            if (!scheduledTime || !scheduledDate) return;
+            // Pass both date and time. The interaction.scheduledTime field stays the time string
+            // for backward compatibility. The full ISO timestamp is in scheduledDateTime.
+            await onLog({
+              clientId: client.id,
+              vendorId,
+              channel: "call",
+              status: "callback",
+              scheduledTime,
+              scheduledDate,
+              scheduledDateTime: new Date(`${scheduledDate}T${scheduledTime}`).toISOString(),
+            });
             reset();
-          }} disabled={!scheduledTime}
+          }} disabled={!scheduledTime || !scheduledDate}
             className="flex-1 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-40" style={{ background: STATUS_META.callback.color }}>
             {t.confirm}
           </button>
@@ -9672,24 +9884,24 @@ function CloseCallbackModal({ t, callbackInteraction, onClose, onCloseCallback }
 function ChannelToggle({ t, icon: Icon, label, doneLabel, interaction, onLog, onUndo, color, bg, onTemplate }) {
   if (interaction) {
     return (
-      <div className="rounded-xl p-2.5 flex items-center justify-between gap-1.5" style={{ background: bg, color }}>
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Icon size={14} />
-          <span className="text-xs font-medium truncate">{doneLabel}</span>
+      <div className="rounded-xl p-2 flex items-center justify-between gap-1 min-w-0" style={{ background: bg, color }}>
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <Icon size={12} className="flex-shrink-0" />
+          <span className="text-[10px] font-medium truncate">{doneLabel}</span>
         </div>
-        <button onClick={onUndo} className="opacity-50 hover:opacity-100 flex-shrink-0"><Trash2 size={11} /></button>
+        <button onClick={onUndo} className="opacity-50 hover:opacity-100 flex-shrink-0 p-0.5"><Trash2 size={10} /></button>
       </div>
     );
   }
   return (
-    <div className="rounded-xl flex overflow-hidden" style={{ background: bg }}>
-      <button onClick={onLog} className="flex-1 p-2.5 flex items-center justify-center gap-1.5 transition-all hover:bg-black/5" style={{ color }}>
-        <Icon size={14} />
-        <span className="text-xs font-medium leading-tight truncate">{label}</span>
+    <div className="rounded-xl flex overflow-hidden min-w-0" style={{ background: bg }}>
+      <button onClick={onLog} className="flex-1 min-w-0 px-2 py-2 flex items-center justify-center gap-1 transition-all hover:bg-black/5" style={{ color }}>
+        <Icon size={12} className="flex-shrink-0" />
+        <span className="text-[10px] font-medium leading-tight truncate">{label}</span>
       </button>
       {onTemplate && (
-        <button onClick={onTemplate} className="px-2 border-l flex items-center justify-center hover:bg-black/5" style={{ color, borderLeftColor: "rgba(0,0,0,0.08)" }} title={t.pickTemplate}>
-          <MessageSquareText size={12} />
+        <button onClick={onTemplate} className="px-2 border-l flex items-center justify-center hover:bg-black/5 flex-shrink-0" style={{ color, borderLeftColor: "rgba(0,0,0,0.08)" }} title={t.pickTemplate}>
+          <MessageSquareText size={11} />
         </button>
       )}
     </div>
@@ -12165,6 +12377,7 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
   // Initialize phone with auto-format applied so legacy unformatted numbers look clean immediately
   const [phone, setPhone] = useState(formatPhoneUS(client.phone || ""));
   const [email, setEmail] = useState(client.email || "");
+  const [contactName, setContactName] = useState(client.contactName || ""); // Optional contact person
   const [vendorId, setVendorId] = useState(client.vendorId || vendors[0]?.id || "");
   // Initialize scheduleConfig from client's existing data, with sane defaults for legacy clients
   const [scheduleConfig, setScheduleConfig] = useState(() => {
@@ -12199,6 +12412,7 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
       await onSave({
         ...client,
         name: name.trim(),
+        contactName: contactName.trim(),
         phone: phone.trim(),
         email: email.trim(),
         vendorId,
@@ -12227,12 +12441,26 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
           </div>
 
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.clientName || "Client name"} *</div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.clientName || "Customer name"} *</div>
             <input
               autoFocus
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+            />
+          </div>
+
+          {/* Optional contact person at the business — "Ask for John" */}
+          <div className="mb-3">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">
+              {t.contactName || "Contact name"} <span className="normal-case text-stone-400">({t.optional || "optional"})</span>
+            </div>
+            <input
+              type="text"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder={t.contactNamePlaceholder || "e.g. Mary, John"}
               className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
             />
           </div>
