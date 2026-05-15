@@ -426,6 +426,8 @@ const T = {
     allCustomers: "All customers",
     allShort: "All",
     allCustomersHint: "Show every customer regardless of day",
+    goToDockApp: "Go to Dock App",
+    goToDockAppSub: "Open Produce Dock",
     sunday: "Sunday",
     monday: "Monday",
     tuesday: "Tuesday",
@@ -1165,6 +1167,8 @@ const T = {
     allCustomers: "Todos los clientes",
     allShort: "Todos",
     allCustomersHint: "Mostrar todos los clientes sin importar el día",
+    goToDockApp: "Ir a Dock App",
+    goToDockAppSub: "Abrir Produce Dock",
     sunday: "Domingo",
     monday: "Lunes",
     tuesday: "Martes",
@@ -5999,6 +6003,33 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           </div>
           <ChevronRight size={18} className="text-stone-400" />
         </button>
+
+        {/* External link — opens Produce Dock in a new tab. Sits at the end of the
+            manager's main button stack as a "switch app" entry point. Uses brand yellow
+            accent so it visually stands apart from the other navigation buttons. */}
+        <a
+          href="https://producedock.vercel.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "linear-gradient(135deg, #FFD700 0%, #FFED13 100%)", color: "#3D2E00" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(60,46,0,0.12)" }}>
+              <span style={{ fontSize: "20px" }}>⚓</span>
+            </div>
+            <div>
+              <div className="font-semibold">{t.goToDockApp || "Go to Dock App"}</div>
+              <div className="text-xs opacity-70">{t.goToDockAppSub || "Open Produce Dock"}</div>
+            </div>
+          </div>
+          {/* External-link icon */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </a>
       </div>
 
       {/* Floating Action Button — Quick Add Task */}
@@ -9977,10 +10008,10 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {filteredLeads.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-3 mt-2">
-            <div className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5">
-              <ClipboardList size={11} /> {t.myLeads}
+            <div className="text-xs uppercase tracking-widest font-bold flex items-center gap-1.5" style={{ color: BRAND_PURPLE }}>
+              <ClipboardList size={12} /> {t.myLeads}
             </div>
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>{filteredLeads.length}</div>
+            <div className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>{filteredLeads.length}</div>
           </div>
           {isDesktop ? (
             // Desktop table view for leads — shares the same CustomerTable component
@@ -10056,11 +10087,19 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </>
       )}
 
-      {/* Section header for customers + status tabs */}
+      {/* Section header for customers + status tabs.
+          Style matches "MY LEADS" above for visual consistency: left-aligned with
+          a count badge on the right. Slightly more emphasis on the label so the
+          section reads as a clear header (not lost in the page). */}
       {(pending.length > 0 || contacted.length > 0) && (
         <>
-          <div className="max-w-md mx-auto text-xs uppercase tracking-widest text-stone-500 mb-3 mt-2 flex items-center gap-1.5">
-            <UserPlus size={11} /> {t.myCustomers}
+          <div className="flex items-center justify-between mb-3 mt-2">
+            <div className="text-xs uppercase tracking-widest font-bold flex items-center gap-1.5" style={{ color: BRAND_PURPLE }}>
+              <UserPlus size={12} /> {t.myCustomers}
+            </div>
+            <div className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#F0E8FA", color: BRAND_PURPLE }}>
+              {pending.length + contacted.length}
+            </div>
           </div>
 
           {/* Tabs — horizontal scrollable on mobile, full width on desktop.
