@@ -9537,7 +9537,7 @@ function CustomerTable({
           </tr>
         </thead>
         <tbody>
-          {customers.map((client) => {
+          {customers.map((client, rowIdx) => {
             const clientInts = (allInteractions || []).filter((i) => i.clientId === client.id);
             const todayInts = clientInts.filter((i) => i.vendorId === vendorId); // already today-filtered upstream
             const callInts = todayInts.filter((i) => (i.channel || "call") === "call");
@@ -9554,7 +9554,16 @@ function CustomerTable({
             const isMoreOpenHere = moreMenuOpen === client.id;
 
             return (
-              <tr key={client.id} className="border-t" style={{ borderColor: "#F0EDE7" }}>
+              <tr
+                key={client.id}
+                className="border-t"
+                style={{
+                  borderColor: "#F0EDE7",
+                  // Zebra stripe: alternate rows get a very light brand-purple background (#F8F4FD)
+                  // for easier scanning when there are many customers.
+                  background: rowIdx % 2 === 1 ? "#F8F4FD" : "white",
+                }}
+              >
                 {/* COL 1: Customer */}
                 <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "240px" }}>
                   <div className="font-semibold truncate" style={{ color: "#1C1B1A", fontSize: "13px" }}>{client.name}</div>
