@@ -377,6 +377,44 @@ const T = {
 
     // callback
     callbackTime: "Callback time",
+    approvals: "Approvals",
+    managerReview: "Manager review",
+    pendingReview: "Pending review",
+    noPendingRequests: "No pending requests right now.",
+    noPendingRequestsDetail: "No pending edit or delete requests.",
+    allCaughtUp: "All caught up!",
+    recentlyResolved: "Recently resolved",
+    editRequestLabel: "Edit",
+    deleteRequestLabel: "Delete",
+    deleteReasonLabel: "Reason given",
+    noReasonGiven: "(no reason provided)",
+    proposedChanges: "Proposed changes",
+    optionalNote: "Optional note (visible in history)",
+    approve: "Approve",
+    approveDelete: "Approve delete",
+    reject: "Reject",
+    approved: "Approved",
+    rejected: "Rejected",
+    cancelled: "Cancelled",
+    requestedBy: "Requested by",
+    actionFailed: "Action failed. Please try again.",
+    deletedCustomer: "deleted customer",
+    justNow: "just now",
+    minutesAgo: "min ago",
+    hoursAgo: "h ago",
+    daysAgo: "d ago",
+    sun: "Sun", mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat",
+    everyDay: "Every day",
+    changePendingShort: "Change pending",
+    deletePending: "Delete pending",
+    requestDeleteTitle: "Request customer removal",
+    requestDeleteIntro: "You're asking the manager to remove this customer:",
+    optionalReason: "Reason",
+    deleteReasonPlaceholder: "e.g., Moved to competitor, business closed, etc.",
+    deleteRequestNote: "The customer will stay visible until the manager approves your request.",
+    submitRequest: "Submit request",
+    cancelMyRequest: "Cancel my request",
+    cancelRequestConfirm: "Cancel your pending request?",
     searchSidebarTitle: "Quick search",
     filterByStatus: "Filter by status",
     todaysOverview: "Today's overview",
@@ -1053,6 +1091,44 @@ const T = {
     writeReason: "Escribe la razón…",
 
     callbackTime: "Hora para llamar",
+    approvals: "Aprobaciones",
+    managerReview: "Revisión del manager",
+    pendingReview: "Pendiente de revisión",
+    noPendingRequests: "No hay solicitudes pendientes en este momento.",
+    noPendingRequestsDetail: "No hay solicitudes de edición o eliminación pendientes.",
+    allCaughtUp: "¡Todo al día!",
+    recentlyResolved: "Resueltas recientemente",
+    editRequestLabel: "Editar",
+    deleteRequestLabel: "Eliminar",
+    deleteReasonLabel: "Razón dada",
+    noReasonGiven: "(sin razón especificada)",
+    proposedChanges: "Cambios propuestos",
+    optionalNote: "Nota opcional (visible en historial)",
+    approve: "Aprobar",
+    approveDelete: "Aprobar eliminación",
+    reject: "Rechazar",
+    approved: "Aprobado",
+    rejected: "Rechazado",
+    cancelled: "Cancelado",
+    requestedBy: "Solicitado por",
+    actionFailed: "La acción falló. Intenta de nuevo.",
+    deletedCustomer: "cliente eliminado",
+    justNow: "ahora",
+    minutesAgo: "min",
+    hoursAgo: "h",
+    daysAgo: "d",
+    sun: "Dom", mon: "Lun", tue: "Mar", wed: "Mié", thu: "Jue", fri: "Vie", sat: "Sáb",
+    everyDay: "Todos los días",
+    changePendingShort: "Cambio pendiente",
+    deletePending: "Eliminación pendiente",
+    requestDeleteTitle: "Solicitar eliminación de cliente",
+    requestDeleteIntro: "Estás pidiéndole al manager eliminar este cliente:",
+    optionalReason: "Razón",
+    deleteReasonPlaceholder: "ej., Se cambió a la competencia, negocio cerrado, etc.",
+    deleteRequestNote: "El cliente seguirá visible hasta que el manager apruebe tu solicitud.",
+    submitRequest: "Enviar solicitud",
+    cancelMyRequest: "Cancelar mi solicitud",
+    cancelRequestConfirm: "¿Cancelar tu solicitud pendiente?",
     searchSidebarTitle: "Búsqueda rápida",
     filterByStatus: "Filtrar por estado",
     todaysOverview: "Resumen de hoy",
@@ -4409,6 +4485,7 @@ export default function App() {
           reminders={reminders}
           clients={clients}
           vendors={vendors}
+          editRequests={editRequests}
           onCreateTask={createTask}
           onCreateClient={(c) => updateClients([...clients, c])}
           onUpdateClient={(id, updates) => updateClients(clients.map((c) => c.id === id ? { ...c, ...updates } : c))}
@@ -4505,6 +4582,17 @@ export default function App() {
           onReject={rejectRemovalRequest}
           onApproveSkip={approveSkipRequest}
           onRejectSkip={rejectSkipRequest}
+          onBack={() => window.history.back()}
+        />
+      )}
+      {currentUser?.role === "admin" && adminView === "approvals-panel" && (
+        <ApprovalsPanel
+          t={t}
+          editRequests={editRequests}
+          clients={clients}
+          vendors={vendors}
+          onApprove={approveEditRequest}
+          onReject={rejectEditRequest}
           onBack={() => window.history.back()}
         />
       )}
@@ -5492,7 +5580,7 @@ function DataEntryHome({ t, currentUser, vendors, clients, onCreateClient, onCre
   );
 }
 
-function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, onCreateTask, onCreateClient, onCreateLead, onUpdateClient, onPick }) {
+function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, clients, vendors, editRequests, onCreateTask, onCreateClient, onCreateLead, onUpdateClient, onPick }) {
   const [showQuickTask, setShowQuickTask] = useState(false);
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
@@ -5507,6 +5595,8 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
   const archivedCount = (clients || []).filter((c) => c.archived).length;
   // Combined count: removal + skip-week requests both surface in the same panel
   const removalRequestsCount = (clients || []).filter((c) => (c.removalRequested || c.skipRequestPending) && !c.archived).length;
+  // Edit requests pending — counts customer-edit + delete requests awaiting manager review
+  const editRequestsCount = (editRequests || []).filter((r) => r.status === "pending").length;
 
   // Reminders due now (overdue + pending)
   const now = new Date();
@@ -5566,6 +5656,36 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             </div>
           </div>
           <ChevronRight size={16} style={{ color: "#7A3D3D" }} />
+        </button>
+      )}
+
+      {/* Edit/delete approval requests from vendors. Shows badge with count of pending. */}
+      {editRequestsCount > 0 && (
+        <button
+          onClick={() => onPick("approvals-panel")}
+          className="w-full text-left rounded-2xl p-4 mb-3 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "#FFF5D6", border: "1px solid #E8C97A" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center relative" style={{ background: "#E8C97A" }}>
+              <span style={{ color: "#7A5A1A", fontSize: "18px", lineHeight: 1 }}>⚠️</span>
+              <span
+                className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold text-white flex items-center justify-center px-1"
+                style={{ background: "#C28B1A", border: "2px solid #FFF5D6" }}
+              >
+                {editRequestsCount}
+              </span>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#7A5A1A" }}>
+                {t.approvals || "Approvals"}
+              </div>
+              <div className="text-sm" style={{ color: "#5C4314" }}>
+                {editRequestsCount} {editRequestsCount === 1 ? (t.requestPending || "request pending") : (t.requestsPending || "requests pending")}
+              </div>
+            </div>
+          </div>
+          <ChevronRight size={16} style={{ color: "#7A5A1A" }} />
         </button>
       )}
 
@@ -7289,7 +7409,318 @@ function RemovalRequestsView({ t, clients, vendors, interactions, onApprove, onR
   );
 }
 
-// ---------- ARCHIVED CLIENTS VIEW (Manager — see and restore archived clients) ----------
+// ---------- APPROVALS PANEL (Manager — review edit & delete requests from vendors) ----------
+// Lists all pending edit_requests with full context: who requested, what changed, when.
+// Manager can approve (applies the change) or reject (no changes applied) with optional note.
+// Realtime: list updates automatically when new requests come in or when resolved.
+function ApprovalsPanel({ t, editRequests, clients, vendors, onApprove, onReject, onBack }) {
+  // Optional resolution note while reviewing — per-request to allow different notes for each.
+  const [resolutionNotes, setResolutionNotes] = useState({});
+  // Track which request is currently being processed (disable buttons during async ops)
+  const [processingId, setProcessingId] = useState(null);
+
+  // DAYS array — reused for displaying purchase_days changes in human-readable form
+  const DAYS_LABELS = [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"];
+
+  function formatDays(arr) {
+    if (!arr || arr.length === 0) return "—";
+    if (arr.length === 7) return t.everyDay || "Every day";
+    return arr.slice().sort().map((d) => DAYS_LABELS[d]).join(", ");
+  }
+
+  function vendorName(id) {
+    const v = (vendors || []).find((vv) => vv.id === id);
+    return v?.name || id?.substring(0, 8) || "—";
+  }
+
+  function clientName(id) {
+    const c = (clients || []).find((cc) => cc.id === id);
+    return c?.name || `[${(t.deletedCustomer || "deleted customer")}]`;
+  }
+
+  function getClient(id) {
+    return (clients || []).find((cc) => cc.id === id);
+  }
+
+  function relativeTime(ts) {
+    if (!ts) return "";
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return t.justNow || "just now";
+    if (mins < 60) return `${mins} ${t.minutesAgo || "min ago"}`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} ${t.hoursAgo || "h ago"}`;
+    const days = Math.floor(hrs / 24);
+    return `${days} ${t.daysAgo || "d ago"}`;
+  }
+
+  // Filter to only pending requests, newest first
+  const pending = (editRequests || [])
+    .filter((r) => r.status === "pending")
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  // Recent resolved (last 10) — for transparency, manager can see what they recently approved/rejected
+  const recent = (editRequests || [])
+    .filter((r) => r.status !== "pending")
+    .sort((a, b) => (b.resolvedAt || b.createdAt || 0) - (a.resolvedAt || a.createdAt || 0))
+    .slice(0, 10);
+
+  async function handleApprove(req) {
+    if (processingId) return;
+    setProcessingId(req.id);
+    try {
+      const note = resolutionNotes[req.id] || "";
+      const result = await onApprove(req.id, note);
+      if (result && result.success === false) {
+        alert(result.error || (t.actionFailed || "Action failed"));
+      }
+      setResolutionNotes((prev) => {
+        const n = { ...prev };
+        delete n[req.id];
+        return n;
+      });
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  async function handleReject(req) {
+    if (processingId) return;
+    setProcessingId(req.id);
+    try {
+      const note = resolutionNotes[req.id] || "";
+      const result = await onReject(req.id, note);
+      if (result && result.success === false) {
+        alert(result.error || (t.actionFailed || "Action failed"));
+      }
+      setResolutionNotes((prev) => {
+        const n = { ...prev };
+        delete n[req.id];
+        return n;
+      });
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={14} />
+        <span>{t.back || "Back"}</span>
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{t.managerReview || "Manager review"}</div>
+        <h1 className="display text-3xl leading-tight">{t.approvals || "Approvals"}</h1>
+        <p className="text-stone-600 text-sm mt-1">
+          {pending.length === 0
+            ? (t.noPendingRequests || "No pending requests right now.")
+            : `${pending.length} ${pending.length === 1 ? (t.requestPending || "request pending") : (t.requestsPending || "requests pending")}`}
+        </p>
+      </div>
+
+      {/* PENDING REQUESTS */}
+      {pending.length > 0 && (
+        <div className="mb-8">
+          <div className="text-[10px] uppercase tracking-widest font-bold mb-3" style={{ color: "#7A5A1A" }}>
+            ⚠️ {t.pendingReview || "Pending review"} ({pending.length})
+          </div>
+
+          <div className="space-y-3">
+            {pending.map((req) => {
+              const client = getClient(req.clientId);
+              const isDelete = req.type === "delete";
+              const isProcessing = processingId === req.id;
+              const noteValue = resolutionNotes[req.id] || "";
+
+              return (
+                <div
+                  key={req.id}
+                  className="rounded-2xl p-4"
+                  style={{
+                    background: isDelete ? "#FEF2EE" : "#FFF5D6",
+                    border: `1px solid ${isDelete ? "#D9B5B5" : "#E8C97A"}`,
+                  }}
+                >
+                  {/* Header: type badge + customer name */}
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded"
+                          style={{
+                            background: isDelete ? "#9C5757" : "#C28B1A",
+                            color: "white",
+                          }}
+                        >
+                          {isDelete ? "🗑 " + (t.deleteRequestLabel || "Delete") : "✏️ " + (t.editRequestLabel || "Edit")}
+                        </span>
+                        <span className="text-[10px]" style={{ color: isDelete ? "#9C5757" : "#7A5A1A" }}>
+                          {relativeTime(req.createdAt)}
+                        </span>
+                      </div>
+                      <div className="font-bold text-base" style={{ color: isDelete ? "#5C2929" : "#5C4314" }}>
+                        {clientName(req.clientId)}
+                      </div>
+                      <div className="text-xs mt-0.5" style={{ color: isDelete ? "#9C5757" : "#7A5A1A" }}>
+                        {t.requestedBy || "Requested by"}: <strong>{vendorName(req.requestedBy)}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Body: details of the change */}
+                  {isDelete ? (
+                    <div className="mb-3 mt-3 p-3 rounded-lg bg-white">
+                      <div className="text-[10px] uppercase tracking-wider font-bold mb-1" style={{ color: "#9C5757" }}>
+                        {t.deleteReasonLabel || "Reason given"}
+                      </div>
+                      <div className="text-sm" style={{ color: "#3D3733" }}>
+                        {req.changes?.reason && req.changes.reason.trim().length > 0
+                          ? req.changes.reason
+                          : <span className="italic text-stone-400">{t.noReasonGiven || "(no reason provided)"}</span>}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-3 mt-3 p-3 rounded-lg bg-white space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider font-bold mb-1" style={{ color: "#7A5A1A" }}>
+                        {t.proposedChanges || "Proposed changes"}
+                      </div>
+                      {req.changes?.name !== undefined && (
+                        <div className="text-xs">
+                          <span className="font-semibold">{t.clientName || "Customer name"}:</span>{" "}
+                          <span style={{ color: "#9C5757", textDecoration: "line-through" }}>{client?.name || "—"}</span>{" → "}
+                          <span style={{ color: "#5C8519", fontWeight: 600 }}>{req.changes.name}</span>
+                        </div>
+                      )}
+                      {req.changes?.purchaseDays !== undefined && (
+                        <div className="text-xs">
+                          <span className="font-semibold">{t.purchaseDays || "Purchase days"}:</span>{" "}
+                          <span style={{ color: "#9C5757", textDecoration: "line-through" }}>{formatDays(client?.purchaseDays)}</span>{" → "}
+                          <span style={{ color: "#5C8519", fontWeight: 600 }}>{formatDays(req.changes.purchaseDays)}</span>
+                        </div>
+                      )}
+                      {req.changes?.frequency !== undefined && (
+                        <div className="text-xs">
+                          <span className="font-semibold">{t.frequency || "Frequency"}:</span>{" "}
+                          <span style={{ color: "#9C5757", textDecoration: "line-through" }}>{client?.frequency || "—"}</span>{" → "}
+                          <span style={{ color: "#5C8519", fontWeight: 600 }}>{req.changes.frequency}</span>
+                        </div>
+                      )}
+                      {req.changes?.vendorId !== undefined && (
+                        <div className="text-xs">
+                          <span className="font-semibold">{t.assignedVendor || "Assigned vendor"}:</span>{" "}
+                          <span style={{ color: "#9C5757", textDecoration: "line-through" }}>{vendorName(client?.vendorId)}</span>{" → "}
+                          <span style={{ color: "#5C8519", fontWeight: 600 }}>{vendorName(req.changes.vendorId)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Optional resolution note */}
+                  <input
+                    type="text"
+                    value={noteValue}
+                    onChange={(e) => setResolutionNotes((prev) => ({ ...prev, [req.id]: e.target.value }))}
+                    placeholder={t.optionalNote || "Optional note (visible in history)"}
+                    className="w-full text-xs px-3 py-2 rounded-lg outline-none mb-2"
+                    style={{ background: "white", border: "1px solid rgba(0,0,0,0.08)" }}
+                    disabled={isProcessing}
+                  />
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleReject(req)}
+                      disabled={isProcessing}
+                      className="flex-1 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
+                      style={{ background: "white", color: "#9C5757", border: "1px solid #D9B5B5" }}
+                    >
+                      ✗ {t.reject || "Reject"}
+                    </button>
+                    <button
+                      onClick={() => handleApprove(req)}
+                      disabled={isProcessing}
+                      className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                      style={{ background: isDelete ? "#9C5757" : "#5C8519" }}
+                    >
+                      {isProcessing ? "…" : (isDelete ? `🗑 ${t.approveDelete || "Approve delete"}` : `✓ ${t.approve || "Approve"}`)}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {pending.length === 0 && (
+        <div className="text-center py-12 rounded-2xl mb-8" style={{ background: "#F8F4FD" }}>
+          <div className="text-4xl mb-2">✨</div>
+          <div className="text-sm font-medium" style={{ color: BRAND_PURPLE }}>
+            {t.allCaughtUp || "All caught up!"}
+          </div>
+          <div className="text-xs text-stone-500 mt-1">
+            {t.noPendingRequestsDetail || "No pending edit or delete requests."}
+          </div>
+        </div>
+      )}
+
+      {/* RECENT HISTORY — last 10 resolved requests */}
+      {recent.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-widest font-bold mb-3 text-stone-500">
+            📜 {t.recentlyResolved || "Recently resolved"} ({recent.length})
+          </div>
+          <div className="space-y-2">
+            {recent.map((req) => {
+              const isApproved = req.status === "approved";
+              const isRejected = req.status === "rejected";
+              const isCancelled = req.status === "cancelled";
+              const isDelete = req.type === "delete";
+              const statusColor = isApproved ? "#5C8519" : isRejected ? "#9C5757" : "#8B847E";
+              const statusLabel = isApproved ? (t.approved || "Approved") : isRejected ? (t.rejected || "Rejected") : (t.cancelled || "Cancelled");
+              return (
+                <div
+                  key={req.id}
+                  className="rounded-lg p-3 text-xs"
+                  style={{ background: "white", border: "1px solid #F0EDE7" }}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+                        style={{ background: statusColor, color: "white" }}
+                      >
+                        {statusLabel}
+                      </span>
+                      <span className="font-semibold truncate">{clientName(req.clientId)}</span>
+                      <span className="text-[10px] text-stone-400 flex-shrink-0">
+                        ({isDelete ? "🗑" : "✏️"})
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-stone-400 flex-shrink-0">
+                      {relativeTime(req.resolvedAt || req.createdAt)}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-stone-500">
+                    {t.requestedBy || "Requested by"} {vendorName(req.requestedBy)}
+                    {req.resolutionNote && req.resolutionNote.trim().length > 0 && (
+                      <span> · <em>"{req.resolutionNote}"</em></span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function ArchivedClientsView({ t, clients, vendors, interactions, onUnarchive, onBack }) {
   const archivedClients = (clients || []).filter((c) => c.archived);
 
@@ -9396,7 +9827,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
         ) : undefined}
       />
       )}
@@ -9412,7 +9844,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
         ) : undefined}
       />
       )}
@@ -9426,7 +9859,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
         ) : undefined}
       />
       )}
@@ -9440,7 +9874,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
         ) : undefined}
       />
       )}
@@ -9454,7 +9889,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
         ) : undefined}
       />
       )}
@@ -9468,7 +9904,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
         ) : undefined}
       />
       )}
@@ -9482,7 +9919,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
         ) : undefined}
       />
       )}
@@ -9577,6 +10015,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           vendors={vendors}
           isManager={isManagerMode}
           onCreateEditRequest={onCreateEditRequest}
+          onCancelEditRequest={onCancelEditRequest}
           pendingRequest={(editRequests || []).find((r) => r.clientId === viewingDuplicate.id && r.status === "pending") || null}
           onSave={async (updates) => {
             await onUpdateClient(viewingDuplicate.id, updates);
@@ -9594,6 +10033,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           vendors={vendors}
           isManager={isManagerMode}
           onCreateEditRequest={onCreateEditRequest}
+          onCancelEditRequest={onCancelEditRequest}
           pendingRequest={(editRequests || []).find((r) => r.clientId === editingClient.id && r.status === "pending") || null}
           onSave={async (updates) => {
             await onUpdateClient(editingClient.id, updates);
@@ -9799,6 +10239,7 @@ function CustomerTable({
   t, customers, vendorId, allInteractions, templates, tags,
   onLog, onUndo, onCloseCallback, onUpdateClient, onOpenEdit, onRequestRemoval,
   onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest,
+  editRequests, onCreateEditRequest, onCancelEditRequest,
   isLead = false,
 }) {
   // Track which row has its callback picker expanded
@@ -9816,6 +10257,30 @@ function CustomerTable({
 
   // Track which row has its More menu open
   const [moreMenuOpen, setMoreMenuOpen] = useState(null); // clientId or null
+
+  // Delete request prompt: when user clicks 🗑, show a modal with optional reason input.
+  // Shape: { client } | null
+  const [deletePrompt, setDeletePrompt] = useState(null);
+  const [deleteReason, setDeleteReason] = useState("");
+
+  function openDeletePrompt(client) {
+    setDeletePrompt({ client });
+    setDeleteReason("");
+    setMoreMenuOpen(null);
+  }
+  function closeDeletePrompt() {
+    setDeletePrompt(null);
+    setDeleteReason("");
+  }
+  async function confirmDeleteRequest() {
+    if (!deletePrompt || !onCreateEditRequest) return;
+    const result = await onCreateEditRequest(deletePrompt.client.id, "delete", { reason: deleteReason.trim() });
+    if (result && result.success === false) {
+      alert(result.error || "Could not submit delete request");
+      return;
+    }
+    closeDeletePrompt();
+  }
 
   // Note tooltip: which client's note is currently being hovered (for the patch overlay)
   const [hoveredNoteClientId, setHoveredNoteClientId] = useState(null);
@@ -9905,6 +10370,9 @@ function CustomerTable({
             const isNoteFlowOpenHere = noteFlow && noteFlow.clientId === client.id;
             const isMoreOpenHere = moreMenuOpen === client.id;
 
+            // Pending edit/delete request for this customer (if any) — used to show "Change pending" badge.
+            const pendingReq = (editRequests || []).find((r) => r.clientId === client.id && r.status === "pending");
+
             return (
               <tr
                 key={client.id}
@@ -9944,6 +10412,17 @@ function CustomerTable({
                     {callbackInt?.scheduledTime && (
                       <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#F0E8FA", color: "#5F2F9D" }}>
                         📅 {callbackInt.scheduledDate ? `${callbackInt.scheduledDate} ` : ""}{callbackInt.scheduledTime}
+                      </span>
+                    )}
+                    {/* Pending request badge — informs vendor that an edit or delete is awaiting manager review */}
+                    {pendingReq && pendingReq.type === "edit" && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#FFF5D6", color: "#7A5A1A" }}>
+                        ⚠ {t.changePendingShort || "Change pending"}
+                      </span>
+                    )}
+                    {pendingReq && pendingReq.type === "delete" && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#FEF2EE", color: "#9C5757" }}>
+                        🗑 {t.deletePending || "Delete pending"}
                       </span>
                     )}
                   </div>
@@ -10241,7 +10720,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 6: Actions menu */}
-                <td className="px-3 py-2.5 align-top text-right" style={{ minWidth: "100px", position: "relative" }}>
+                <td className="px-3 py-2.5 align-top text-right" style={{ minWidth: "110px", position: "relative" }}>
                   <div className="inline-flex gap-0.5" style={{ color: "#B5ADA5" }}>
                     {onOpenEdit && !isLead && (
                       <button
@@ -10259,6 +10738,17 @@ function CustomerTable({
                         onClick={() => alert((t.historyDesktopHint || "Tap any customer card on a smaller screen to see full history."))}
                       >
                         <History size={13} />
+                      </button>
+                    )}
+                    {/* Delete request: vendor requests removal, manager must approve.
+                        Hidden if there's already a pending delete request. */}
+                    {!isLead && onCreateEditRequest && !(pendingReq && pendingReq.type === "delete") && (
+                      <button
+                        className="w-7 h-7 rounded flex items-center justify-center hover:bg-stone-100 hover:text-red-600 transition-colors"
+                        title={t.requestRemoval || "Request removal"}
+                        onClick={() => openDeletePrompt(client)}
+                      >
+                        <Trash2 size={13} />
                       </button>
                     )}
                     {!isLead && (
@@ -10290,20 +10780,6 @@ function CustomerTable({
                           ⏭ {t.alreadyOrdered || "Already ordered this week"}
                         </button>
                       )}
-                      {onRequestRemoval && !client.removalRequested && (
-                        <button
-                          onClick={() => {
-                            if (confirm(t.requestRemovalConfirm || "Request manager to remove this customer?")) {
-                              onRequestRemoval(client.id);
-                            }
-                            setMoreMenuOpen(null);
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50"
-                          style={{ color: "#9C5757" }}
-                        >
-                          🗑 {t.requestRemoval || "Request removal"}
-                        </button>
-                      )}
                       <button
                         onClick={() => setMoreMenuOpen(null)}
                         className="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50"
@@ -10319,6 +10795,68 @@ function CustomerTable({
           })}
         </tbody>
       </table>
+
+      {/* Delete-request prompt — vendor clicks 🗑, this modal asks for optional reason
+          and submits a delete edit_request that the manager must approve. */}
+      {deletePrompt && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={closeDeletePrompt}
+        >
+          <div
+            className="bg-white w-full max-w-md rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xl">🗑</span>
+                <div className="text-base font-semibold" style={{ color: "#9C5757" }}>
+                  {t.requestDeleteTitle || "Request customer removal"}
+                </div>
+              </div>
+              <div className="text-sm text-stone-700 mb-1">
+                {t.requestDeleteIntro || "You're asking the manager to remove this customer:"}
+              </div>
+              <div className="font-bold text-base mb-3" style={{ color: "#1C1B1A" }}>
+                {deletePrompt.client.name}
+              </div>
+
+              <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">
+                {t.optionalReason || "Reason"} <span className="normal-case text-stone-400">({t.optional || "optional"})</span>
+              </div>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder={t.deleteReasonPlaceholder || "e.g., Moved to competitor, business closed, etc."}
+                rows={3}
+                autoFocus
+                className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400 resize-none mb-3"
+              />
+
+              <div className="p-2.5 rounded-lg text-[11px] mb-4" style={{ background: "#FEF8F6", color: "#7A3D3D" }}>
+                {t.deleteRequestNote || "The customer will stay visible until the manager approves your request."}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={closeDeletePrompt}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border border-stone-200 text-stone-700"
+                >
+                  {t.cancel || "Cancel"}
+                </button>
+                <button
+                  onClick={confirmDeleteRequest}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white"
+                  style={{ background: "#9C5757" }}
+                >
+                  {t.submitRequest || "Submit request"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -13424,7 +13962,7 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
 // ============================================
 // EditClientModal — edit existing client (name, phone, vendor, frequency, notes)
 // ============================================
-function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = false, onCreateEditRequest, pendingRequest = null }) {
+function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = false, onCreateEditRequest, onCancelEditRequest, pendingRequest = null }) {
   const [name, setName] = useState(client.name || "");
   // Initialize phone with auto-format applied so legacy unformatted numbers look clean immediately
   const [phone, setPhone] = useState(formatPhoneUS(client.phone || ""));
@@ -13558,14 +14096,35 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
           </div>
 
           {/* Pending-request banner — shown when there's already an active edit_request for this client.
-              Vendors see this so they know a change is awaiting manager approval. */}
+              Vendors see this so they know a change is awaiting manager approval, and can cancel it. */}
           {pendingRequest && (
-            <div className="mb-3 p-3 rounded-lg flex items-start gap-2" style={{ background: "#FFF5D6", borderLeft: "3px solid #C28B1A", color: "#6B5300" }}>
-              <span className="text-base">⚠️</span>
-              <div className="flex-1 text-[11px] leading-snug">
-                <div className="font-semibold mb-0.5">{t.changePending || "Change pending approval"}</div>
-                <div>{t.changePendingDetail || "Your request is awaiting manager approval. Some fields may be locked until resolved."}</div>
+            <div className="mb-3 p-3 rounded-lg" style={{ background: "#FFF5D6", borderLeft: "3px solid #C28B1A", color: "#6B5300" }}>
+              <div className="flex items-start gap-2 mb-2">
+                <span className="text-base">⚠️</span>
+                <div className="flex-1 text-[11px] leading-snug">
+                  <div className="font-semibold mb-0.5">{t.changePending || "Change pending approval"}</div>
+                  <div>{t.changePendingDetail || "Your request is awaiting manager approval. Some fields may be locked until resolved."}</div>
+                </div>
               </div>
+              {/* Vendor can cancel their own pending request. Manager can too (sees the same banner if they open the modal). */}
+              {onCancelEditRequest && (
+                <button
+                  onClick={async () => {
+                    if (confirm(t.cancelRequestConfirm || "Cancel your pending request?")) {
+                      const result = await onCancelEditRequest(pendingRequest.id);
+                      if (result && result.success === false) {
+                        alert(result.error || (t.actionFailed || "Action failed"));
+                      } else {
+                        onCancel(); // close modal after successful cancel
+                      }
+                    }
+                  }}
+                  className="text-[10px] font-semibold px-2 py-1 rounded ml-auto block"
+                  style={{ background: "white", color: "#7A5A1A", border: "1px solid #C28B1A" }}
+                >
+                  ✗ {t.cancelMyRequest || "Cancel my request"}
+                </button>
+              )}
             </div>
           )}
 
