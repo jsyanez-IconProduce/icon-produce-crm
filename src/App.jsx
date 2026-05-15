@@ -377,6 +377,11 @@ const T = {
 
     // callback
     callbackTime: "Callback time",
+    searchSidebarTitle: "Quick search",
+    filterByStatus: "Filter by status",
+    todaysOverview: "Today's overview",
+    contacted: "Contacted",
+    totalCustomers: "Total",
     addNote: "Add note",
     undoCall: "Click to undo call",
     undoText: "Click to undo text",
@@ -1048,6 +1053,11 @@ const T = {
     writeReason: "Escribe la razón…",
 
     callbackTime: "Hora para llamar",
+    searchSidebarTitle: "Búsqueda rápida",
+    filterByStatus: "Filtrar por estado",
+    todaysOverview: "Resumen de hoy",
+    contacted: "Contactados",
+    totalCustomers: "Total",
     addNote: "Agregar nota",
     undoCall: "Click para deshacer llamada",
     undoText: "Click para deshacer texto",
@@ -8912,13 +8922,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   }
 
   return (
-    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"}`}>
-      {/* Search bar — filter clients and leads by name in real time.
-          Placed in the wide outer container (NOT inside the narrow column) so that
-          its sticky scope covers ALL content below: leads section, customer tabs, etc.
-          As the user scrolls through the whole page, the search bar stays pinned to the top. */}
+    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"} lg:pr-72`}>
+      {/* Search bar — mobile/tablet only. On desktop we use the right sidebar instead.
+          The lg:hidden hides this whole block on screens ≥1024px. */}
       <div
-        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3"
+        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3 lg:hidden"
         style={{ top: 0, background: "#F5F1EA", borderBottom: "1px solid rgba(95,47,157,0.10)" }}
       >
         <div className="relative max-w-md mx-auto">
@@ -8946,6 +8954,107 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           )}
         </div>
       </div>
+
+      {/* Desktop-only sidebar: fixed to the right, contains search + status filter chips.
+          The parent container adds lg:pr-72 (288px) to reserve space so the sidebar doesn't
+          overlap the table content. Hidden on screens <1024px. */}
+      <aside
+        className="hidden lg:flex lg:flex-col fixed right-0 top-14 bottom-0 w-64 px-4 py-4 overflow-y-auto"
+        style={{
+          background: "white",
+          borderLeft: "1px solid #E5E0DA",
+          boxShadow: "-2px 0 8px rgba(0,0,0,0.03)",
+          zIndex: 30,
+        }}
+      >
+        <div className="text-[10px] uppercase tracking-widest font-bold mb-2 flex items-center gap-1.5" style={{ color: "#5F2F9D" }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+          {t.searchSidebarTitle || "Quick search"}
+        </div>
+
+        <div className="relative mb-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t.searchClients || "Customer or lead…"}
+            className="w-full pl-8 pr-8 py-2 bg-stone-50 rounded-lg text-sm outline-none focus:bg-white"
+            style={{ border: "1px solid #E5E0DA" }}
+          />
+          <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+          </div>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+              title={t.clear || "Clear"}
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
+        {/* Filter chips: clicking a chip jumps to that tab.
+            Reuses the existing tab system. Counts show how many items in each. */}
+        <div className="text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color: "#6B6560" }}>
+          {t.filterByStatus || "Filter by status"}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {[
+            { key: "to_contact", label: t.toContact || "To contact", count: pending.length, color: "#5F2F9D", bg: "#F0E8FA" },
+            { key: "ordered", label: t.statusOrdered || "Ordered", count: contactedOrdered.length, color: "#5C8519", bg: "#ECF7E5" },
+            { key: "callback", label: t.statusCallback || "Callback", count: contactedCallback.length, color: "#5A6B85", bg: "#E5EAF2" },
+            { key: "no_answer", label: t.statusNoAnswer || "No answer", count: contactedNoAnswer.length, color: "#8B7355", bg: "#F0EAE0" },
+            { key: "price_issue", label: t.statusPriceIssue || "Price issue", count: contactedPriceIssue.length, color: "#B8860B", bg: "#FFF5D6" },
+            { key: "not_interested", label: t.statusNotInterested || "Not interested", count: contactedNotInterested.length, color: "#9C5757", bg: "#F2E2E2" },
+            { key: "other", label: t.statusOther || "Other", count: contactedOther.length, color: "#5A4A6B", bg: "#EAE3F0" },
+          ].map((f) => {
+            const isActive = activeTab === f.key;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setActiveTab(f.key)}
+                className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all"
+                style={{
+                  background: isActive ? f.color : f.bg,
+                  color: isActive ? "white" : f.color,
+                  border: isActive ? `1px solid ${f.color}` : `1px solid transparent`,
+                }}
+              >
+                <span>{f.label}</span>
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: isActive ? "rgba(255,255,255,0.25)" : "white",
+                    color: isActive ? "white" : f.color,
+                  }}
+                >
+                  {f.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Total summary card */}
+        <div className="mt-4 p-3 rounded-lg text-[11px]" style={{ background: "#F8F4FD", color: "#4A2D7A" }}>
+          <div className="font-bold mb-1 text-xs">{t.todaysOverview || "Today's overview"}</div>
+          <div className="flex justify-between"><span>{t.toContact || "To contact"}:</span><span className="font-semibold">{pending.length}</span></div>
+          <div className="flex justify-between"><span>{t.contacted || "Contacted"}:</span><span className="font-semibold">{contacted.length}</span></div>
+          <div className="flex justify-between"><span>{t.totalCustomers || "Total"}:</span><span className="font-semibold">{pending.length + contacted.length}</span></div>
+          {filteredLeads.length > 0 && (
+            <div className="flex justify-between mt-1 pt-1" style={{ borderTop: "1px solid rgba(95,47,157,0.15)" }}>
+              <span>{t.myLeads || "Leads"}:</span>
+              <span className="font-semibold">{filteredLeads.length}</span>
+            </div>
+          )}
+        </div>
+      </aside>
 
       {/* Narrow column for personal/account sections */}
       <div className="max-w-md mx-auto">
