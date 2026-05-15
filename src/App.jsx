@@ -422,6 +422,10 @@ const T = {
     previousDay: "Previous day",
     nextDay: "Next day",
     backToToday: "Back to today",
+    viewingAll: "Viewing",
+    allCustomers: "All customers",
+    allShort: "All",
+    allCustomersHint: "Show every customer regardless of day",
     sunday: "Sunday",
     monday: "Monday",
     tuesday: "Tuesday",
@@ -1157,6 +1161,10 @@ const T = {
     previousDay: "Día anterior",
     nextDay: "Día siguiente",
     backToToday: "Volver a hoy",
+    viewingAll: "Viendo",
+    allCustomers: "Todos los clientes",
+    allShort: "Todos",
+    allCustomersHint: "Mostrar todos los clientes sin importar el día",
     sunday: "Domingo",
     monday: "Lunes",
     tuesday: "Martes",
@@ -9199,6 +9207,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   // 0 = Sun, 1 = Mon, ..., 6 = Sat. Used to filter customers by their purchase days.
   const [selectedDow, setSelectedDow] = useState(() => new Date().getDay());
 
+  // "Show all" mode: when true, the day filter is bypassed and ALL customers
+  // assigned to this vendor are shown regardless of their purchase days.
+  // Useful for searching/finding any customer in the full list.
+  const [viewAllDays, setViewAllDays] = useState(false);
+
   // Sort option for customer lists. "alpha" is default (no extra data needed).
   // The other two options need historical interactions, loaded lazily on demand.
   // "alpha" | "most_orders" | "least_contacted"
@@ -9253,7 +9266,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     if (c.skipUntil && c.skipUntil > nowMs) return false;
     // Filter by assigned contact day: customer only appears on its configured days.
     // null/undefined purchaseDays = legacy data, always show. Empty array = hide.
-    if (Array.isArray(c.purchaseDays)) {
+    // If viewAllDays mode is on, this filter is bypassed entirely.
+    if (!viewAllDays && Array.isArray(c.purchaseDays)) {
       if (c.purchaseDays.length === 0) return false;
       if (!c.purchaseDays.includes(selectedDow)) return false;
     }
@@ -9680,6 +9694,129 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         )}
       </div>
 
+      {/* DAY NAVIGATOR — lets vendor see who they need to contact on any given day.
+          Arrows navigate ±1 day; chip strip below jumps to any of the 7 surrounding days.
+          The selected day filters all customer lists below (purchaseDays match).
+          "All customers" mode bypasses day filtering entirely — useful for full-list searches. */}
+      <div className="mb-5 rounded-2xl overflow-hidden card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        {/* Header bar with arrows + day name (OR "All customers" indicator when toggled on) */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: viewAllDays ? "#3D2A6B" : BRAND_PURPLE, color: "white" }}>
+          <button
+            onClick={() => { setViewAllDays(false); setSelectedDow((selectedDow + 6) % 7); }}
+            disabled={viewAllDays}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            title={t.previousDay || "Previous day"}
+          >
+            <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
+          </button>
+          <div className="text-center flex-1">
+            {viewAllDays ? (
+              <>
+                <div className="text-[10px] uppercase tracking-widest opacity-80">
+                  📋 {t.viewingAll || "Viewing"}
+                </div>
+                <div className="text-lg font-bold">
+                  {t.allCustomers || "All customers"}
+                </div>
+                <button
+                  onClick={() => setViewAllDays(false)}
+                  className="text-[10px] mt-0.5 underline opacity-90 hover:opacity-100"
+                >
+                  ↺ {t.backToToday || "Back to today"}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-[10px] uppercase tracking-widest opacity-80">
+                  {selectedDow === todayDow
+                    ? (t.today || "Today")
+                    : selectedDow === (todayDow + 1) % 7
+                      ? (t.tomorrow || "Tomorrow")
+                      : selectedDow === (todayDow + 6) % 7
+                        ? (t.yesterday || "Yesterday")
+                        : (t.viewing || "Viewing")}
+                </div>
+                <div className="text-lg font-bold">
+                  {[t.sunday || "Sunday", t.monday || "Monday", t.tuesday || "Tuesday", t.wednesday || "Wednesday", t.thursday || "Thursday", t.friday || "Friday", t.saturday || "Saturday"][selectedDow]}
+                </div>
+                {selectedDow !== todayDow && (
+                  <button
+                    onClick={() => setSelectedDow(todayDow)}
+                    className="text-[10px] mt-0.5 underline opacity-90 hover:opacity-100"
+                  >
+                    ↺ {t.backToToday || "Back to today"}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => { setViewAllDays(false); setSelectedDow((selectedDow + 1) % 7); }}
+            disabled={viewAllDays}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            title={t.nextDay || "Next day"}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Quick-jump chip strip: 7 days centered on today.
+            LAST chip is "All" — toggles viewAllDays mode (shows every customer regardless of day). */}
+        <div className="flex gap-1.5 px-3 py-3 overflow-x-auto" style={{ background: "#FAF8F4" }}>
+          {dayNavItems.map((item) => {
+            const isSelected = !viewAllDays && item.dow === selectedDow;
+            const count = customersPerDow[item.dow];
+            const dayShort = [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][item.dow];
+            return (
+              <button
+                key={`day-${item.offset}`}
+                onClick={() => { setViewAllDays(false); setSelectedDow(item.dow); }}
+                className="flex-shrink-0 px-3 py-2 rounded-lg text-center transition-all"
+                style={{
+                  background: isSelected ? BRAND_PURPLE : (item.isToday ? "#F0E8FA" : "white"),
+                  color: isSelected ? "white" : (item.isToday ? BRAND_PURPLE : "#6B6560"),
+                  border: `1px solid ${isSelected ? BRAND_PURPLE : (item.isToday ? BRAND_PURPLE + "40" : "#E5E0DA")}`,
+                  minWidth: "52px",
+                }}
+              >
+                <div className="text-[9px] uppercase tracking-wide font-bold opacity-90">{dayShort}</div>
+                <div className="text-base font-bold leading-tight">{item.date}</div>
+                <div className="text-[9px] font-semibold" style={{ opacity: isSelected ? 0.9 : 0.7 }}>
+                  {count > 0 ? `${count} ${count === 1 ? (t.custShort || "cust") : (t.custsShort || "custs")}` : "—"}
+                </div>
+              </button>
+            );
+          })}
+          {/* "All" chip: shows every customer regardless of day. Useful for searching the
+              full customer list, finding someone not assigned to today, etc. */}
+          {(() => {
+            const totalCusts = clients.filter((c) =>
+              c.vendorId === vendorId && !c.archived && !c.skipRequestPending && !(c.skipUntil && c.skipUntil > nowMs)
+            ).length;
+            return (
+              <button
+                onClick={() => setViewAllDays(true)}
+                className="flex-shrink-0 px-3 py-2 rounded-lg text-center transition-all"
+                style={{
+                  background: viewAllDays ? "#3D2A6B" : "white",
+                  color: viewAllDays ? "white" : "#5F2F9D",
+                  border: `1px solid ${viewAllDays ? "#3D2A6B" : BRAND_PURPLE}`,
+                  minWidth: "52px",
+                }}
+                title={t.allCustomersHint || "Show every customer regardless of day"}
+              >
+                <div className="text-[9px] uppercase tracking-wide font-bold opacity-90">{t.allShort || "All"}</div>
+                <div className="text-base font-bold leading-tight">★</div>
+                <div className="text-[9px] font-semibold" style={{ opacity: viewAllDays ? 0.9 : 0.7 }}>
+                  {totalCusts > 0 ? `${totalCusts}` : "—"}
+                </div>
+              </button>
+            );
+          })()}
+        </div>
+      </div>
 
       {/* Quick action row — only visible in manager mode.
           Manager can add clients/leads directly from My Sales without going back to dashboard.
@@ -9975,80 +10112,6 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </>
       )}
 
-      {/* DAY NAVIGATOR — lets vendor see who they need to contact on any given day.
-          Arrows navigate ±1 day; chip strip below jumps to any of the 7 surrounding days.
-          The selected day filters all customer lists below (purchaseDays match). */}
-      <div className="mb-5 rounded-2xl overflow-hidden card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-        {/* Header bar with arrows + day name */}
-        <div className="flex items-center justify-between px-4 py-3" style={{ background: BRAND_PURPLE, color: "white" }}>
-          <button
-            onClick={() => setSelectedDow((selectedDow + 6) % 7)}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            title={t.previousDay || "Previous day"}
-          >
-            <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
-          </button>
-          <div className="text-center flex-1">
-            <div className="text-[10px] uppercase tracking-widest opacity-80">
-              {selectedDow === todayDow
-                ? (t.today || "Today")
-                : selectedDow === (todayDow + 1) % 7
-                  ? (t.tomorrow || "Tomorrow")
-                  : selectedDow === (todayDow + 6) % 7
-                    ? (t.yesterday || "Yesterday")
-                    : (t.viewing || "Viewing")}
-            </div>
-            <div className="text-lg font-bold">
-              {[t.sunday || "Sunday", t.monday || "Monday", t.tuesday || "Tuesday", t.wednesday || "Wednesday", t.thursday || "Thursday", t.friday || "Friday", t.saturday || "Saturday"][selectedDow]}
-            </div>
-            {selectedDow !== todayDow && (
-              <button
-                onClick={() => setSelectedDow(todayDow)}
-                className="text-[10px] mt-0.5 underline opacity-90 hover:opacity-100"
-              >
-                ↺ {t.backToToday || "Back to today"}
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => setSelectedDow((selectedDow + 1) % 7)}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            title={t.nextDay || "Next day"}
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-
-        {/* Quick-jump chip strip: 7 days centered on today */}
-        <div className="flex gap-1.5 px-3 py-3 overflow-x-auto" style={{ background: "#FAF8F4" }}>
-          {dayNavItems.map((item) => {
-            const isSelected = item.dow === selectedDow;
-            const count = customersPerDow[item.dow];
-            const dayShort = [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][item.dow];
-            return (
-              <button
-                key={`day-${item.offset}`}
-                onClick={() => setSelectedDow(item.dow)}
-                className="flex-shrink-0 px-3 py-2 rounded-lg text-center transition-all"
-                style={{
-                  background: isSelected ? BRAND_PURPLE : (item.isToday ? "#F0E8FA" : "white"),
-                  color: isSelected ? "white" : (item.isToday ? BRAND_PURPLE : "#6B6560"),
-                  border: `1px solid ${isSelected ? BRAND_PURPLE : (item.isToday ? BRAND_PURPLE + "40" : "#E5E0DA")}`,
-                  minWidth: "52px",
-                }}
-              >
-                <div className="text-[9px] uppercase tracking-wide font-bold opacity-90">{dayShort}</div>
-                <div className="text-base font-bold leading-tight">{item.date}</div>
-                <div className="text-[9px] font-semibold" style={{ opacity: isSelected ? 0.9 : 0.7 }}>
-                  {count > 0 ? `${count} ${count === 1 ? (t.custShort || "cust") : (t.custsShort || "custs")}` : "—"}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* SORT CONTROL — small dropdown above the customer list. Lets vendor choose how to
           order the rows: alphabetically (default, instant), most orders historically, or
