@@ -377,6 +377,24 @@ const T = {
 
     // callback
     callbackTime: "Callback time",
+    customerColName: "Customer",
+    contactToday: "Contact today",
+    notesCol: "Notes",
+    outcomeCol: "Outcome",
+    noNotes: "— no notes —",
+    noAnswerShort: "No ans.",
+    noAnsShort: "No ans.",
+    callbackShort: "Callback",
+    notInterestedShort: "Not int.",
+    notIntShort: "Not int.",
+    priceIssueShort: "Price",
+    alreadyOrderedInPastShort: "Past customer",
+    closeAsOrdered: "Close as ordered",
+    retry: "Retry",
+    more: "More",
+    close: "Close",
+    historyDesktopHint: "Switch to mobile/tablet view to see full history.",
+    skipWeekConfirm: "Already ordered this week? This will hide the customer for 48 hours.",
     date: "Date",
     time: "Time",
     contactName: "Contact name",
@@ -1016,6 +1034,24 @@ const T = {
     writeReason: "Escribe la razón…",
 
     callbackTime: "Hora para llamar",
+    customerColName: "Cliente",
+    contactToday: "Contactar hoy",
+    notesCol: "Notas",
+    outcomeCol: "Resultado",
+    noNotes: "— sin notas —",
+    noAnswerShort: "No cont.",
+    noAnsShort: "No cont.",
+    callbackShort: "Volver a llamar",
+    notInterestedShort: "No int.",
+    notIntShort: "No int.",
+    priceIssueShort: "Precio",
+    alreadyOrderedInPastShort: "Cliente previo",
+    closeAsOrdered: "Cerrar como ordenado",
+    retry: "Reintentar",
+    more: "Más",
+    close: "Cerrar",
+    historyDesktopHint: "Cambia a vista móvil/tablet para ver historial completo.",
+    skipWeekConfirm: "¿Ya ordenó esta semana? Esto ocultará al cliente por 48 horas.",
     date: "Fecha",
     time: "Hora",
     contactName: "Nombre de contacto",
@@ -2733,6 +2769,31 @@ function prettyDate(locale, d = new Date()) {
 }
 function timeStr(ts, locale) {
   return new Date(ts).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+}
+
+// ---------- RESPONSIVE LAYOUT HOOK ----------
+// Returns true when viewport is at least the given breakpoint (default 1024px = desktop).
+// Listens to window resize and updates automatically.
+// Used to switch between table view (desktop) and card view (mobile/tablet).
+function useIsDesktop(breakpoint = 1024) {
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth >= breakpoint;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia(`(min-width: ${breakpoint}px)`);
+    const handler = (e) => setIsDesktop(e.matches);
+    // Use both addEventListener (modern) and addListener (Safari fallback)
+    if (mql.addEventListener) mql.addEventListener("change", handler);
+    else mql.addListener(handler);
+    setIsDesktop(mql.matches);
+    return () => {
+      if (mql.removeEventListener) mql.removeEventListener("change", handler);
+      else mql.removeListener(handler);
+    };
+  }, [breakpoint]);
+  return isDesktop;
 }
 
 // ---------- ROOT ----------
@@ -8445,6 +8506,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const [convertingLead, setConvertingLead] = useState(null);
   // When manager clicks "View" on a duplicate, this holds the existing client to view/edit
   const [viewingDuplicate, setViewingDuplicate] = useState(null);
+  // Detect desktop viewport (>=1024px) so we can switch between table and card layouts.
+  // Table layout shows everything in one row; card layout stacks vertically for mobile/tablet.
+  const isDesktop = useIsDesktop(1024);
+  // Customer being edited (from table's Edit icon). Opens EditClientModal when set.
+  const [editingClient, setEditingClient] = useState(null);
   const vendor = vendors.find((v) => v.id === vendorId);
 
   // Hide clients whose skip period is still active (skip_until > now).
@@ -8860,37 +8926,77 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             </div>
             <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>{filteredLeads.length}</div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
-            {filteredLeads.map((lead) => {
-              // Adapt lead shape to ClientCard interface
-              const asClient = { id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead" };
-              return (
-                <div key={lead.id} style={{ borderLeft: "3px solid #F5D785", borderRadius: "16px" }}>
-                  <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
-                  {/* Convert to client — turns a lead into a regular client.
-                      Opens modal to choose frequency + purchase days.
-                      After conversion, lead disappears from leads list and client appears with
-                      "Already ordered in the past" badge. */}
-                  {onConvertLead && (
-                    <div className="px-4 pb-3 -mt-1">
-                      <button
-                        onClick={() => setConvertingLead(lead)}
-                        className="w-full text-center text-[11px] py-1.5 rounded-md font-medium flex items-center justify-center gap-1.5 transition-colors"
-                        style={{
-                          background: "rgba(115, 166, 38, 0.10)",
-                          color: "#5C8519",
-                          border: "1px dashed rgba(115, 166, 38, 0.35)",
-                        }}
-                      >
-                        <UserPlus size={12} />
-                        {t.convertToClient || "Convert to client"}
-                      </button>
-                    </div>
-                  )}
+          {isDesktop ? (
+            // Desktop table view for leads — shares the same CustomerTable component
+            // but uses isLead=true to slightly simplify the actions column.
+            <div className="mb-6 rounded-2xl overflow-hidden" style={{ background: "#FFFBED", border: "1px solid #FFF5D6" }}>
+              <CustomerTable
+                t={t}
+                customers={filteredLeads.map((lead) => ({ id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead", contactName: lead.contactName, longNote: lead.longNote }))}
+                vendorId={vendorId}
+                allInteractions={interactions}
+                templates={templates}
+                tags={tags}
+                onLog={onLog}
+                onUndo={onUndo}
+                onCloseCallback={onCloseCallback}
+                isLead={true}
+              />
+              {onConvertLead && filteredLeads.length > 0 && (
+                <div className="px-3 pb-3 pt-1 flex flex-wrap gap-2">
+                  {filteredLeads.map((lead) => (
+                    <button
+                      key={`conv-${lead.id}`}
+                      onClick={() => setConvertingLead(lead)}
+                      className="text-[11px] py-1 px-3 rounded-md font-medium flex items-center gap-1 transition-colors"
+                      style={{
+                        background: "rgba(115, 166, 38, 0.10)",
+                        color: "#5C8519",
+                        border: "1px dashed rgba(115, 166, 38, 0.35)",
+                      }}
+                      title={`${t.convertToClient || "Convert to customer"}: ${lead.name}`}
+                    >
+                      <UserPlus size={11} />
+                      {lead.name}
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          ) : (
+            // Mobile/tablet card grid (existing layout)
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+              {filteredLeads.map((lead) => {
+                // Adapt lead shape to ClientCard interface
+                const asClient = { id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead" };
+                return (
+                  <div key={lead.id} style={{ borderLeft: "3px solid #F5D785", borderRadius: "16px" }}>
+                    <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
+                    {/* Convert to client — turns a lead into a regular client.
+                        Opens modal to choose frequency + purchase days.
+                        After conversion, lead disappears from leads list and client appears with
+                        "Already ordered in the past" badge. */}
+                    {onConvertLead && (
+                      <div className="px-4 pb-3 -mt-1">
+                        <button
+                          onClick={() => setConvertingLead(lead)}
+                          className="w-full text-center text-[11px] py-1.5 rounded-md font-medium flex items-center justify-center gap-1.5 transition-colors"
+                          style={{
+                            background: "rgba(115, 166, 38, 0.10)",
+                            color: "#5C8519",
+                            border: "1px dashed rgba(115, 166, 38, 0.35)",
+                          }}
+                        >
+                          <UserPlus size={12} />
+                          {t.convertToClient || "Convert to client"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
@@ -8950,12 +9056,25 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </>
       )}
 
+      {/* Helper closure: returns a renderTable function for desktop viewports.
+          When isDesktop is false, returns undefined so VendorStatusSection falls back to its
+          existing card grid layout. We define this once and pass it to every section below. */}
+      {/* eslint-disable-next-line */}
+      {(() => null)()}
+
       {/* Pending — clients not yet called today */}
       {activeTab === "to_contact" && (
       <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={pending}
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
+        renderTable={isDesktop ? (list) => (
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
+            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+        ) : undefined}
       />
       )}
 
@@ -8965,6 +9084,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
+        renderTable={isDesktop ? (list) => (
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
+            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+        ) : undefined}
       />
       )}
       {activeTab === "callback" && (
@@ -8972,6 +9098,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
+        renderTable={isDesktop ? (list) => (
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
+            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+        ) : undefined}
       />
       )}
       {activeTab === "no_answer" && (
@@ -8979,6 +9112,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
+        renderTable={isDesktop ? (list) => (
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
+            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+        ) : undefined}
       />
       )}
       {activeTab === "price_issue" && (
@@ -8986,6 +9126,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
+        renderTable={isDesktop ? (list) => (
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
+            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+        ) : undefined}
       />
       )}
       {activeTab === "not_interested" && (
@@ -8993,6 +9140,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
+        renderTable={isDesktop ? (list) => (
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
+            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+        ) : undefined}
       />
       )}
       {activeTab === "other" && (
@@ -9000,6 +9154,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
+        renderTable={isDesktop ? (list) => (
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
+            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
+            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+        ) : undefined}
       />
       )}
 
@@ -9096,6 +9257,20 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             setViewingDuplicate(null);
           }}
           onCancel={() => setViewingDuplicate(null)}
+        />
+      )}
+
+      {/* Edit modal — opens when user clicks the ✏️ Edit icon in the desktop customer table */}
+      {editingClient && onUpdateClient && (
+        <EditClientModal
+          t={t}
+          client={editingClient}
+          vendors={vendors}
+          onSave={async (updates) => {
+            await onUpdateClient(editingClient.id, updates);
+            setEditingClient(null);
+          }}
+          onCancel={() => setEditingClient(null)}
         />
       )}
       {isManagerMode && showAddLead && onCreateLeadDirect && (
@@ -9247,7 +9422,9 @@ function MiniStat({ icon: Icon, label, value, color }) {
 // Visually distinctive section header for vendor's grouped client lists.
 // Each section has a colored header bar with icon, title and count.
 // Renders nothing if clientList is empty so sections collapse cleanly.
-function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientList, renderClient }) {
+// `renderTable` is optional — when provided AND clientList is non-empty AND we're on
+// desktop, the section uses the table layout instead of the card grid.
+function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientList, renderClient, renderTable }) {
   if (!clientList || clientList.length === 0) return null;
   return (
     <div className="mb-6 rounded-2xl overflow-hidden" style={{ background: lightBg, border: `1px solid ${bg}` }}>
@@ -9263,10 +9440,380 @@ function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientL
           {clientList.length}
         </div>
       </div>
-      {/* Client list — responsive grid: 1 col mobile, 2 col tablet, 4 col desktop */}
-      <div className="p-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
-        {clientList.map((client) => renderClient(client))}
-      </div>
+      {/* Body: either table (desktop) or card grid (mobile/tablet) */}
+      {renderTable ? (
+        renderTable(clientList)
+      ) : (
+        <div className="p-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5">
+          {clientList.map((client) => renderClient(client))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- CUSTOMER TABLE ----------
+// Desktop-only horizontal table view of customers, used inside VendorStatusSection
+// when viewport is >= 1024px. Renders a 6-column row per customer with all
+// essential info and quick actions. Reuses existing handlers (onLog, onUndo, etc.).
+//
+// Columns:
+//  1. Customer (name + Ask for + badges)
+//  2. Phone
+//  3. Contact today (📞 💬 ✉️ - 3 icon buttons)
+//  4. Notes (yellow strip with title tooltip on hover)
+//  5. Outcome (contextual buttons depending on state)
+//  6. Actions (✏️ Edit · ⏱ History · ⋯ More menu)
+//
+// `isLead` (optional): when true, renders simpler row for leads (no skip/remove buttons).
+function CustomerTable({
+  t, customers, vendorId, allInteractions, templates, tags,
+  onLog, onUndo, onCloseCallback, onUpdateClient, onOpenEdit, onRequestRemoval,
+  onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest,
+  isLead = false,
+}) {
+  // Track which row has its callback picker expanded
+  const [callbackOpen, setCallbackOpen] = useState(null); // clientId or null
+  const [callbackTime, setCallbackTime] = useState("");
+  const [callbackDate, setCallbackDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+
+  // Track which row has its More menu open
+  const [moreMenuOpen, setMoreMenuOpen] = useState(null); // clientId or null
+
+  function openCallback(clientId) {
+    setCallbackOpen(clientId);
+    setCallbackTime("");
+    const d = new Date();
+    setCallbackDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+  function closeCallback() {
+    setCallbackOpen(null);
+    setCallbackTime("");
+  }
+  async function confirmCallback(clientId) {
+    if (!callbackTime) return;
+    await onLog({ clientId, vendorId, channel: "call", status: "callback", scheduledTime: callbackTime, scheduledDate: callbackDate });
+    closeCallback();
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: "#F0EDE7" }}>
+            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.customerColName || "Customer"}</th>
+            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.phone || "Phone"}</th>
+            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.contactToday || "Contact today"}</th>
+            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.notesCol || "Notes"}</th>
+            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.outcomeCol || "Outcome"}</th>
+            <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {customers.map((client) => {
+            const clientInts = (allInteractions || []).filter((i) => i.clientId === client.id);
+            const todayInts = clientInts.filter((i) => i.vendorId === vendorId); // already today-filtered upstream
+            const callInts = todayInts.filter((i) => (i.channel || "call") === "call");
+            const textInts = todayInts.filter((i) => i.channel === "text");
+            const emailInts = todayInts.filter((i) => i.channel === "email");
+            const latestCall = callInts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+            const latestStatus = latestCall?.status;
+            const noAnswerCount = callInts.filter((i) => i.status === "no_answer").length;
+            const notInterestedCount = clientInts.filter((i) => i.channel === "call" && i.status === "not_interested").length;
+            const callbackInt = callInts.find((i) => i.status === "callback");
+
+            const isCallbackOpenHere = callbackOpen === client.id;
+            const isMoreOpenHere = moreMenuOpen === client.id;
+
+            return (
+              <tr key={client.id} className="border-t" style={{ borderColor: "#F0EDE7" }}>
+                {/* COL 1: Customer */}
+                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "240px" }}>
+                  <div className="font-semibold truncate" style={{ color: "#1C1B1A", fontSize: "13px" }}>{client.name}</div>
+                  {client.contactName && (
+                    <div className="text-[11px] truncate" style={{ color: "#8B847E" }}>
+                      {t.ask || "Ask for"}: <span style={{ color: "#3D3733", fontWeight: 500 }}>{client.contactName}</span>
+                    </div>
+                  )}
+                  {/* Inline badges */}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {client.convertedFromLead && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#F0E8FA", color: "#5F2F9D" }}>
+                        ★ {t.alreadyOrderedInPastShort || "Past customer"}
+                      </span>
+                    )}
+                    {noAnswerCount > 0 && noAnswerCount < 3 && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#FEF2EE", color: "#9C5757" }}>
+                        ⚠ {t.noAnsShort || "No ans."} {noAnswerCount}/3
+                      </span>
+                    )}
+                    {notInterestedCount > 0 && notInterestedCount < 3 && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#FEF2EE", color: "#9C5757" }}>
+                        ⚠ {t.notIntShort || "Not int."} {notInterestedCount}/3
+                      </span>
+                    )}
+                    {callbackInt?.scheduledTime && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#F0E8FA", color: "#5F2F9D" }}>
+                        📅 {callbackInt.scheduledDate ? `${callbackInt.scheduledDate} ` : ""}{callbackInt.scheduledTime}
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                {/* COL 2: Phone */}
+                <td className="px-3 py-2.5 align-top text-[12px]" style={{ color: "#4A453F", fontFeatureSettings: '"tnum"', minWidth: "110px" }}>
+                  {client.phone || "—"}
+                </td>
+
+                {/* COL 3: Contact today */}
+                <td className="px-3 py-2.5 align-top" style={{ minWidth: "120px" }}>
+                  <div className="flex gap-1">
+                    <button
+                      className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
+                      style={{
+                        background: callInts.length > 0 ? "#ECF7E5" : "white",
+                        borderColor: callInts.length > 0 ? "#73A626" : "#E5E0DA",
+                        color: callInts.length > 0 ? "#73A626" : "#B5ADA5",
+                      }}
+                      title={t.call || "Call"}
+                      onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })}
+                    >
+                      <Phone size={14} />
+                      {callInts.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-bold text-white" style={{ background: "#73A626", border: "1.5px solid white" }}>✓</span>
+                      )}
+                    </button>
+                    <button
+                      className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
+                      style={{
+                        background: textInts.length > 0 ? "#ECF7E5" : "white",
+                        borderColor: textInts.length > 0 ? "#73A626" : "#E5E0DA",
+                        color: textInts.length > 0 ? "#73A626" : "#B5ADA5",
+                      }}
+                      title={t.text || "Text"}
+                      onClick={() => onLog({ clientId: client.id, vendorId, channel: "text", status: "ordered" })}
+                    >
+                      <MessageSquare size={14} />
+                      {textInts.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-bold text-white" style={{ background: "#73A626", border: "1.5px solid white" }}>✓</span>
+                      )}
+                    </button>
+                    <button
+                      className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
+                      style={{
+                        background: emailInts.length > 0 ? "#ECF7E5" : "white",
+                        borderColor: emailInts.length > 0 ? "#73A626" : "#E5E0DA",
+                        color: emailInts.length > 0 ? "#73A626" : "#B5ADA5",
+                      }}
+                      title={t.email || "Email"}
+                      onClick={() => onLog({ clientId: client.id, vendorId, channel: "email", status: "ordered" })}
+                    >
+                      <Mail size={14} />
+                      {emailInts.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-bold text-white" style={{ background: "#73A626", border: "1.5px solid white" }}>✓</span>
+                      )}
+                    </button>
+                  </div>
+                </td>
+
+                {/* COL 4: Notes (yellow strip with hover tooltip) */}
+                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "260px" }}>
+                  {client.longNote && client.longNote.trim().length > 0 ? (
+                    <div
+                      className="rounded text-[11px] leading-snug px-2 py-1 truncate"
+                      style={{ background: "#FFFCE8", borderLeft: "3px solid #FFED13", color: "#6B5300", cursor: "help" }}
+                      title={client.longNote}
+                    >
+                      📝 {client.longNote}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] italic" style={{ color: "#B5ADA5" }}>{t.noNotes || "— no notes —"}</span>
+                  )}
+                </td>
+
+                {/* COL 5: Outcome buttons (contextual) */}
+                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px" }}>
+                  {isCallbackOpenHere ? (
+                    // Inline callback flow: date + time picker
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex gap-1.5">
+                        <input
+                          type="date"
+                          value={callbackDate}
+                          onChange={(e) => setCallbackDate(e.target.value)}
+                          className="text-[11px] px-1.5 py-1 rounded border"
+                          style={{ borderColor: "#E5E0DA" }}
+                        />
+                        <input
+                          type="time"
+                          value={callbackTime}
+                          onChange={(e) => setCallbackTime(e.target.value)}
+                          autoFocus
+                          className="text-[11px] px-1.5 py-1 rounded border"
+                          style={{ borderColor: "#E5E0DA" }}
+                        />
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button onClick={closeCallback} className="text-[10px] px-2 py-1 rounded" style={{ background: "#F0EDE7", color: "#6B6560" }}>{t.cancel || "Cancel"}</button>
+                        <button onClick={() => confirmCallback(client.id)} disabled={!callbackTime} className="text-[10px] px-2 py-1 rounded font-semibold text-white disabled:opacity-40" style={{ background: "#5F2F9D" }}>
+                          {t.confirm || "Confirm"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : latestStatus === "callback" && callbackInt ? (
+                    <div className="flex flex-wrap gap-1">
+                      <button onClick={() => onCloseCallback && onCloseCallback(callbackInt.id, "ordered")} className="text-[10px] px-2 py-1 rounded font-semibold text-white" style={{ background: "#73A626" }}>
+                        ✓ {t.closeAsOrdered || "Close as ordered"}
+                      </button>
+                      <button onClick={() => onUndo && onUndo(callbackInt.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                        {t.undo || "Undo"}
+                      </button>
+                    </div>
+                  ) : latestStatus === "ordered" ? (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[10px] px-2 py-1 rounded font-semibold text-white" style={{ background: "#73A626" }}>
+                        ✓ {t.statusOrdered || "Ordered"}
+                      </span>
+                      {latestCall && (
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                          {t.undo || "Undo"}
+                        </button>
+                      )}
+                    </div>
+                  ) : latestStatus === "not_interested" ? (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FEF2EE", color: "#9C5757", border: "1px solid #D9B5B5" }}>
+                        {t.notInterestedShort || "Not int."}
+                      </span>
+                      {latestCall && (
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                          {t.retry || "Retry"}
+                        </button>
+                      )}
+                    </div>
+                  ) : latestStatus === "price_issue" ? (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
+                        $ {t.priceIssueShort || "Price"}
+                      </span>
+                      {latestCall && (
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                          {t.retry || "Retry"}
+                        </button>
+                      )}
+                    </div>
+                  ) : latestStatus === "other" ? (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#EAE3F0", color: "#5A4A6B" }}>
+                        {t.statusOther || "Other"}
+                      </span>
+                      {latestCall && (
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                          {t.retry || "Retry"}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    // Pending — show all outcome buttons
+                    <div className="flex flex-wrap gap-1">
+                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.order || "Order"}>
+                        {t.order || "Order"}
+                      </button>
+                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.noAnswer || "No answer"}>
+                        {t.noAnswerShort || "No ans."}
+                      </button>
+                      <button onClick={() => openCallback(client.id)} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.callback || "Callback"}>
+                        {t.callbackShort || "Callback"}
+                      </button>
+                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "not_interested" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FEF8F6", border: "1px solid #D9B5B5", color: "#9C5757" }} title={t.notInterested || "Not interested"}>
+                        {t.notInterestedShort || "Not int."}
+                      </button>
+                    </div>
+                  )}
+                </td>
+
+                {/* COL 6: Actions menu */}
+                <td className="px-3 py-2.5 align-top text-right" style={{ minWidth: "100px", position: "relative" }}>
+                  <div className="inline-flex gap-0.5" style={{ color: "#B5ADA5" }}>
+                    {onOpenEdit && !isLead && (
+                      <button
+                        className="w-7 h-7 rounded flex items-center justify-center hover:bg-stone-100"
+                        title={t.editClient || "Edit customer"}
+                        onClick={() => onOpenEdit(client)}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    )}
+                    {!isLead && (
+                      <button
+                        className="w-7 h-7 rounded flex items-center justify-center hover:bg-stone-100"
+                        title={t.history || "History"}
+                        onClick={() => alert((t.historyDesktopHint || "Tap any customer card on a smaller screen to see full history."))}
+                      >
+                        <History size={13} />
+                      </button>
+                    )}
+                    {!isLead && (
+                      <button
+                        className="w-7 h-7 rounded flex items-center justify-center hover:bg-stone-100"
+                        title={t.more || "More"}
+                        onClick={() => setMoreMenuOpen(isMoreOpenHere ? null : client.id)}
+                      >
+                        <span style={{ fontSize: "14px", lineHeight: 1 }}>⋯</span>
+                      </button>
+                    )}
+                  </div>
+                  {/* More menu popover */}
+                  {isMoreOpenHere && !isLead && (
+                    <div
+                      className="absolute right-3 z-20 bg-white rounded-lg shadow-lg border py-1 mt-1 text-left"
+                      style={{ borderColor: "#E5E0DA", minWidth: "180px" }}
+                    >
+                      {onRequestSkipWeek && !client.skipRequestPending && !(client.skipUntil && client.skipUntil > Date.now()) && (
+                        <button
+                          onClick={() => {
+                            if (confirm(t.skipWeekConfirm || "Already ordered this week? This will hide the customer for 48 hours.")) {
+                              onRequestSkipWeek(client.id);
+                            }
+                            setMoreMenuOpen(null);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50"
+                        >
+                          ⏭ {t.alreadyOrdered || "Already ordered this week"}
+                        </button>
+                      )}
+                      {onRequestRemoval && !client.removalRequested && (
+                        <button
+                          onClick={() => {
+                            if (confirm(t.requestRemovalConfirm || "Request manager to remove this customer?")) {
+                              onRequestRemoval(client.id);
+                            }
+                            setMoreMenuOpen(null);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50"
+                          style={{ color: "#9C5757" }}
+                        >
+                          🗑 {t.requestRemoval || "Request removal"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setMoreMenuOpen(null)}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-stone-50"
+                        style={{ color: "#6B6560", borderTop: "1px solid #F0EDE7" }}
+                      >
+                        {t.close || "Close"}
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
