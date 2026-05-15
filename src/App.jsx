@@ -377,6 +377,16 @@ const T = {
 
     // callback
     callbackTime: "Callback time",
+    changePending: "Change pending approval",
+    changePendingDetail: "A previous edit is awaiting manager approval. Some fields may be locked until resolved.",
+    freeFieldsLegend: "Saves immediately",
+    approvalFieldsLegend: "Requires manager approval",
+    requestApprovalTitle: "Manager approval needed",
+    savedImmediately: "These will be saved immediately",
+    requiresApprovalLabel: "These need manager approval",
+    requestApprovalBtn: "Request approval",
+    editRequestFailed: "Could not submit your request. Please try again.",
+    purchaseDays: "Purchase days",
     customerColName: "Customer",
     contactToday: "Contact today",
     notesCol: "Notes",
@@ -1034,6 +1044,16 @@ const T = {
     writeReason: "Escribe la razón…",
 
     callbackTime: "Hora para llamar",
+    changePending: "Cambio pendiente de aprobación",
+    changePendingDetail: "Una edición anterior está esperando la aprobación del manager. Algunos campos pueden estar bloqueados hasta resolverse.",
+    freeFieldsLegend: "Se guarda al instante",
+    approvalFieldsLegend: "Requiere aprobación del manager",
+    requestApprovalTitle: "Aprobación del manager requerida",
+    savedImmediately: "Estos cambios se guardarán al instante",
+    requiresApprovalLabel: "Estos requieren aprobación del manager",
+    requestApprovalBtn: "Solicitar aprobación",
+    editRequestFailed: "No se pudo enviar tu solicitud. Intenta de nuevo.",
+    purchaseDays: "Días de compra",
     customerColName: "Cliente",
     contactToday: "Contactar hoy",
     notesCol: "Notas",
@@ -1636,6 +1656,25 @@ function interactionToDb(i) {
   if (i.subReason !== undefined) out.sub_reason = i.subReason;
   if (i.scheduledTime !== undefined) out.scheduled_time = i.scheduledTime;
   return out;
+}
+
+// Edit-request mappers: track proposed changes to a customer that need manager approval.
+// Free fields (contact_name, phone, email, long_note, tags) bypass this entirely.
+// Restricted fields (purchase_days, frequency, vendor_id) and deletes go through here.
+function editRequestFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    requestedBy: row.requested_by,
+    type: row.request_type, // 'edit' or 'delete'
+    changes: row.changes || {}, // { purchaseDays?, frequency?, vendorId?, reason? }
+    status: row.status,         // 'pending' | 'approved' | 'rejected' | 'cancelled'
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
+    resolvedBy: row.resolved_by,
+    resolutionNote: row.resolution_note || "",
+  };
 }
 
 function vendorFromProfile(row) {
@@ -2809,6 +2848,9 @@ export default function App() {
   const [quotas, setQuotas] = useState({});
   const [tags, setTags] = useState([]);
   const [interactions, setInteractions] = useState([]);
+  // Edit requests: pending/approved/rejected proposals from vendors to change restricted
+  // customer fields or delete a customer entirely. Manager reviews these in ApprovalsPanel.
+  const [editRequests, setEditRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [splashDone, setSplashDone] = useState(false);
   const [adminCreds, setAdminCreds] = useState(DEFAULT_ADMIN_CREDS);
@@ -2955,6 +2997,15 @@ export default function App() {
           .order("created_at", { ascending: false });
         if (intsData) setInteractions(intsData.map(interactionFromDb));
 
+        // Edit requests (RLS auto-filters: vendors see own, manager sees all)
+        // Load both pending AND resolved (for activity log); UI filters as needed.
+        const { data: erData } = await supabase
+          .from("edit_requests")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (erData) setEditRequests(erData.map(editRequestFromDb));
+
         // ----- FASE 3: Load tasks, templates, tags, quotas from Supabase -----
 
         // Tasks (RLS: managers see all, vendors see own)
@@ -3023,6 +3074,16 @@ export default function App() {
           .gte("created_at", startOfToday.toISOString())
           .order("created_at", { ascending: false });
         if (data) setInteractions(data.map(interactionFromDb));
+      })
+      // Realtime updates for edit_requests so the manager sees new approval requests
+      // appear instantly without refreshing, and vendors see when their requests are resolved.
+      .on("postgres_changes", { event: "*", schema: "public", table: "edit_requests" }, async () => {
+        const { data } = await supabase
+          .from("edit_requests")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (data) setEditRequests(data.map(editRequestFromDb));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, async () => {
         const { data } = await supabase
@@ -3875,6 +3936,136 @@ export default function App() {
     );
   }
 
+  // ============================================
+  // EDIT REQUESTS — handlers
+  // ============================================
+  // Vendors create requests to change restricted customer fields (purchase_days, frequency,
+  // vendor_id) or to delete a customer. Manager reviews them in ApprovalsPanel.
+  //
+  // Free fields (contact_name, phone, email, long_note, tags) DON'T go through this flow —
+  // they're applied directly via the existing onUpdateClient path.
+
+  async function createEditRequest(clientId, type, changes) {
+    if (!currentUser?.id) {
+      console.error("createEditRequest: no current user");
+      return { success: false, error: "Not logged in" };
+    }
+    const payload = {
+      client_id: clientId,
+      requested_by: currentUser.id,
+      request_type: type, // 'edit' or 'delete'
+      changes: changes || {},
+      status: "pending",
+    };
+    const { data, error } = await supabase
+      .from("edit_requests")
+      .insert(payload)
+      .select("*")
+      .single();
+    if (error) {
+      console.error("createEditRequest failed:", error);
+      return { success: false, error: error.message };
+    }
+    // Optimistic local update; realtime will also fire and reconcile
+    if (data) setEditRequests((prev) => [editRequestFromDb(data), ...prev]);
+    return { success: true };
+  }
+
+  // Vendor cancels their own pending request. Manager can also cancel.
+  async function cancelEditRequest(requestId) {
+    const { error } = await supabase
+      .from("edit_requests")
+      .update({
+        status: "cancelled",
+        resolved_at: new Date().toISOString(),
+        resolved_by: currentUser?.id,
+      })
+      .eq("id", requestId);
+    if (error) {
+      console.error("cancelEditRequest failed:", error);
+      return { success: false, error: error.message };
+    }
+    setEditRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, status: "cancelled", resolvedAt: Date.now(), resolvedBy: currentUser?.id } : r))
+    );
+    return { success: true };
+  }
+
+  // Manager approves an edit_request. Applies the proposed changes to the client.
+  async function approveEditRequest(requestId, resolutionNote = "") {
+    const req = editRequests.find((r) => r.id === requestId);
+    if (!req) {
+      console.error("approveEditRequest: request not found", requestId);
+      return { success: false, error: "Request not found" };
+    }
+    if (req.type === "delete") {
+      // Delete the customer entirely. RLS lets manager delete (existing policy).
+      const { error: delErr } = await supabase.from("clients").delete().eq("id", req.clientId);
+      if (delErr) {
+        console.error("approveEditRequest (delete) failed:", delErr);
+        return { success: false, error: delErr.message };
+      }
+      setClients((prev) => prev.filter((c) => c.id !== req.clientId));
+    } else {
+      // Apply field changes. Map camelCase -> snake_case for DB.
+      const updates = {};
+      if (req.changes.purchaseDays !== undefined) updates.purchase_days = req.changes.purchaseDays;
+      if (req.changes.frequency !== undefined) updates.frequency = req.changes.frequency;
+      if (req.changes.vendorId !== undefined) updates.vendor_id = req.changes.vendorId;
+      if (Object.keys(updates).length > 0) {
+        const { error: updErr } = await supabase.from("clients").update(updates).eq("id", req.clientId);
+        if (updErr) {
+          console.error("approveEditRequest (edit) failed:", updErr);
+          return { success: false, error: updErr.message };
+        }
+        setClients((prev) =>
+          prev.map((c) => (c.id === req.clientId ? { ...c, ...{
+            ...(req.changes.purchaseDays !== undefined ? { purchaseDays: req.changes.purchaseDays } : {}),
+            ...(req.changes.frequency !== undefined ? { frequency: req.changes.frequency } : {}),
+            ...(req.changes.vendorId !== undefined ? { vendorId: req.changes.vendorId } : {}),
+          } } : c))
+        );
+      }
+    }
+    // Mark request as approved
+    const { error: erErr } = await supabase
+      .from("edit_requests")
+      .update({
+        status: "approved",
+        resolved_at: new Date().toISOString(),
+        resolved_by: currentUser?.id,
+        resolution_note: resolutionNote || null,
+      })
+      .eq("id", requestId);
+    if (erErr) console.warn("approveEditRequest: status update failed (but changes were applied):", erErr);
+    setEditRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, status: "approved", resolvedAt: Date.now(), resolvedBy: currentUser?.id, resolutionNote } : r))
+    );
+    return { success: true };
+  }
+
+  // Manager rejects an edit_request — no changes applied to the client.
+  async function rejectEditRequest(requestId, resolutionNote = "") {
+    const { error } = await supabase
+      .from("edit_requests")
+      .update({
+        status: "rejected",
+        resolved_at: new Date().toISOString(),
+        resolved_by: currentUser?.id,
+        resolution_note: resolutionNote || null,
+      })
+      .eq("id", requestId);
+    if (error) {
+      console.error("rejectEditRequest failed:", error);
+      return { success: false, error: error.message };
+    }
+    setEditRequests((prev) =>
+      prev.map((r) => (r.id === requestId ? { ...r, status: "rejected", resolvedAt: Date.now(), resolvedBy: currentUser?.id, resolutionNote } : r))
+    );
+    return { success: true };
+  }
+
+
   async function rejectLead(leadId, reason, rejecterLabel = "manager") {
     const { error } = await supabase
       .from("leads")
@@ -4165,6 +4356,9 @@ export default function App() {
           onRequestSkipWeek={requestSkipWeek}
           onCancelSkipRequest={cancelSkipRequest}
           onConvertLead={convertLeadToCustomer}
+          editRequests={editRequests}
+          onCreateEditRequest={createEditRequest}
+          onCancelEditRequest={cancelEditRequest}
           onBack={handleLogout}
         />
       )}
@@ -4354,6 +4548,9 @@ export default function App() {
             approvedAt: Date.now(),
           })}
           onBack={() => window.history.back()}
+          editRequests={editRequests}
+          onCreateEditRequest={createEditRequest}
+          onCancelEditRequest={cancelEditRequest}
         />
       )}
       {currentUser?.role === "admin" && adminView === "setup" && (
@@ -8494,7 +8691,7 @@ function TrendsTab({ t, dowLabels, dowLabelsLong, trends, totalOrders }) {
 
 
 // ---------- VENDOR VIEW (main vendor home screen) ----------
-function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, onConvertLead, isManagerMode, onCreateClientDirect, onCreateLeadDirect, onBack }) {
+function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, onConvertLead, isManagerMode, onCreateClientDirect, onCreateLeadDirect, onBack, editRequests, onCreateEditRequest, onCancelEditRequest }) {
   const [view, setView] = useState("home"); // "home" | "insights"
   const [searchQuery, setSearchQuery] = useState("");
   // Active tab for client status sections. Default to "to_contact" — the most actionable group today.
@@ -9252,6 +9449,9 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           t={t}
           client={viewingDuplicate}
           vendors={vendors}
+          isManager={isManagerMode}
+          onCreateEditRequest={onCreateEditRequest}
+          pendingRequest={(editRequests || []).find((r) => r.clientId === viewingDuplicate.id && r.status === "pending") || null}
           onSave={async (updates) => {
             await onUpdateClient(viewingDuplicate.id, updates);
             setViewingDuplicate(null);
@@ -9266,6 +9466,9 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           t={t}
           client={editingClient}
           vendors={vendors}
+          isManager={isManagerMode}
+          onCreateEditRequest={onCreateEditRequest}
+          pendingRequest={(editRequests || []).find((r) => r.clientId === editingClient.id && r.status === "pending") || null}
           onSave={async (updates) => {
             await onUpdateClient(editingClient.id, updates);
             setEditingClient(null);
@@ -12988,7 +13191,7 @@ function ClientsManager({ t, clients, vendors, updateClients }) {
 // ============================================
 // EditClientModal — edit existing client (name, phone, vendor, frequency, notes)
 // ============================================
-function EditClientModal({ t, client, vendors, onSave, onCancel }) {
+function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = false, onCreateEditRequest, pendingRequest = null }) {
   const [name, setName] = useState(client.name || "");
   // Initialize phone with auto-format applied so legacy unformatted numbers look clean immediately
   const [phone, setPhone] = useState(formatPhoneUS(client.phone || ""));
@@ -13010,6 +13213,31 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
   const [longNote, setLongNote] = useState(client.longNote || "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  // Confirmation modal when restricted-field changes need approval (vendor flow only)
+  const [pendingConfirm, setPendingConfirm] = useState(null); // null | { freeUpdates, restrictedChanges }
+
+  // Detect what changed compared to the original client data.
+  // FREE FIELDS (apply immediately): contactName, phone, email, longNote (and `name` is also free).
+  // RESTRICTED FIELDS (require manager approval): purchaseDays, frequency, vendorId.
+  function computeChanges() {
+    const originalDays = (client.purchaseDays || []).slice().sort();
+    const newDays = (scheduleConfig.purchaseDays || []).slice().sort();
+    const daysChanged = JSON.stringify(originalDays) !== JSON.stringify(newDays);
+
+    const freeUpdates = {};
+    if ((client.name || "") !== name.trim()) freeUpdates.name = name.trim();
+    if ((client.contactName || "") !== contactName.trim()) freeUpdates.contactName = contactName.trim();
+    if ((client.phone || "") !== phone.trim()) freeUpdates.phone = phone.trim();
+    if ((client.email || "") !== email.trim()) freeUpdates.email = email.trim();
+    if ((client.longNote || "") !== longNote.trim()) freeUpdates.longNote = longNote.trim();
+
+    const restrictedChanges = {};
+    if (daysChanged) restrictedChanges.purchaseDays = scheduleConfig.purchaseDays;
+    if ((client.frequency || "daily") !== scheduleConfig.frequency) restrictedChanges.frequency = scheduleConfig.frequency;
+    if ((client.vendorId || "") !== vendorId) restrictedChanges.vendorId = vendorId;
+
+    return { freeUpdates, restrictedChanges };
+  }
 
   async function submit() {
     if (!name.trim()) { setError(t.nameRequired || "Name is required"); return; }
@@ -13022,20 +13250,59 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
       setError(t.invalidEmail || "Please enter a valid email or leave it empty");
       return;
     }
+
+    const { freeUpdates, restrictedChanges } = computeChanges();
+    const hasRestricted = Object.keys(restrictedChanges).length > 0;
+
+    // Manager OR vendor-with-only-free-changes: save everything directly.
+    // Also fall back to direct save if the parent didn't wire onCreateEditRequest (graceful degradation).
+    if (isManager || !hasRestricted || !onCreateEditRequest) {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await onSave({
+          ...client,
+          name: name.trim(),
+          contactName: contactName.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          vendorId,
+          frequency: scheduleConfig.frequency,
+          purchaseDays: scheduleConfig.purchaseDays,
+          longNote: longNote.trim(),
+        });
+      } catch (e) {
+        setError(e?.message || "Failed to save");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Vendor with restricted changes: show confirmation modal before splitting.
+    setPendingConfirm({ freeUpdates, restrictedChanges });
+  }
+
+  // Confirmation flow: save the free updates immediately and create an edit_request
+  // for the restricted changes. Manager will see it in ApprovalsPanel.
+  async function confirmApprovalRequest() {
+    if (!pendingConfirm || !onCreateEditRequest) return;
     setSubmitting(true);
     setError(null);
     try {
-      await onSave({
-        ...client,
-        name: name.trim(),
-        contactName: contactName.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-        vendorId,
-        frequency: scheduleConfig.frequency,
-        purchaseDays: scheduleConfig.purchaseDays,
-        longNote: longNote.trim(),
-      });
+      // First save the free updates directly (if any)
+      if (Object.keys(pendingConfirm.freeUpdates).length > 0) {
+        await onSave({ ...client, ...pendingConfirm.freeUpdates });
+      }
+      // Then create the edit_request for restricted changes
+      const result = await onCreateEditRequest(client.id, "edit", pendingConfirm.restrictedChanges);
+      if (result && result.success === false) {
+        setError(result.error || (t.editRequestFailed || "Failed to submit request"));
+        setSubmitting(false);
+        return;
+      }
+      setPendingConfirm(null);
+      onCancel(); // close the modal
     } catch (e) {
       setError(e?.message || "Failed to save");
     } finally {
@@ -13056,8 +13323,37 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
             </button>
           </div>
 
+          {/* Pending-request banner — shown when there's already an active edit_request for this client.
+              Vendors see this so they know a change is awaiting manager approval. */}
+          {pendingRequest && (
+            <div className="mb-3 p-3 rounded-lg flex items-start gap-2" style={{ background: "#FFF5D6", borderLeft: "3px solid #C28B1A", color: "#6B5300" }}>
+              <span className="text-base">⚠️</span>
+              <div className="flex-1 text-[11px] leading-snug">
+                <div className="font-semibold mb-0.5">{t.changePending || "Change pending approval"}</div>
+                <div>{t.changePendingDetail || "Your request is awaiting manager approval. Some fields may be locked until resolved."}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Approval-flow legend — visible only to vendors so they know which fields trigger approval */}
+          {!isManager && (
+            <div className="mb-3 p-2.5 rounded-lg text-[10px]" style={{ background: "#F8F4FD", color: "#4A2D7A" }}>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span style={{ background: "#73A626", color: "white", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>✓ FREE</span>
+                <span>{t.freeFieldsLegend || "Saves immediately"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span style={{ background: "#C28B1A", color: "white", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>⚠ APPROVAL</span>
+                <span>{t.approvalFieldsLegend || "Requires manager approval"}</span>
+              </div>
+            </div>
+          )}
+
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.clientName || "Customer name"} *</div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+              {t.clientName || "Customer name"} *
+              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
+            </div>
             <input
               autoFocus
               type="text"
@@ -13069,20 +13365,25 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
 
           {/* Optional contact person at the business — "Ask for John" */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
               {t.contactName || "Contact name"} <span className="normal-case text-stone-400">({t.optional || "optional"})</span>
+              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
             </div>
             <input
               type="text"
               value={contactName}
               onChange={(e) => setContactName(e.target.value)}
-              placeholder={t.contactNamePlaceholder || "e.g. Mary, John"}
+              placeholder={t.contactNamePlaceholder || "e.g., Ask for John"}
               className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
             />
           </div>
 
+          {/* Phone */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.phone || "Phone"}</div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+              {t.phone || "Phone"}
+              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
+            </div>
             <input
               type="tel"
               value={phone}
@@ -13091,32 +13392,45 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
             />
           </div>
 
+          {/* Email */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.email || "Email"}</div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+              {t.email || "Email"} <span className="normal-case text-stone-400">({t.optional || "optional"})</span>
+              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
+            </div>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={t.clientEmailPlaceholder || "client@example.com"}
+              placeholder="contact@example.com"
               className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
             />
           </div>
 
-          <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.assignedVendor || "Assigned vendor"} *</div>
-            <select
-              value={vendorId}
-              onChange={(e) => setVendorId(e.target.value)}
-              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm bg-white focus:outline-none focus:border-stone-400"
-            >
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>
-              ))}
-            </select>
-          </div>
+          {/* Assigned vendor — ONLY visible to managers.
+              Vendors cannot reassign customers (would require approval, plus it's an odd
+              operation for a vendor to do). Hidden entirely for them. */}
+          {isManager && (
+            <div className="mb-3">
+              <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.assignedVendor || "Assigned vendor"} *</div>
+              <select
+                value={vendorId}
+                onChange={(e) => setVendorId(e.target.value)}
+                className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm bg-white focus:outline-none focus:border-stone-400"
+              >
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}{v.role === "manager" ? " (Manager)" : ""}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
+          {/* Frequency + Purchase days — restricted (require approval for vendor) */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.frequency || "Frequency"} *</div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+              {t.frequency || "Frequency"} *
+              {!isManager && <span style={{ background: "#C28B1A", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>⚠</span>}
+            </div>
             <PurchaseDaysPicker
               t={t}
               value={scheduleConfig}
@@ -13125,7 +13439,10 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
           </div>
 
           <div className="mb-4">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.notes || "Notes"}</div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+              {t.notes || "Notes"}
+              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
+            </div>
             <textarea
               value={longNote}
               onChange={(e) => setLongNote(e.target.value)}
@@ -13147,7 +13464,7 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
             </button>
             <button
               onClick={submit}
-              disabled={submitting || !name.trim() || !vendorId}
+              disabled={submitting || !name.trim() || (isManager && !vendorId)}
               className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
               style={{ background: BRAND_PURPLE }}
             >
@@ -13156,6 +13473,75 @@ function EditClientModal({ t, client, vendors, onSave, onCancel }) {
           </div>
         </div>
       </div>
+
+      {/* Confirmation modal: shown when a vendor's submission contains restricted changes.
+          Splits the changes into "save now" (free) vs "request approval" (restricted)
+          and lets the vendor confirm before sending the request to the manager. */}
+      {pendingConfirm && (
+        <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }} onClick={() => !submitting && setPendingConfirm(null)}>
+          <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xl">⚠️</span>
+                <div className="text-base font-semibold" style={{ color: BRAND_PURPLE }}>
+                  {t.requestApprovalTitle || "Manager approval needed"}
+                </div>
+              </div>
+
+              {Object.keys(pendingConfirm.freeUpdates).length > 0 && (
+                <div className="mb-3 p-3 rounded-lg" style={{ background: "#ECF7E5", color: "#2D4A1A" }}>
+                  <div className="text-[10px] uppercase tracking-wide font-bold mb-1.5">
+                    ✓ {t.savedImmediately || "These will be saved immediately"}
+                  </div>
+                  <ul className="text-xs space-y-0.5">
+                    {pendingConfirm.freeUpdates.name !== undefined && <li>• {t.clientName || "Customer name"}</li>}
+                    {pendingConfirm.freeUpdates.contactName !== undefined && <li>• {t.contactName || "Contact name"}</li>}
+                    {pendingConfirm.freeUpdates.phone !== undefined && <li>• {t.phone || "Phone"}</li>}
+                    {pendingConfirm.freeUpdates.email !== undefined && <li>• {t.email || "Email"}</li>}
+                    {pendingConfirm.freeUpdates.longNote !== undefined && <li>• {t.notes || "Notes"}</li>}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mb-4 p-3 rounded-lg" style={{ background: "#FFF5D6", color: "#6B5300" }}>
+                <div className="text-[10px] uppercase tracking-wide font-bold mb-1.5">
+                  ⚠ {t.requiresApprovalLabel || "These need manager approval"}
+                </div>
+                <ul className="text-xs space-y-0.5">
+                  {pendingConfirm.restrictedChanges.purchaseDays !== undefined && <li>• {t.purchaseDays || "Purchase days"}</li>}
+                  {pendingConfirm.restrictedChanges.frequency !== undefined && <li>• {t.frequency || "Frequency"}</li>}
+                  {pendingConfirm.restrictedChanges.vendorId !== undefined && <li>• {t.assignedVendor || "Assigned vendor"}</li>}
+                </ul>
+              </div>
+
+              {error && (
+                <div className="mb-3 px-3 py-2 rounded-lg text-xs" style={{ background: "#F2E2E2", color: "#9C5757" }}>
+                  {error}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPendingConfirm(null)}
+                  disabled={submitting}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border border-stone-200 text-stone-700"
+                >
+                  {t.cancel || "Cancel"}
+                </button>
+                <button
+                  onClick={confirmApprovalRequest}
+                  disabled={submitting}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white"
+                  style={{ background: BRAND_PURPLE }}
+                >
+                  {submitting ? "…" : (t.requestApprovalBtn || "Request approval")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
