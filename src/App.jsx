@@ -377,6 +377,10 @@ const T = {
 
     // callback
     callbackTime: "Callback time",
+    addNote: "Add note",
+    undoCall: "Click to undo call",
+    undoText: "Click to undo text",
+    undoEmail: "Click to undo email",
     changePending: "Change pending approval",
     changePendingDetail: "A previous edit is awaiting manager approval. Some fields may be locked until resolved.",
     freeFieldsLegend: "Saves immediately",
@@ -1044,6 +1048,10 @@ const T = {
     writeReason: "Escribe la razón…",
 
     callbackTime: "Hora para llamar",
+    addNote: "Agregar nota",
+    undoCall: "Click para deshacer llamada",
+    undoText: "Click para deshacer texto",
+    undoEmail: "Click para deshacer email",
     changePending: "Cambio pendiente de aprobación",
     changePendingDetail: "Una edición anterior está esperando la aprobación del manager. Algunos campos pueden estar bloqueados hasta resolverse.",
     freeFieldsLegend: "Se guarda al instante",
@@ -4009,6 +4017,7 @@ export default function App() {
     } else {
       // Apply field changes. Map camelCase -> snake_case for DB.
       const updates = {};
+      if (req.changes.name !== undefined) updates.name = req.changes.name;
       if (req.changes.purchaseDays !== undefined) updates.purchase_days = req.changes.purchaseDays;
       if (req.changes.frequency !== undefined) updates.frequency = req.changes.frequency;
       if (req.changes.vendorId !== undefined) updates.vendor_id = req.changes.vendorId;
@@ -4020,6 +4029,7 @@ export default function App() {
         }
         setClients((prev) =>
           prev.map((c) => (c.id === req.clientId ? { ...c, ...{
+            ...(req.changes.name !== undefined ? { name: req.changes.name } : {}),
             ...(req.changes.purchaseDays !== undefined ? { purchaseDays: req.changes.purchaseDays } : {}),
             ...(req.changes.frequency !== undefined ? { frequency: req.changes.frequency } : {}),
             ...(req.changes.vendorId !== undefined ? { vendorId: req.changes.vendorId } : {}),
@@ -9084,8 +9094,9 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       )}
 
-      {/* Search bar — filter clients and leads by name in real time */}
-      <div className="mb-4 mt-2">
+      {/* Search bar — filter clients and leads by name in real time.
+          Sticky positioning so vendor can search while scrolling through long lists. */}
+      <div className="mb-4 mt-2 sticky top-0 z-30 -mx-3 px-3 py-2" style={{ background: "#F5F1EA" }}>
         <div className="relative">
           <input
             type="text"
@@ -9261,7 +9272,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
       {/* Pending — clients not yet called today */}
       {activeTab === "to_contact" && (
-      <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={pending}
+      <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#5F2F9D" bg="#E8DDF5" lightBg="#F4EDFA" clientList={pending}
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
@@ -9691,6 +9702,29 @@ function CustomerTable({
   // Track which row has its More menu open
   const [moreMenuOpen, setMoreMenuOpen] = useState(null); // clientId or null
 
+  // Note tooltip: which client's note is currently being hovered (for the patch overlay)
+  const [hoveredNoteClientId, setHoveredNoteClientId] = useState(null);
+
+  // Inline note editing: which client's note cell is being edited, and the draft text
+  const [editingNoteClientId, setEditingNoteClientId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState("");
+
+  function openNoteEditor(client) {
+    setEditingNoteClientId(client.id);
+    setNoteDraft(client.longNote || "");
+    setHoveredNoteClientId(null);
+  }
+  function cancelNoteEditor() {
+    setEditingNoteClientId(null);
+    setNoteDraft("");
+  }
+  async function saveNote(clientId) {
+    if (!onUpdateClient) return;
+    const trimmed = noteDraft.trim();
+    await onUpdateClient(clientId, { longNote: trimmed });
+    cancelNoteEditor();
+  }
+
   function openCallback(clientId) {
     setCallbackOpen(clientId);
     setNoteFlow(null);
@@ -9730,13 +9764,13 @@ function CustomerTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
         <thead>
-          <tr style={{ background: "#F0EDE7" }}>
-            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.customerColName || "Customer"}</th>
-            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.phone || "Phone"}</th>
-            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.contactToday || "Contact today"}</th>
-            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.notesCol || "Notes"}</th>
-            <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}>{t.outcomeCol || "Outcome"}</th>
-            <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wider font-bold" style={{ color: "#6B6560" }}></th>
+          <tr style={{ background: "#5F2F9D" }}>
+            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
+            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
+            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
+            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
+            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
+            <th className="text-right px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}></th>
           </tr>
         </thead>
         <tbody>
@@ -9805,7 +9839,8 @@ function CustomerTable({
                   {client.phone || "—"}
                 </td>
 
-                {/* COL 3: Contact today */}
+                {/* COL 3: Contact today — toggleable. Click logs the interaction;
+                    clicking again on a completed channel removes the most recent one (undo). */}
                 <td className="px-3 py-2.5 align-top" style={{ minWidth: "120px" }}>
                   <div className="flex gap-1">
                     <button
@@ -9815,8 +9850,16 @@ function CustomerTable({
                         borderColor: callInts.length > 0 ? "#73A626" : "#E5E0DA",
                         color: callInts.length > 0 ? "#73A626" : "#B5ADA5",
                       }}
-                      title={t.call || "Call"}
-                      onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })}
+                      title={callInts.length > 0 ? (t.undoCall || "Click to undo") : (t.call || "Call")}
+                      onClick={() => {
+                        if (callInts.length > 0 && onUndo) {
+                          // Undo the most recent call interaction today
+                          const latest = [...callInts].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+                          if (latest) onUndo(latest.id);
+                        } else {
+                          onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" });
+                        }
+                      }}
                     >
                       <Phone size={14} />
                       {callInts.length > 0 && (
@@ -9830,8 +9873,15 @@ function CustomerTable({
                         borderColor: textInts.length > 0 ? "#73A626" : "#E5E0DA",
                         color: textInts.length > 0 ? "#73A626" : "#B5ADA5",
                       }}
-                      title={t.text || "Text"}
-                      onClick={() => onLog({ clientId: client.id, vendorId, channel: "text", status: "ordered" })}
+                      title={textInts.length > 0 ? (t.undoText || "Click to undo") : (t.text || "Text")}
+                      onClick={() => {
+                        if (textInts.length > 0 && onUndo) {
+                          const latest = [...textInts].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+                          if (latest) onUndo(latest.id);
+                        } else {
+                          onLog({ clientId: client.id, vendorId, channel: "text", status: "ordered" });
+                        }
+                      }}
                     >
                       <MessageSquare size={14} />
                       {textInts.length > 0 && (
@@ -9845,8 +9895,15 @@ function CustomerTable({
                         borderColor: emailInts.length > 0 ? "#73A626" : "#E5E0DA",
                         color: emailInts.length > 0 ? "#73A626" : "#B5ADA5",
                       }}
-                      title={t.email || "Email"}
-                      onClick={() => onLog({ clientId: client.id, vendorId, channel: "email", status: "ordered" })}
+                      title={emailInts.length > 0 ? (t.undoEmail || "Click to undo") : (t.email || "Email")}
+                      onClick={() => {
+                        if (emailInts.length > 0 && onUndo) {
+                          const latest = [...emailInts].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+                          if (latest) onUndo(latest.id);
+                        } else {
+                          onLog({ clientId: client.id, vendorId, channel: "email", status: "ordered" });
+                        }
+                      }}
                     >
                       <Mail size={14} />
                       {emailInts.length > 0 && (
@@ -9856,18 +9913,79 @@ function CustomerTable({
                   </div>
                 </td>
 
-                {/* COL 4: Notes (yellow strip with hover tooltip) */}
-                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "260px" }}>
-                  {client.longNote && client.longNote.trim().length > 0 ? (
+                {/* COL 4: Notes — click to edit inline, hover for full text "patch note" overlay.
+                    Empty notes show a discreet "+ Add note" trigger so vendor can add without
+                    opening the full Edit modal. */}
+                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
+                  {editingNoteClientId === client.id ? (
+                    // Inline editor — appears in-place when user clicks an existing note OR "+ Add note"
+                    <div className="flex flex-col gap-1.5">
+                      <textarea
+                        autoFocus
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        placeholder={t.notesPlaceholder || "Add a note..."}
+                        rows={3}
+                        className="w-full text-[11px] leading-snug px-2 py-1.5 rounded border resize-none"
+                        style={{ borderColor: "#E5E0DA", background: "#FFFCE8" }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") cancelNoteEditor();
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveNote(client.id);
+                        }}
+                      />
+                      <div className="flex gap-1.5">
+                        <button onClick={cancelNoteEditor} className="text-[10px] px-2 py-1 rounded" style={{ background: "#F0EDE7", color: "#6B6560" }}>
+                          {t.cancel || "Cancel"}
+                        </button>
+                        <button onClick={() => saveNote(client.id)} className="text-[10px] px-2 py-1 rounded font-semibold text-white" style={{ background: "#5F2F9D" }}>
+                          {t.save || "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : client.longNote && client.longNote.trim().length > 0 ? (
                     <div
-                      className="rounded text-[11px] leading-snug px-2 py-1 truncate"
-                      style={{ background: "#FFFCE8", borderLeft: "3px solid #FFED13", color: "#6B5300", cursor: "help" }}
-                      title={client.longNote}
+                      className="rounded text-[11px] leading-snug px-2 py-1 truncate cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ background: "#FFFCE8", borderLeft: "3px solid #FFED13", color: "#6B5300" }}
+                      onClick={() => openNoteEditor(client)}
+                      onMouseEnter={() => setHoveredNoteClientId(client.id)}
+                      onMouseLeave={() => setHoveredNoteClientId(null)}
                     >
                       📝 {client.longNote}
                     </div>
                   ) : (
-                    <span className="text-[11px] italic" style={{ color: "#B5ADA5" }}>{t.noNotes || "— no notes —"}</span>
+                    // No notes yet — show a discreet "+ Add note" trigger
+                    <button
+                      onClick={() => openNoteEditor(client)}
+                      className="text-[11px] italic hover:underline"
+                      style={{ color: "#B5ADA5" }}
+                    >
+                      + {t.addNote || "Add note"}
+                    </button>
+                  )}
+
+                  {/* Styled hover tooltip ("patch note") — appears above the note cell on hover.
+                      Replaces the browser-native title attribute with a custom styled overlay. */}
+                  {hoveredNoteClientId === client.id && client.longNote && client.longNote.trim().length > 0 && editingNoteClientId !== client.id && (
+                    <div
+                      className="absolute z-30 rounded-lg shadow-lg p-3 text-[11px] leading-relaxed pointer-events-none"
+                      style={{
+                        background: "#FFFCE8",
+                        border: "1px solid #FFED13",
+                        borderLeft: "4px solid #FFED13",
+                        color: "#3D2E00",
+                        bottom: "calc(100% - 4px)",
+                        left: "0.5rem",
+                        right: "0.5rem",
+                        maxWidth: "320px",
+                        whiteSpace: "pre-wrap",
+                        boxShadow: "0 8px 20px rgba(95, 47, 157, 0.18)",
+                      }}
+                    >
+                      <div className="font-semibold text-[10px] uppercase tracking-wider mb-1.5" style={{ color: "#8B6914" }}>
+                        📝 {t.notesCol || "Notes"}
+                      </div>
+                      {client.longNote}
+                    </div>
                   )}
                 </td>
 
@@ -13217,21 +13335,22 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
   const [pendingConfirm, setPendingConfirm] = useState(null); // null | { freeUpdates, restrictedChanges }
 
   // Detect what changed compared to the original client data.
-  // FREE FIELDS (apply immediately): contactName, phone, email, longNote (and `name` is also free).
-  // RESTRICTED FIELDS (require manager approval): purchaseDays, frequency, vendorId.
+  // FREE FIELDS (apply immediately): contactName, phone, email, longNote.
+  // RESTRICTED FIELDS (require manager approval): name (customer name itself),
+  // purchaseDays, frequency, vendorId.
   function computeChanges() {
     const originalDays = (client.purchaseDays || []).slice().sort();
     const newDays = (scheduleConfig.purchaseDays || []).slice().sort();
     const daysChanged = JSON.stringify(originalDays) !== JSON.stringify(newDays);
 
     const freeUpdates = {};
-    if ((client.name || "") !== name.trim()) freeUpdates.name = name.trim();
     if ((client.contactName || "") !== contactName.trim()) freeUpdates.contactName = contactName.trim();
     if ((client.phone || "") !== phone.trim()) freeUpdates.phone = phone.trim();
     if ((client.email || "") !== email.trim()) freeUpdates.email = email.trim();
     if ((client.longNote || "") !== longNote.trim()) freeUpdates.longNote = longNote.trim();
 
     const restrictedChanges = {};
+    if ((client.name || "") !== name.trim()) restrictedChanges.name = name.trim();
     if (daysChanged) restrictedChanges.purchaseDays = scheduleConfig.purchaseDays;
     if ((client.frequency || "daily") !== scheduleConfig.frequency) restrictedChanges.frequency = scheduleConfig.frequency;
     if ((client.vendorId || "") !== vendorId) restrictedChanges.vendorId = vendorId;
@@ -13335,39 +13454,34 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
             </div>
           )}
 
-          {/* Approval-flow legend — visible only to vendors so they know which fields trigger approval */}
-          {!isManager && (
-            <div className="mb-3 p-2.5 rounded-lg text-[10px]" style={{ background: "#F8F4FD", color: "#4A2D7A" }}>
-              <div className="flex items-center gap-2 mb-0.5">
-                <span style={{ background: "#73A626", color: "white", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>✓ FREE</span>
-                <span>{t.freeFieldsLegend || "Saves immediately"}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={{ background: "#C28B1A", color: "white", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>⚠ APPROVAL</span>
-                <span>{t.approvalFieldsLegend || "Requires manager approval"}</span>
-              </div>
-            </div>
-          )}
-
+          {/* Customer name — RESTRICTED for vendors (requires approval).
+              Subtle visual cue: the label is rendered in a lighter/desaturated tone to
+              hint "this isn't directly editable". No icons, no explicit warnings. */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+            <div
+              className="text-[10px] uppercase tracking-widest mb-1"
+              style={{ color: isManager ? "#6B6560" : "#B5ADA5" }}
+            >
               {t.clientName || "Customer name"} *
-              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
             </div>
             <input
               autoFocus
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2.5 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+              className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:border-stone-400"
+              style={{ borderColor: isManager ? "#E7E5E0" : "#EDEAE5" }}
             />
           </div>
 
-          {/* Optional contact person at the business — "Ask for John" */}
+          {/* Contact name — FREE for vendors (saves immediately).
+              Label rendered in darker tone to feel "directly editable". */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+            <div
+              className="text-[10px] uppercase tracking-widest mb-1"
+              style={{ color: "#6B6560" }}
+            >
               {t.contactName || "Contact name"} <span className="normal-case text-stone-400">({t.optional || "optional"})</span>
-              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
             </div>
             <input
               type="text"
@@ -13378,11 +13492,13 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
             />
           </div>
 
-          {/* Phone */}
+          {/* Phone — FREE for vendors */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+            <div
+              className="text-[10px] uppercase tracking-widest mb-1"
+              style={{ color: "#6B6560" }}
+            >
               {t.phone || "Phone"}
-              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
             </div>
             <input
               type="tel"
@@ -13392,11 +13508,13 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
             />
           </div>
 
-          {/* Email */}
+          {/* Email — FREE for vendors */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+            <div
+              className="text-[10px] uppercase tracking-widest mb-1"
+              style={{ color: "#6B6560" }}
+            >
               {t.email || "Email"} <span className="normal-case text-stone-400">({t.optional || "optional"})</span>
-              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
             </div>
             <input
               type="email"
@@ -13408,8 +13526,7 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
           </div>
 
           {/* Assigned vendor — ONLY visible to managers.
-              Vendors cannot reassign customers (would require approval, plus it's an odd
-              operation for a vendor to do). Hidden entirely for them. */}
+              Vendors cannot reassign customers; this row is hidden entirely for them. */}
           {isManager && (
             <div className="mb-3">
               <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1">{t.assignedVendor || "Assigned vendor"} *</div>
@@ -13425,11 +13542,13 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
             </div>
           )}
 
-          {/* Frequency + Purchase days — restricted (require approval for vendor) */}
+          {/* Frequency + Purchase days — RESTRICTED for vendors */}
           <div className="mb-3">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+            <div
+              className="text-[10px] uppercase tracking-widest mb-1"
+              style={{ color: isManager ? "#6B6560" : "#B5ADA5" }}
+            >
               {t.frequency || "Frequency"} *
-              {!isManager && <span style={{ background: "#C28B1A", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>⚠</span>}
             </div>
             <PurchaseDaysPicker
               t={t}
@@ -13438,10 +13557,13 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
             />
           </div>
 
+          {/* Notes — FREE for vendors */}
           <div className="mb-4">
-            <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-1 flex items-center gap-1">
+            <div
+              className="text-[10px] uppercase tracking-widest mb-1"
+              style={{ color: "#6B6560" }}
+            >
               {t.notes || "Notes"}
-              {!isManager && <span style={{ background: "#73A626", color: "white", padding: "0px 4px", borderRadius: "2px", fontSize: "8px", fontWeight: 700 }}>✓</span>}
             </div>
             <textarea
               value={longNote}
@@ -13494,7 +13616,6 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
                     ✓ {t.savedImmediately || "These will be saved immediately"}
                   </div>
                   <ul className="text-xs space-y-0.5">
-                    {pendingConfirm.freeUpdates.name !== undefined && <li>• {t.clientName || "Customer name"}</li>}
                     {pendingConfirm.freeUpdates.contactName !== undefined && <li>• {t.contactName || "Contact name"}</li>}
                     {pendingConfirm.freeUpdates.phone !== undefined && <li>• {t.phone || "Phone"}</li>}
                     {pendingConfirm.freeUpdates.email !== undefined && <li>• {t.email || "Email"}</li>}
@@ -13508,6 +13629,7 @@ function EditClientModal({ t, client, vendors, onSave, onCancel, isManager = fal
                   ⚠ {t.requiresApprovalLabel || "These need manager approval"}
                 </div>
                 <ul className="text-xs space-y-0.5">
+                  {pendingConfirm.restrictedChanges.name !== undefined && <li>• {t.clientName || "Customer name"}</li>}
                   {pendingConfirm.restrictedChanges.purchaseDays !== undefined && <li>• {t.purchaseDays || "Purchase days"}</li>}
                   {pendingConfirm.restrictedChanges.frequency !== undefined && <li>• {t.frequency || "Frequency"}</li>}
                   {pendingConfirm.restrictedChanges.vendorId !== undefined && <li>• {t.assignedVendor || "Assigned vendor"}</li>}
