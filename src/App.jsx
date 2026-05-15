@@ -6258,11 +6258,12 @@ function AddClientModal({ t, vendors, onSave, onCancel, defaultVendorId, existin
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [vendorId, setVendorId] = useState(defaultVendorId || vendors[0]?.id || "");
-  // Frequency + purchaseDays managed together via PurchaseDaysPicker
-  // Default = all business days (Monday-Saturday). No Sunday since produce doesn't operate then.
+  // Frequency + purchaseDays managed together via PurchaseDaysPicker.
+  // Default = EMPTY array so the vendor must explicitly pick the days for this customer.
+  // This avoids accidentally creating customers showing up every day when that wasn't intended.
   const [scheduleConfig, setScheduleConfig] = useState({
-    frequency: "daily",
-    purchaseDays: [1, 2, 3, 4, 5, 6],
+    frequency: "biweekly",
+    purchaseDays: [],
   });
   // Optional contact name (e.g., "Ask for John" or "Owner: Maria")
   const [contactName, setContactName] = useState("");
@@ -9679,80 +9680,6 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         )}
       </div>
 
-      {/* DAY NAVIGATOR — lets vendor see who they need to contact on any given day.
-          Arrows navigate ±1 day; chip strip below jumps to any of the 7 surrounding days.
-          The selected day filters all customer lists below (purchaseDays match). */}
-      <div className="mb-5 rounded-2xl overflow-hidden card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-        {/* Header bar with arrows + day name */}
-        <div className="flex items-center justify-between px-4 py-3" style={{ background: BRAND_PURPLE, color: "white" }}>
-          <button
-            onClick={() => setSelectedDow((selectedDow + 6) % 7)}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            title={t.previousDay || "Previous day"}
-          >
-            <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
-          </button>
-          <div className="text-center flex-1">
-            <div className="text-[10px] uppercase tracking-widest opacity-80">
-              {selectedDow === todayDow
-                ? (t.today || "Today")
-                : selectedDow === (todayDow + 1) % 7
-                  ? (t.tomorrow || "Tomorrow")
-                  : selectedDow === (todayDow + 6) % 7
-                    ? (t.yesterday || "Yesterday")
-                    : (t.viewing || "Viewing")}
-            </div>
-            <div className="text-lg font-bold">
-              {[t.sunday || "Sunday", t.monday || "Monday", t.tuesday || "Tuesday", t.wednesday || "Wednesday", t.thursday || "Thursday", t.friday || "Friday", t.saturday || "Saturday"][selectedDow]}
-            </div>
-            {selectedDow !== todayDow && (
-              <button
-                onClick={() => setSelectedDow(todayDow)}
-                className="text-[10px] mt-0.5 underline opacity-90 hover:opacity-100"
-              >
-                ↺ {t.backToToday || "Back to today"}
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => setSelectedDow((selectedDow + 1) % 7)}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            title={t.nextDay || "Next day"}
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-
-        {/* Quick-jump chip strip: 7 days centered on today */}
-        <div className="flex gap-1.5 px-3 py-3 overflow-x-auto" style={{ background: "#FAF8F4" }}>
-          {dayNavItems.map((item) => {
-            const isSelected = item.dow === selectedDow;
-            const count = customersPerDow[item.dow];
-            const dayShort = [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][item.dow];
-            return (
-              <button
-                key={`day-${item.offset}`}
-                onClick={() => setSelectedDow(item.dow)}
-                className="flex-shrink-0 px-3 py-2 rounded-lg text-center transition-all"
-                style={{
-                  background: isSelected ? BRAND_PURPLE : (item.isToday ? "#F0E8FA" : "white"),
-                  color: isSelected ? "white" : (item.isToday ? BRAND_PURPLE : "#6B6560"),
-                  border: `1px solid ${isSelected ? BRAND_PURPLE : (item.isToday ? BRAND_PURPLE + "40" : "#E5E0DA")}`,
-                  minWidth: "52px",
-                }}
-              >
-                <div className="text-[9px] uppercase tracking-wide font-bold opacity-90">{dayShort}</div>
-                <div className="text-base font-bold leading-tight">{item.date}</div>
-                <div className="text-[9px] font-semibold" style={{ opacity: isSelected ? 0.9 : 0.7 }}>
-                  {count > 0 ? `${count} ${count === 1 ? (t.custShort || "cust") : (t.custsShort || "custs")}` : "—"}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Quick action row — only visible in manager mode.
           Manager can add clients/leads directly from My Sales without going back to dashboard.
@@ -10047,6 +9974,81 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           </div>
         </>
       )}
+
+      {/* DAY NAVIGATOR — lets vendor see who they need to contact on any given day.
+          Arrows navigate ±1 day; chip strip below jumps to any of the 7 surrounding days.
+          The selected day filters all customer lists below (purchaseDays match). */}
+      <div className="mb-5 rounded-2xl overflow-hidden card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        {/* Header bar with arrows + day name */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: BRAND_PURPLE, color: "white" }}>
+          <button
+            onClick={() => setSelectedDow((selectedDow + 6) % 7)}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            title={t.previousDay || "Previous day"}
+          >
+            <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
+          </button>
+          <div className="text-center flex-1">
+            <div className="text-[10px] uppercase tracking-widest opacity-80">
+              {selectedDow === todayDow
+                ? (t.today || "Today")
+                : selectedDow === (todayDow + 1) % 7
+                  ? (t.tomorrow || "Tomorrow")
+                  : selectedDow === (todayDow + 6) % 7
+                    ? (t.yesterday || "Yesterday")
+                    : (t.viewing || "Viewing")}
+            </div>
+            <div className="text-lg font-bold">
+              {[t.sunday || "Sunday", t.monday || "Monday", t.tuesday || "Tuesday", t.wednesday || "Wednesday", t.thursday || "Thursday", t.friday || "Friday", t.saturday || "Saturday"][selectedDow]}
+            </div>
+            {selectedDow !== todayDow && (
+              <button
+                onClick={() => setSelectedDow(todayDow)}
+                className="text-[10px] mt-0.5 underline opacity-90 hover:opacity-100"
+              >
+                ↺ {t.backToToday || "Back to today"}
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setSelectedDow((selectedDow + 1) % 7)}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            title={t.nextDay || "Next day"}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Quick-jump chip strip: 7 days centered on today */}
+        <div className="flex gap-1.5 px-3 py-3 overflow-x-auto" style={{ background: "#FAF8F4" }}>
+          {dayNavItems.map((item) => {
+            const isSelected = item.dow === selectedDow;
+            const count = customersPerDow[item.dow];
+            const dayShort = [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][item.dow];
+            return (
+              <button
+                key={`day-${item.offset}`}
+                onClick={() => setSelectedDow(item.dow)}
+                className="flex-shrink-0 px-3 py-2 rounded-lg text-center transition-all"
+                style={{
+                  background: isSelected ? BRAND_PURPLE : (item.isToday ? "#F0E8FA" : "white"),
+                  color: isSelected ? "white" : (item.isToday ? BRAND_PURPLE : "#6B6560"),
+                  border: `1px solid ${isSelected ? BRAND_PURPLE : (item.isToday ? BRAND_PURPLE + "40" : "#E5E0DA")}`,
+                  minWidth: "52px",
+                }}
+              >
+                <div className="text-[9px] uppercase tracking-wide font-bold opacity-90">{dayShort}</div>
+                <div className="text-base font-bold leading-tight">{item.date}</div>
+                <div className="text-[9px] font-semibold" style={{ opacity: isSelected ? 0.9 : 0.7 }}>
+                  {count > 0 ? `${count} ${count === 1 ? (t.custShort || "cust") : (t.custsShort || "custs")}` : "—"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* SORT CONTROL — small dropdown above the customer list. Lets vendor choose how to
           order the rows: alphabetically (default, instant), most orders historically, or
