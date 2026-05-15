@@ -9480,11 +9480,18 @@ function CustomerTable({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
 
+  // Track which row has its note-flow open (price_issue or other — both require a brief note)
+  // Shape: { clientId: string, status: "price_issue" | "other" } | null
+  const [noteFlow, setNoteFlow] = useState(null);
+  const [noteText, setNoteText] = useState("");
+
   // Track which row has its More menu open
   const [moreMenuOpen, setMoreMenuOpen] = useState(null); // clientId or null
 
   function openCallback(clientId) {
     setCallbackOpen(clientId);
+    setNoteFlow(null);
+    setMoreMenuOpen(null);
     setCallbackTime("");
     const d = new Date();
     setCallbackDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
@@ -9497,6 +9504,23 @@ function CustomerTable({
     if (!callbackTime) return;
     await onLog({ clientId, vendorId, channel: "call", status: "callback", scheduledTime: callbackTime, scheduledDate: callbackDate });
     closeCallback();
+  }
+
+  function openNoteFlow(clientId, status) {
+    setNoteFlow({ clientId, status });
+    setNoteText("");
+    setCallbackOpen(null);
+    setMoreMenuOpen(null);
+  }
+  function closeNoteFlow() {
+    setNoteFlow(null);
+    setNoteText("");
+  }
+  async function confirmNoteFlow() {
+    if (!noteFlow) return;
+    // Note is optional — vendor can submit without typing, but it's encouraged.
+    await onLog({ clientId: noteFlow.clientId, vendorId, channel: "call", status: noteFlow.status, note: noteText.trim() });
+    closeNoteFlow();
   }
 
   return (
@@ -9526,6 +9550,7 @@ function CustomerTable({
             const callbackInt = callInts.find((i) => i.status === "callback");
 
             const isCallbackOpenHere = callbackOpen === client.id;
+            const isNoteFlowOpenHere = noteFlow && noteFlow.clientId === client.id;
             const isMoreOpenHere = moreMenuOpen === client.id;
 
             return (
@@ -9635,7 +9660,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px" }}>
+                <td className="px-3 py-2.5 align-top" style={{ minWidth: "200px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
@@ -9659,6 +9684,29 @@ function CustomerTable({
                       <div className="flex gap-1.5">
                         <button onClick={closeCallback} className="text-[10px] px-2 py-1 rounded" style={{ background: "#F0EDE7", color: "#6B6560" }}>{t.cancel || "Cancel"}</button>
                         <button onClick={() => confirmCallback(client.id)} disabled={!callbackTime} className="text-[10px] px-2 py-1 rounded font-semibold text-white disabled:opacity-40" style={{ background: "#5F2F9D" }}>
+                          {t.confirm || "Confirm"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : isNoteFlowOpenHere ? (
+                    // Inline note flow for price_issue or other — both ask for a brief explanation.
+                    // Vendor can submit empty if they don't have details, but the input is shown by default.
+                    <div className="flex flex-col gap-1.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: noteFlow.status === "price_issue" ? "#B8860B" : "#5A4A6B" }}>
+                        {noteFlow.status === "price_issue" ? (t.statusPriceIssue || "Price issue") : (t.statusOther || "Other")}
+                      </div>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        placeholder={t.briefNote || "Brief note (optional)"}
+                        className="text-[11px] px-2 py-1 rounded border"
+                        style={{ borderColor: "#E5E0DA", minWidth: "160px" }}
+                      />
+                      <div className="flex gap-1.5">
+                        <button onClick={closeNoteFlow} className="text-[10px] px-2 py-1 rounded" style={{ background: "#F0EDE7", color: "#6B6560" }}>{t.cancel || "Cancel"}</button>
+                        <button onClick={confirmNoteFlow} className="text-[10px] px-2 py-1 rounded font-semibold text-white" style={{ background: noteFlow.status === "price_issue" ? "#B8860B" : "#5A4A6B" }}>
                           {t.confirm || "Confirm"}
                         </button>
                       </div>
@@ -9717,20 +9765,32 @@ function CustomerTable({
                       )}
                     </div>
                   ) : (
-                    // Pending — show all outcome buttons
-                    <div className="flex flex-wrap gap-1">
-                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.order || "Order"}>
-                        {t.order || "Order"}
-                      </button>
-                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.noAnswer || "No answer"}>
-                        {t.noAnswerShort || "No ans."}
-                      </button>
-                      <button onClick={() => openCallback(client.id)} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.callback || "Callback"}>
-                        {t.callbackShort || "Callback"}
-                      </button>
-                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "not_interested" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FEF8F6", border: "1px solid #D9B5B5", color: "#9C5757" }} title={t.notInterested || "Not interested"}>
-                        {t.notInterestedShort || "Not int."}
-                      </button>
+                    // Pending — show all 6 outcome buttons in 2 rows for readability:
+                    //   Row 1: Order · No ans. · Callback           (most common, quick)
+                    //   Row 2: Price · Not int. · Other             (less common, require note)
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-wrap gap-1">
+                        <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.order || "Order"}>
+                          {t.order || "Order"}
+                        </button>
+                        <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.noAnswer || "No answer"}>
+                          {t.noAnswerShort || "No ans."}
+                        </button>
+                        <button onClick={() => openCallback(client.id)} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.callback || "Callback"}>
+                          {t.callbackShort || "Callback"}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        <button onClick={() => openNoteFlow(client.id, "price_issue")} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FFFBED", border: "1px solid #E8D89A", color: "#8B6F1A" }} title={t.statusPriceIssue || "Price issue"}>
+                          $ {t.priceIssueShort || "Price"}
+                        </button>
+                        <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "not_interested" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FEF8F6", border: "1px solid #D9B5B5", color: "#9C5757" }} title={t.notInterested || "Not interested"}>
+                          {t.notInterestedShort || "Not int."}
+                        </button>
+                        <button onClick={() => openNoteFlow(client.id, "other")} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#F4EFF7", border: "1px solid #C9BDD4", color: "#5A4A6B" }} title={t.statusOther || "Other"}>
+                          {t.statusOther || "Other"}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </td>
