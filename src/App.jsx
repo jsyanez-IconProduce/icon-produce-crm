@@ -8913,6 +8913,40 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
   return (
     <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"}`}>
+      {/* Search bar — filter clients and leads by name in real time.
+          Placed in the wide outer container (NOT inside the narrow column) so that
+          its sticky scope covers ALL content below: leads section, customer tabs, etc.
+          As the user scrolls through the whole page, the search bar stays pinned to the top. */}
+      <div
+        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3"
+        style={{ top: 0, background: "#F5F1EA", borderBottom: "1px solid rgba(95,47,157,0.10)" }}
+      >
+        <div className="relative max-w-md mx-auto">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t.searchClients || "Search customers and leads…"}
+            className="w-full pl-9 pr-9 py-2.5 bg-white rounded-xl text-sm outline-none card-shadow"
+            style={{ border: "1px solid rgba(28,27,26,0.06)" }}
+          />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+          </div>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+              title={t.clear || "Clear"}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Narrow column for personal/account sections */}
       <div className="max-w-md mx-auto">
       {/* Back to Manager button — visible only when manager is in "My Sales" mode.
@@ -9094,34 +9128,6 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       )}
 
-      {/* Search bar — filter clients and leads by name in real time.
-          Sticky positioning so vendor can search while scrolling through long lists. */}
-      <div className="mb-4 mt-2 sticky top-0 z-30 -mx-3 px-3 py-2" style={{ background: "#F5F1EA" }}>
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t.searchClients || "Search clients and leads…"}
-            className="w-full pl-9 pr-9 py-2.5 bg-white rounded-xl text-sm outline-none card-shadow"
-            style={{ border: "1px solid rgba(28,27,26,0.06)" }}
-          />
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-            </svg>
-          </div>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
-              title={t.clear || "Clear"}
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </div>
       </div>
       {/* End narrow column — leads + client sections span wide on desktop */}
 
