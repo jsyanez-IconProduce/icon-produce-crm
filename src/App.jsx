@@ -415,6 +415,27 @@ const T = {
     submitRequest: "Submit request",
     cancelMyRequest: "Cancel my request",
     cancelRequestConfirm: "Cancel your pending request?",
+    today: "Today",
+    tomorrow: "Tomorrow",
+    yesterday: "Yesterday",
+    viewing: "Viewing",
+    previousDay: "Previous day",
+    nextDay: "Next day",
+    backToToday: "Back to today",
+    sunday: "Sunday",
+    monday: "Monday",
+    tuesday: "Tuesday",
+    wednesday: "Wednesday",
+    thursday: "Thursday",
+    friday: "Friday",
+    saturday: "Saturday",
+    custShort: "cust",
+    custsShort: "custs",
+    sortBy: "Sort by",
+    sortAlpha: "Name (A-Z)",
+    sortMostOrders: "Most orders (90 days)",
+    sortLeastContacted: "Needs attention",
+    loadingDots: "loading…",
     searchSidebarTitle: "Quick search",
     filterByStatus: "Filter by status",
     todaysOverview: "Today's overview",
@@ -1129,6 +1150,27 @@ const T = {
     submitRequest: "Enviar solicitud",
     cancelMyRequest: "Cancelar mi solicitud",
     cancelRequestConfirm: "¿Cancelar tu solicitud pendiente?",
+    today: "Hoy",
+    tomorrow: "Mañana",
+    yesterday: "Ayer",
+    viewing: "Viendo",
+    previousDay: "Día anterior",
+    nextDay: "Día siguiente",
+    backToToday: "Volver a hoy",
+    sunday: "Domingo",
+    monday: "Lunes",
+    tuesday: "Martes",
+    wednesday: "Miércoles",
+    thursday: "Jueves",
+    friday: "Viernes",
+    saturday: "Sábado",
+    custShort: "cliente",
+    custsShort: "clientes",
+    sortBy: "Ordenar por",
+    sortAlpha: "Nombre (A-Z)",
+    sortMostOrders: "Más órdenes (90 días)",
+    sortLeastContacted: "Necesita atención",
+    loadingDots: "cargando…",
     searchSidebarTitle: "Búsqueda rápida",
     filterByStatus: "Filtrar por estado",
     todaysOverview: "Resumen de hoy",
@@ -3070,8 +3112,9 @@ export default function App() {
           setVendors(profiles.map(vendorFromProfile));
         }
 
-        // Clients (RLS auto-filters: vendors see only theirs)
-        const { data: clientsData } = await supabase.from("clients").select("*");
+        // Clients (RLS auto-filters: vendors see only theirs).
+        // Stable order by id so rows don't shuffle between renders / realtime updates.
+        const { data: clientsData } = await supabase.from("clients").select("*").order("id", { ascending: true });
         if (clientsData) setClients(clientsData.map(clientFromDb));
 
         // Leads (RLS auto-filters)
@@ -3152,7 +3195,11 @@ export default function App() {
     const channel = supabase
       .channel("crm-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, async () => {
-        const { data } = await supabase.from("clients").select("*");
+        // Use a stable ORDER BY so customer positions don't randomly shift when realtime fires.
+        // Without this, adding a note triggers re-fetch and Supabase returns rows in arbitrary
+        // order — the customer "jumps" to a different row position visually. Ordering by id
+        // ensures the same sequence every time.
+        const { data } = await supabase.from("clients").select("*").order("id", { ascending: true });
         if (data) setClients(data.map(clientFromDb));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, async () => {
@@ -9147,6 +9194,36 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const [searchQuery, setSearchQuery] = useState("");
   // Active tab for client status sections. Default to "to_contact" — the most actionable group today.
   const [activeTab, setActiveTab] = useState("to_contact");
+  // Day navigator: which day of week the vendor is viewing. Defaults to today.
+  // 0 = Sun, 1 = Mon, ..., 6 = Sat. Used to filter customers by their purchase days.
+  const [selectedDow, setSelectedDow] = useState(() => new Date().getDay());
+
+  // Sort option for customer lists. "alpha" is default (no extra data needed).
+  // The other two options need historical interactions, loaded lazily on demand.
+  // "alpha" | "most_orders" | "least_contacted"
+  const [sortBy, setSortBy] = useState("alpha");
+
+  // Historical interactions for sort calculations. Populated on demand when vendor
+  // picks "most_orders" or "least_contacted". Window: last 90 days (enough for both
+  // recency and historical order patterns without loading everything).
+  const [historicalInts, setHistoricalInts] = useState([]);
+  const [historicalLoaded, setHistoricalLoaded] = useState(false);
+  const [loadingHistorical, setLoadingHistorical] = useState(false);
+
+  // Trigger historical load only the first time vendor picks a sort that needs it.
+  useEffect(() => {
+    if (sortBy === "alpha") return; // no historical data needed
+    if (historicalLoaded || loadingHistorical) return; // already loaded or loading
+    setLoadingHistorical(true);
+    loadInteractionsForDays(90, false).then((data) => {
+      setHistoricalInts(data || []);
+      setHistoricalLoaded(true);
+      setLoadingHistorical(false);
+    }).catch((err) => {
+      console.error("Failed to load historical interactions:", err);
+      setLoadingHistorical(false);
+    });
+  }, [sortBy, historicalLoaded, loadingHistorical]);
   // Manager-mode only: state for the "Add client" / "Add lead" quick action modals
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
@@ -9163,10 +9240,10 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
   // Hide clients whose skip period is still active (skip_until > now).
   // Approved skip = invisible until 48h elapse. Pending skip = also hidden (we trust the vendor).
-  // Also hide customers whose assigned purchase days don't include TODAY.
+  // Filter customers by the SELECTED day (defaults to today, but vendor can navigate forward/back).
   // Legacy customers (purchaseDays = null) are always visible since they predate the day system.
   const nowMs = Date.now();
-  const todayDow = new Date().getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const todayDow = new Date().getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat — used for "today" detection
   const myClients = clients.filter((c) => {
     if (c.vendorId !== vendorId) return false;
     if (c.archived) return false;
@@ -9177,21 +9254,107 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     // null/undefined purchaseDays = legacy data, always show. Empty array = hide.
     if (Array.isArray(c.purchaseDays)) {
       if (c.purchaseDays.length === 0) return false;
-      if (!c.purchaseDays.includes(todayDow)) return false;
+      if (!c.purchaseDays.includes(selectedDow)) return false;
     }
     return true;
   });
   const myLeads = (leads || []).filter((l) => l.assignedVendorId === vendorId && l.status === "active");
 
+  // Compute customer count per day-of-week — used to show "X customers" under each day chip
+  // in the day navigator. Iterates all my customers and increments the day bucket for each.
+  const customersPerDow = (() => {
+    const counts = [0, 0, 0, 0, 0, 0, 0]; // Sun..Sat
+    clients.forEach((c) => {
+      if (c.vendorId !== vendorId) return;
+      if (c.archived) return;
+      if (c.skipRequestPending) return;
+      if (c.skipUntil && c.skipUntil > nowMs) return;
+      if (Array.isArray(c.purchaseDays) && c.purchaseDays.length === 0) return;
+      // Legacy customers (null purchaseDays) count on every day
+      const days = Array.isArray(c.purchaseDays) ? c.purchaseDays : [0, 1, 2, 3, 4, 5, 6];
+      days.forEach((d) => { counts[d]++; });
+    });
+    return counts;
+  })();
+
+  // Day navigator helpers: build dates for ±3 days around today so the chip strip
+  // shows yesterday, today, and the upcoming days. Always shows 7 chips (full week view).
+  const dayNavItems = (() => {
+    const items = [];
+    // Show 3 days before today + today + 3 days after = 7 chips with today centered
+    for (let offset = -3; offset <= 3; offset++) {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      items.push({
+        dow: d.getDay(),
+        date: d.getDate(),
+        month: d.getMonth(),
+        offset,
+        isToday: offset === 0,
+      });
+    }
+    return items;
+  })();
+
   // Apply search filter (only by client/lead name, case-insensitive).
   // Search affects both clients and leads — vendor types one query and finds anything.
   const searchLower = searchQuery.trim().toLowerCase();
-  const filteredClients = searchLower
+  const unsortedFilteredClients = searchLower
     ? myClients.filter((c) => (c.name || "").toLowerCase().includes(searchLower))
     : myClients;
   const filteredLeads = searchLower
     ? myLeads.filter((l) => (l.name || "").toLowerCase().includes(searchLower))
     : myLeads;
+
+  // ============================================
+  // SORT — apply the vendor's chosen sort option
+  // ============================================
+  // For "most_orders" and "least_contacted" we use historicalInts (90-day window) so that the
+  // sort reflects real patterns, not just today's data. While historical is loading we fall
+  // back to alphabetical so the UI doesn't appear broken.
+  const filteredClients = (() => {
+    const list = unsortedFilteredClients.slice(); // copy so we don't mutate
+    if (sortBy === "alpha") {
+      // Case-insensitive A-Z by name
+      return list.sort((a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
+    }
+    if (sortBy === "most_orders") {
+      if (!historicalLoaded) return list; // not loaded yet — keep current order
+      // Count "ordered" interactions per client across the 90-day window
+      const ordersByClient = new Map();
+      historicalInts.forEach((i) => {
+        if (i.vendorId !== vendorId) return;
+        if (i.status === "ordered") {
+          ordersByClient.set(i.clientId, (ordersByClient.get(i.clientId) || 0) + 1);
+        }
+      });
+      return list.sort((a, b) => {
+        const ao = ordersByClient.get(a.id) || 0;
+        const bo = ordersByClient.get(b.id) || 0;
+        if (bo !== ao) return bo - ao; // most orders first
+        // Tie-break: alphabetical
+        return (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase());
+      });
+    }
+    if (sortBy === "least_contacted") {
+      if (!historicalLoaded) return list;
+      // Most-recent contact timestamp per client (any interaction)
+      const lastContactByClient = new Map();
+      historicalInts.forEach((i) => {
+        if (i.vendorId !== vendorId) return;
+        const prev = lastContactByClient.get(i.clientId) || 0;
+        if ((i.timestamp || 0) > prev) lastContactByClient.set(i.clientId, i.timestamp || 0);
+      });
+      return list.sort((a, b) => {
+        const al = lastContactByClient.get(a.id) || 0; // 0 = never contacted
+        const bl = lastContactByClient.get(b.id) || 0;
+        // Never-contacted (0) rises to top; otherwise oldest-contact rises to top
+        if (al !== bl) return al - bl;
+        return (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase());
+      });
+    }
+    return list;
+  })();
   const myRecentRejected = (leads || []).filter((l) => {
     if (l.status !== "rejected") return false;
     if (!l.createdBy?.startsWith(`vendor:${vendorId}`)) return false;
@@ -9516,6 +9679,81 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         )}
       </div>
 
+      {/* DAY NAVIGATOR — lets vendor see who they need to contact on any given day.
+          Arrows navigate ±1 day; chip strip below jumps to any of the 7 surrounding days.
+          The selected day filters all customer lists below (purchaseDays match). */}
+      <div className="mb-5 rounded-2xl overflow-hidden card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        {/* Header bar with arrows + day name */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ background: BRAND_PURPLE, color: "white" }}>
+          <button
+            onClick={() => setSelectedDow((selectedDow + 6) % 7)}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            title={t.previousDay || "Previous day"}
+          >
+            <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
+          </button>
+          <div className="text-center flex-1">
+            <div className="text-[10px] uppercase tracking-widest opacity-80">
+              {selectedDow === todayDow
+                ? (t.today || "Today")
+                : selectedDow === (todayDow + 1) % 7
+                  ? (t.tomorrow || "Tomorrow")
+                  : selectedDow === (todayDow + 6) % 7
+                    ? (t.yesterday || "Yesterday")
+                    : (t.viewing || "Viewing")}
+            </div>
+            <div className="text-lg font-bold">
+              {[t.sunday || "Sunday", t.monday || "Monday", t.tuesday || "Tuesday", t.wednesday || "Wednesday", t.thursday || "Thursday", t.friday || "Friday", t.saturday || "Saturday"][selectedDow]}
+            </div>
+            {selectedDow !== todayDow && (
+              <button
+                onClick={() => setSelectedDow(todayDow)}
+                className="text-[10px] mt-0.5 underline opacity-90 hover:opacity-100"
+              >
+                ↺ {t.backToToday || "Back to today"}
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setSelectedDow((selectedDow + 1) % 7)}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            title={t.nextDay || "Next day"}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Quick-jump chip strip: 7 days centered on today */}
+        <div className="flex gap-1.5 px-3 py-3 overflow-x-auto" style={{ background: "#FAF8F4" }}>
+          {dayNavItems.map((item) => {
+            const isSelected = item.dow === selectedDow;
+            const count = customersPerDow[item.dow];
+            const dayShort = [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][item.dow];
+            return (
+              <button
+                key={`day-${item.offset}`}
+                onClick={() => setSelectedDow(item.dow)}
+                className="flex-shrink-0 px-3 py-2 rounded-lg text-center transition-all"
+                style={{
+                  background: isSelected ? BRAND_PURPLE : (item.isToday ? "#F0E8FA" : "white"),
+                  color: isSelected ? "white" : (item.isToday ? BRAND_PURPLE : "#6B6560"),
+                  border: `1px solid ${isSelected ? BRAND_PURPLE : (item.isToday ? BRAND_PURPLE + "40" : "#E5E0DA")}`,
+                  minWidth: "52px",
+                }}
+              >
+                <div className="text-[9px] uppercase tracking-wide font-bold opacity-90">{dayShort}</div>
+                <div className="text-base font-bold leading-tight">{item.date}</div>
+                <div className="text-[9px] font-semibold" style={{ opacity: isSelected ? 0.9 : 0.7 }}>
+                  {count > 0 ? `${count} ${count === 1 ? (t.custShort || "cust") : (t.custsShort || "custs")}` : "—"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Quick action row — only visible in manager mode.
           Manager can add clients/leads directly from My Sales without going back to dashboard.
           These are auto-approved (no pending state) and default-assigned to the manager themselves. */}
@@ -9809,6 +10047,43 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           </div>
         </>
       )}
+
+      {/* SORT CONTROL — small dropdown above the customer list. Lets vendor choose how to
+          order the rows: alphabetically (default, instant), most orders historically, or
+          least recently contacted. The latter two load historical data (90 days) on first
+          use; while loading, list stays in alphabetical order. */}
+      <div className="flex items-center justify-end mb-3 gap-2">
+        <label className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "#6B6560" }}>
+          {t.sortBy || "Sort by"}:
+        </label>
+        <div className="relative">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="text-xs font-semibold pl-3 pr-8 py-1.5 rounded-lg appearance-none cursor-pointer"
+            style={{
+              background: "white",
+              color: "#5F2F9D",
+              border: "1px solid #E5E0DA",
+              minWidth: "180px",
+            }}
+          >
+            <option value="alpha">{t.sortAlpha || "Name (A-Z)"}</option>
+            <option value="most_orders">{t.sortMostOrders || "Most orders (90 days)"}</option>
+            <option value="least_contacted">{t.sortLeastContacted || "Needs attention"}</option>
+          </select>
+          {/* Custom chevron — the select's native arrow is hidden via appearance-none */}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "#5F2F9D" }}>
+            <ChevronRight size={12} style={{ transform: "rotate(90deg)" }} />
+          </div>
+        </div>
+        {/* Loading indicator when historical data is being fetched */}
+        {loadingHistorical && (
+          <span className="text-[10px]" style={{ color: "#8B847E" }}>
+            {t.loadingDots || "loading…"}
+          </span>
+        )}
+      </div>
 
       {/* Helper closure: returns a renderTable function for desktop viewports.
           When isDesktop is false, returns undefined so VendorStatusSection falls back to its
@@ -10285,6 +10560,10 @@ function CustomerTable({
   // Note tooltip: which client's note is currently being hovered (for the patch overlay)
   const [hoveredNoteClientId, setHoveredNoteClientId] = useState(null);
 
+  // Row hover: which entire customer row is being hovered. Used to highlight the name
+  // and give visual feedback as the vendor scans down the list.
+  const [hoveredRowClientId, setHoveredRowClientId] = useState(null);
+
   // Inline note editing: which client's note cell is being edited, and the draft text
   const [editingNoteClientId, setEditingNoteClientId] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -10376,17 +10655,31 @@ function CustomerTable({
             return (
               <tr
                 key={client.id}
-                className="border-t"
+                className="border-t transition-colors"
+                onMouseEnter={() => setHoveredRowClientId(client.id)}
+                onMouseLeave={() => setHoveredRowClientId(null)}
                 style={{
                   borderColor: "#F0EDE7",
                   // Zebra stripe: alternate rows get a very light brand-purple background (#F8F4FD)
                   // for easier scanning when there are many customers.
-                  background: rowIdx % 2 === 1 ? "#F8F4FD" : "white",
+                  // On hover, row gets a slightly deeper purple tint to show focus.
+                  background: hoveredRowClientId === client.id
+                    ? "#EFE5F8"
+                    : (rowIdx % 2 === 1 ? "#F8F4FD" : "white"),
                 }}
               >
                 {/* COL 1: Customer */}
                 <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "240px" }}>
-                  <div className="font-semibold truncate" style={{ color: "#1C1B1A", fontSize: "13px" }}>{client.name}</div>
+                  <div
+                    className="font-semibold truncate transition-colors"
+                    style={{
+                      // Name color shifts to brand purple on hover for clear "selected" feedback
+                      color: hoveredRowClientId === client.id ? "#5F2F9D" : "#1C1B1A",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {client.name}
+                  </div>
                   {client.contactName && (
                     <div className="text-[11px] truncate" style={{ color: "#8B847E" }}>
                       {t.ask || "Ask for"}: <span style={{ color: "#3D3733", fontWeight: 500 }}>{client.contactName}</span>
