@@ -438,6 +438,11 @@ const T = {
     custShort: "cust",
     custsShort: "custs",
     sortBy: "Sort by",
+    viewLabel: "View",
+    viewAll: "All customers",
+    viewMissingCall: "Missing call",
+    viewMissingText: "Missing text",
+    viewMissingEmail: "Missing email",
     sortAlpha: "Name (A-Z)",
     sortMostOrders: "Most orders (90 days)",
     sortLeastContacted: "Needs attention",
@@ -1179,6 +1184,11 @@ const T = {
     custShort: "cliente",
     custsShort: "clientes",
     sortBy: "Ordenar por",
+    viewLabel: "Ver",
+    viewAll: "Todos los clientes",
+    viewMissingCall: "Falta llamada",
+    viewMissingText: "Falta texto",
+    viewMissingEmail: "Falta email",
     sortAlpha: "Nombre (A-Z)",
     sortMostOrders: "Más órdenes (90 días)",
     sortLeastContacted: "Necesita atención",
@@ -9248,6 +9258,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   // "alpha" | "most_orders" | "least_contacted"
   const [sortBy, setSortBy] = useState("alpha");
 
+  // View filter — narrows the list to customers MISSING a specific contact type today.
+  // Useful to quickly find who you still need to call/text/email on the selected day.
+  // "all" | "missing_call" | "missing_text" | "missing_email"
+  const [viewFilter, setViewFilter] = useState("all");
+
   // Historical interactions for sort calculations. Populated on demand when vendor
   // picks "most_orders" or "least_contacted". Window: last 90 days (enough for both
   // recency and historical order patterns without loading everything).
@@ -9345,12 +9360,35 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   // Apply search filter (only by client/lead name, case-insensitive).
   // Search affects both clients and leads — vendor types one query and finds anything.
   const searchLower = searchQuery.trim().toLowerCase();
-  const unsortedFilteredClients = searchLower
+  const searchedClients = searchLower
     ? myClients.filter((c) => (c.name || "").toLowerCase().includes(searchLower))
     : myClients;
   const filteredLeads = searchLower
     ? myLeads.filter((l) => (l.name || "").toLowerCase().includes(searchLower))
     : myLeads;
+
+  // ============================================
+  // VIEW FILTER — narrow to customers MISSING a contact type today
+  // ============================================
+  // "all" = no filter. "missing_call/text/email" = hide customers that already received
+  // that contact channel today from this vendor. The dropdown lets the vendor focus
+  // on remaining work for the selected day.
+  const unsortedFilteredClients = (() => {
+    if (viewFilter === "all") return searchedClients;
+    // Determine which channel to check
+    const channel = viewFilter === "missing_call" ? "call"
+                  : viewFilter === "missing_text" ? "text"
+                  : viewFilter === "missing_email" ? "email"
+                  : null;
+    if (!channel) return searchedClients;
+    // Build a set of clientIds that DO have that channel today, then hide them
+    const hasChannelToday = new Set();
+    (interactions || []).forEach((i) => {
+      if (i.vendorId !== vendorId) return;
+      if ((i.channel || "call") === channel) hasChannelToday.add(i.clientId);
+    });
+    return searchedClients.filter((c) => !hasChannelToday.has(c.id));
+  })();
 
   // ============================================
   // SORT — apply the vendor's chosen sort option
@@ -9562,11 +9600,12 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   }
 
   return (
-    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"} lg:pr-72`}>
-      {/* Search bar — mobile/tablet only. On desktop we use the right sidebar instead.
-          The lg:hidden hides this whole block on screens ≥1024px. */}
+    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"} xl:pr-72`}>
+      {/* Search bar — small laptop, tablet, and mobile (i.e. <1280px). On larger screens the
+          desktop sidebar takes over with full search + filters. The xl:hidden class hides
+          this whole block on screens ≥1280px so it doesn't double up with the sidebar. */}
       <div
-        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3 lg:hidden"
+        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3 xl:hidden"
         style={{ top: 0, background: "#F5F1EA", borderBottom: "1px solid rgba(95,47,157,0.10)" }}
       >
         <div className="relative max-w-md mx-auto">
@@ -9595,11 +9634,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       </div>
 
-      {/* Desktop-only sidebar: fixed to the right, contains search + status filter chips.
-          The parent container adds lg:pr-72 (288px) to reserve space so the sidebar doesn't
-          overlap the table content. Hidden on screens <1024px. */}
+      {/* Right sidebar — only on screens ≥1280px (xl). Below that, smaller laptops use the
+          sticky top search bar instead. The parent container adds xl:pr-72 (288px) padding
+          right so the customer table never overlaps with the sidebar on the right edge. */}
       <aside
-        className="hidden lg:flex lg:flex-col fixed right-0 top-14 bottom-0 w-64 px-4 py-4 overflow-y-auto"
+        className="hidden xl:flex xl:flex-col fixed right-0 top-14 bottom-0 w-64 px-4 py-4 overflow-y-auto"
         style={{
           background: "white",
           borderLeft: "1px solid #E5E0DA",
@@ -10152,12 +10191,38 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       )}
 
 
-      {/* SORT CONTROL — small dropdown above the customer list. Lets vendor choose how to
-          order the rows: alphabetically (default, instant), most orders historically, or
-          least recently contacted. The latter two load historical data (90 days) on first
-          use; while loading, list stays in alphabetical order. */}
-      <div className="flex items-center justify-end mb-3 gap-2">
+      {/* CONTROLS ROW — View filter + Sort dropdown above the customer list.
+          View filter narrows to customers missing a specific contact type today.
+          Sort orders the visible rows alphabetically / by orders / by attention need. */}
+      <div className="flex flex-wrap items-center justify-end mb-3 gap-2">
+        {/* VIEW FILTER — narrow to customers missing a specific contact today */}
         <label className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: "#6B6560" }}>
+          {t.viewLabel || "View"}:
+        </label>
+        <div className="relative">
+          <select
+            value={viewFilter}
+            onChange={(e) => setViewFilter(e.target.value)}
+            className="text-xs font-semibold pl-3 pr-8 py-1.5 rounded-lg appearance-none cursor-pointer"
+            style={{
+              background: viewFilter === "all" ? "white" : "#FFF5D6",
+              color: viewFilter === "all" ? "#5F2F9D" : "#7A5A1A",
+              border: `1px solid ${viewFilter === "all" ? "#E5E0DA" : "#E8C97A"}`,
+              minWidth: "180px",
+            }}
+          >
+            <option value="all">{t.viewAll || "All customers"}</option>
+            <option value="missing_call">📞 {t.viewMissingCall || "Missing call"}</option>
+            <option value="missing_text">💬 {t.viewMissingText || "Missing text"}</option>
+            <option value="missing_email">✉️ {t.viewMissingEmail || "Missing email"}</option>
+          </select>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: viewFilter === "all" ? "#5F2F9D" : "#7A5A1A" }}>
+            <ChevronRight size={12} style={{ transform: "rotate(90deg)" }} />
+          </div>
+        </div>
+
+        {/* SORT CONTROL */}
+        <label className="text-[10px] uppercase tracking-widest font-semibold ml-2" style={{ color: "#6B6560" }}>
           {t.sortBy || "Sort by"}:
         </label>
         <div className="relative">
@@ -10955,7 +11020,10 @@ function CustomerTable({
                   )}
 
                   {/* Styled hover tooltip ("patch note") — appears above the note cell on hover.
-                      Replaces the browser-native title attribute with a custom styled overlay. */}
+                      Replaces the browser-native title attribute with a custom styled overlay.
+                      Width is fixed (not stretched to cell edges) so long content wraps inside
+                      the box. Long unbroken words/URLs break instead of overflowing horizontally.
+                      Very long notes scroll vertically inside the tooltip. */}
                   {hoveredNoteClientId === client.id && client.longNote && client.longNote.trim().length > 0 && editingNoteClientId !== client.id && (
                     <div
                       className="absolute z-30 rounded-lg shadow-lg p-3 text-[11px] leading-relaxed pointer-events-none"
@@ -10966,9 +11034,12 @@ function CustomerTable({
                         color: "#3D2E00",
                         bottom: "calc(100% - 4px)",
                         left: "0.5rem",
-                        right: "0.5rem",
-                        maxWidth: "320px",
-                        whiteSpace: "pre-wrap",
+                        width: "280px",                  // fixed width — content wraps inside
+                        maxHeight: "240px",              // cap height for very long notes
+                        overflowY: "auto",               // scroll vertically if too tall
+                        whiteSpace: "pre-wrap",          // preserve line breaks + wrap text
+                        wordBreak: "break-word",         // break long unbroken words/URLs
+                        overflowWrap: "anywhere",        // fallback for any character
                         boxShadow: "0 8px 20px rgba(95, 47, 157, 0.18)",
                       }}
                     >
