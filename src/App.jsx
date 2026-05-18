@@ -459,6 +459,8 @@ const T = {
     priceListSent: "Mark price list sent",
     undoPriceList: "Click to undo price list",
     priceSentBadge: "Price sent",
+    priceListMarked: "Price list sent ✓",
+    priceListSendBtn: "Mark price list sent",
     changePending: "Change pending approval",
     changePendingDetail: "A previous edit is awaiting manager approval. Some fields may be locked until resolved.",
     freeFieldsLegend: "Saves immediately",
@@ -520,7 +522,8 @@ const T = {
     dashboard: "Dashboard",
     contactedToday: "Called today",
     textedStat: "Texted",
-    emailedStat: "Price list sent",
+    emailedStat: "Emailed",
+    priceListStat: "Price list sent",
     contactRate: "Contact rate",
     avgOrders: "Avg orders / rep",
     report4pmPreview: "Preview of 4:00 PM report",
@@ -1208,6 +1211,8 @@ const T = {
     priceListSent: "Marcar lista de precios enviada",
     undoPriceList: "Click para deshacer lista de precios",
     priceSentBadge: "Lista enviada",
+    priceListMarked: "Lista enviada ✓",
+    priceListSendBtn: "Marcar lista enviada",
     changePending: "Cambio pendiente de aprobación",
     changePendingDetail: "Una edición anterior está esperando la aprobación del manager. Algunos campos pueden estar bloqueados hasta resolverse.",
     freeFieldsLegend: "Se guarda al instante",
@@ -1267,7 +1272,8 @@ const T = {
     dashboard: "Dashboard",
     contactedToday: "Llamados hoy",
     textedStat: "Con mensaje",
-    emailedStat: "Lista enviada",
+    emailedStat: "Email enviado",
+    priceListStat: "Lista de precios enviada",
     contactRate: "Tasa de llamada",
     avgOrders: "Órdenes prom / vend",
     report4pmPreview: "Vista previa del reporte de las 4:00 PM",
@@ -9458,12 +9464,16 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   const myInts = interactions.filter((i) => i.vendorId === vendorId);
 
   const callInts = myInts.filter((i) => chOf(i) === "call");
-  const textInts = myInts.filter((i) => chOf(i) === "text");
-  const emailInts = myInts.filter((i) => chOf(i) === "email");
+  // Exclude price-list pings from regular text/email — they're a separate concept and
+  // shouldn't double-count toward those channel totals. Price list lives in its own bucket.
+  const textInts = myInts.filter((i) => chOf(i) === "text" && i.subReason !== "price_list");
+  const emailInts = myInts.filter((i) => chOf(i) === "email" && i.subReason !== "price_list");
+  const priceListInts = myInts.filter((i) => i.subReason === "price_list");
 
   const calledIds = new Set(callInts.map((i) => i.clientId));
   const textedIds = new Set(textInts.map((i) => i.clientId));
   const emailedIds = new Set(emailInts.map((i) => i.clientId));
+  const priceListSentIds = new Set(priceListInts.map((i) => i.clientId));
 
   // Build no_answer counts per customer (today only) BEFORE pending/contacted logic
   // because pending depends on it: customers with <3 no_answer stay in pending so vendor retries.
@@ -9981,7 +9991,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
           <MiniStat icon={MessageSquare} label={t.orders} value={orderedCount} color="#73A626" />
           <MiniStat icon={MessageCircle} label={t.textedStat} value={`${textedIds.size}/${myClients.length}`} color="#5A6B85" />
-          <MiniStat icon={Mail} label={t.emailedStat} value={`${emailedIds.size}/${myClients.length}`} color="#5A4A6B" />
+          <MiniStat icon={ClipboardList} label={t.priceListStat || "Price list sent"} value={`${priceListSentIds.size}/${myClients.length}`} color="#5F2F9D" />
         </div>
       </div>
 
@@ -11381,8 +11391,11 @@ function CustomerTable({
 
 function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest }) {
   const callInt = interactions.find((i) => chOf(i) === "call");
-  const textInt = interactions.find((i) => chOf(i) === "text");
-  const emailInt = interactions.find((i) => chOf(i) === "email");
+  // Exclude price_list pings from regular text/email — they're a separate concept.
+  const textInt = interactions.find((i) => chOf(i) === "text" && i.subReason !== "price_list");
+  const emailInt = interactions.find((i) => chOf(i) === "email" && i.subReason !== "price_list");
+  // Price list "sent" marker — tracked as a text-channel interaction with subReason="price_list".
+  const priceListInt = interactions.find((i) => i.subReason === "price_list");
 
   // ---------- CONTACT WORKFLOW ----------
   // Establish a clear contact process: call → text → email
@@ -11475,6 +11488,13 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
                style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
             <History size={10} />
             {t.alreadyOrderedInPast || "Already ordered in the past"}
+          </div>
+        )}
+        {/* Price list sent today — purple badge so vendor sees at a glance */}
+        {priceListInt && (
+          <div className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide mt-1.5 ml-1 px-2 py-0.5 rounded-full"
+               style={{ background: "#F0E8FA", color: "#5F2F9D" }}>
+            📋 {t.priceSentBadge || "Price sent"}
           </div>
         )}
         {clientTags.length > 0 && (
@@ -11591,6 +11611,28 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
           onTemplate={templates && templates.length > 0 ? () => setShowTemplate("email") : null}
         />
       </div>
+
+      {/* Price list toggle — full-width button below the text/email row.
+          Marks that the price list was shared with this customer today.
+          Click toggles it on/off. Independent from regular text/email logs. */}
+      <button
+        onClick={() => {
+          if (priceListInt) {
+            onUndo(priceListInt.id);
+          } else {
+            onLog({ clientId: client.id, vendorId, channel: "text", status: "ordered", subReason: "price_list" });
+          }
+        }}
+        className="w-full mt-2 py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-xs font-semibold transition-colors"
+        style={{
+          background: priceListInt ? "#F0E8FA" : "white",
+          color: priceListInt ? "#5F2F9D" : "#6B6560",
+          border: `1px solid ${priceListInt ? "#5F2F9D" : "#E5E0DA"}`,
+        }}
+      >
+        <span style={{ fontSize: "14px" }}>📋</span>
+        <span>{priceListInt ? (t.priceListMarked || "Price list sent ✓") : (t.priceListSendBtn || "Mark price list sent")}</span>
+      </button>
 
       {/* "Already ordered this week" — escape from contact process for clients who already ordered.
           Only shown for clients (not leads), only when not already pending.
@@ -12038,11 +12080,14 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
     const myClients = clients.filter((c) => c.vendorId === v.id && !c.archived);
     const myInts = periodInts.filter((i) => i.vendorId === v.id);
     const callInts = myInts.filter((i) => chOf(i) === "call");
-    const textInts = myInts.filter((i) => chOf(i) === "text");
-    const emailInts = myInts.filter((i) => chOf(i) === "email");
+    // Exclude price_list pings so they don't double-count toward text/email totals.
+    const textInts = myInts.filter((i) => chOf(i) === "text" && i.subReason !== "price_list");
+    const emailInts = myInts.filter((i) => chOf(i) === "email" && i.subReason !== "price_list");
+    const priceListInts = myInts.filter((i) => i.subReason === "price_list");
     const calledIds = new Set(callInts.map((i) => i.clientId));
     const textedIds = new Set(textInts.map((i) => i.clientId));
     const emailedIds = new Set(emailInts.map((i) => i.clientId));
+    const priceListSentIds = new Set(priceListInts.map((i) => i.clientId));
     const contacted = myClients.filter((c) => calledIds.has(c.id));
     const pending = myClients.filter((c) => !calledIds.has(c.id));
     const orders = callInts.filter((i) => i.status === "ordered");
@@ -12062,7 +12107,7 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
 
     return {
       vendor: v, myClients, contacted, pending, myInts, callInts, textInts, emailInts,
-      textedIds, emailedIds, orders, callbacks, noAnswers, priceIssues, notInterested, otherStatus,
+      textedIds, emailedIds, priceListSentIds, orders, callbacks, noAnswers, priceIssues, notInterested, otherStatus,
       recurrentCount: recurrentList.length,
       recurrentRate: myClients.length ? recurrentList.length / myClients.length : 0,
       recurrentList,
@@ -12081,6 +12126,7 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
   const totalCalls = stats.reduce((s, x) => s + x.callInts.length, 0);
   const totalTexted = stats.reduce((s, x) => s + x.textedIds.size, 0);
   const totalEmailed = stats.reduce((s, x) => s + x.emailedIds.size, 0);
+  const totalPriceListSent = stats.reduce((s, x) => s + x.priceListSentIds.size, 0);
   const totalRecurrent = stats.reduce((s, x) => s + x.recurrentCount, 0);
 
   // For week/month: rank by recurrent clients then by total orders
@@ -12122,7 +12168,7 @@ function AdminView({ t, vendors, clients, leads, interactions, quotas, onBack })
               </div>
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <StatCard label={t.textedStat} value={`${totalTexted}/${totalClients}`} accent="#1C5E6E" />
-                <StatCard label={t.emailedStat} value={`${totalEmailed}/${totalClients}`} accent="#5A4A6B" />
+                <StatCard label={t.priceListStat || "Price list sent"} value={`${totalPriceListSent}/${totalClients}`} accent="#5F2F9D" />
               </div>
 
               {totalCalls > 0 && (
