@@ -456,6 +456,9 @@ const T = {
     undoCall: "Click to undo call",
     undoText: "Click to undo text",
     undoEmail: "Click to undo email",
+    priceListSent: "Mark price list sent",
+    undoPriceList: "Click to undo price list",
+    priceSentBadge: "Price sent",
     changePending: "Change pending approval",
     changePendingDetail: "A previous edit is awaiting manager approval. Some fields may be locked until resolved.",
     freeFieldsLegend: "Saves immediately",
@@ -1202,6 +1205,9 @@ const T = {
     undoCall: "Click para deshacer llamada",
     undoText: "Click para deshacer texto",
     undoEmail: "Click para deshacer email",
+    priceListSent: "Marcar lista de precios enviada",
+    undoPriceList: "Click para deshacer lista de precios",
+    priceSentBadge: "Lista enviada",
     changePending: "Cambio pendiente de aprobación",
     changePendingDetail: "Una edición anterior está esperando la aprobación del manager. Algunos campos pueden estar bloqueados hasta resolverse.",
     freeFieldsLegend: "Se guarda al instante",
@@ -9381,10 +9387,14 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
                   : viewFilter === "missing_email" ? "email"
                   : null;
     if (!channel) return searchedClients;
-    // Build a set of clientIds that DO have that channel today, then hide them
+    // Build a set of clientIds that DO have that channel today, then hide them.
+    // IMPORTANT: price_list interactions (subReason="price_list") are stored as
+    // channel="text" but they're a separate concept — they shouldn't count as
+    // "real text contact" for the missing-text filter.
     const hasChannelToday = new Set();
     (interactions || []).forEach((i) => {
       if (i.vendorId !== vendorId) return;
+      if (i.subReason === "price_list") return; // skip price-list pings
       if ((i.channel || "call") === channel) hasChannelToday.add(i.clientId);
     });
     return searchedClients.filter((c) => !hasChannelToday.has(c.id));
@@ -10806,8 +10816,14 @@ function CustomerTable({
             const clientInts = (allInteractions || []).filter((i) => i.clientId === client.id);
             const todayInts = clientInts.filter((i) => i.vendorId === vendorId); // already today-filtered upstream
             const callInts = todayInts.filter((i) => (i.channel || "call") === "call");
-            const textInts = todayInts.filter((i) => i.channel === "text");
-            const emailInts = todayInts.filter((i) => i.channel === "email");
+            // Filter out price-list pings from text/email — they're tracked separately
+            // and shouldn't make those channel buttons show "✓ done" by mistake.
+            const textInts = todayInts.filter((i) => i.channel === "text" && i.subReason !== "price_list");
+            const emailInts = todayInts.filter((i) => i.channel === "email" && i.subReason !== "price_list");
+            // Price-list interactions: sent today via either text or email with subReason="price_list".
+            // Tracked separately so vendor can mark "I sent the price list" independently of a
+            // regular text/email log. Customer gets a "📋 Price sent" badge if any are present.
+            const priceListInts = todayInts.filter((i) => i.subReason === "price_list");
             const latestCall = callInts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
             const latestStatus = latestCall?.status;
             const noAnswerCount = callInts.filter((i) => i.status === "no_answer").length;
@@ -10887,6 +10903,13 @@ function CustomerTable({
                         🗑 {t.deletePending || "Delete pending"}
                       </span>
                     )}
+                    {/* Price list sent today — purple badge so vendor can see at a glance
+                        which customers have received the price list during today's contact. */}
+                    {priceListInts.length > 0 && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: "#F0E8FA", color: "#5F2F9D" }}>
+                        📋 {t.priceSentBadge || "Price sent"}
+                      </span>
+                    )}
                   </div>
                 </td>
 
@@ -10964,6 +10987,33 @@ function CustomerTable({
                       <Mail size={14} />
                       {emailInts.length > 0 && (
                         <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-bold text-white" style={{ background: "#73A626", border: "1.5px solid white" }}>✓</span>
+                      )}
+                    </button>
+                    {/* Price list sent — log-only marker (no actual send).
+                        Toggleable like the channel buttons. Stored as a "text" channel
+                        interaction with subReason="price_list" so it shows in history. */}
+                    <button
+                      className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
+                      style={{
+                        background: priceListInts.length > 0 ? "#F0E8FA" : "white",
+                        borderColor: priceListInts.length > 0 ? "#5F2F9D" : "#E5E0DA",
+                        color: priceListInts.length > 0 ? "#5F2F9D" : "#B5ADA5",
+                      }}
+                      title={priceListInts.length > 0 ? (t.undoPriceList || "Click to undo price list") : (t.priceListSent || "Mark price list sent")}
+                      onClick={() => {
+                        if (priceListInts.length > 0 && onUndo) {
+                          const latest = [...priceListInts].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+                          if (latest) onUndo(latest.id);
+                        } else {
+                          // Log as a text-channel interaction with subReason marking price-list intent.
+                          // Status="ordered" keeps it from triggering no_answer logic.
+                          onLog({ clientId: client.id, vendorId, channel: "text", status: "ordered", subReason: "price_list" });
+                        }
+                      }}
+                    >
+                      <span style={{ fontSize: "14px", lineHeight: 1 }}>📋</span>
+                      {priceListInts.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-bold text-white" style={{ background: "#5F2F9D", border: "1.5px solid white" }}>✓</span>
                       )}
                     </button>
                   </div>
