@@ -242,6 +242,19 @@ const T = {
     backToManager: "Back to Manager",
     myManagerSalesMode: "My Sales (Manager mode)",
     salesInsightsTagline: "See who orders on which days",
+    myAnalytics: "My Analytics",
+    myAnalyticsTagline: "Charts & trends of your sales",
+    myAnalyticsSubtitle: "Your performance over time",
+    chartMySales: "My sales trend · last 7 days",
+    chartMyOutcomes: "My outcomes",
+    chartMyTopCustomers: "My top customers",
+    chartMyDow: "My activity by day of week",
+    chartMyDowSub: "When you sell most",
+    chartMyFunnel: "My conversion funnel",
+    funnelMyTotal: "My customers",
+    orderShort: "ord",
+    ordersShort: "ords",
+    noTopCustomers: "No orders yet in this period",
     salesInsightsSub: "Track your customer ordering patterns across all history",
     salesInsightsTeamSub: "Team-wide ordering patterns",
     weeklyReport: "Weekly Report",
@@ -1006,6 +1019,19 @@ const T = {
     backToManager: "Volver al Manager",
     myManagerSalesMode: "Mis Ventas (Modo Manager)",
     salesInsightsTagline: "Ver quién ordena qué días",
+    myAnalytics: "Mi Analítica",
+    myAnalyticsTagline: "Gráficos y tendencias de tus ventas",
+    myAnalyticsSubtitle: "Tu desempeño en el tiempo",
+    chartMySales: "Mi tendencia de ventas · últimos 7 días",
+    chartMyOutcomes: "Mis resultados",
+    chartMyTopCustomers: "Mis mejores clientes",
+    chartMyDow: "Mi actividad por día de semana",
+    chartMyDowSub: "Cuándo vendes más",
+    chartMyFunnel: "Mi embudo de conversión",
+    funnelMyTotal: "Mis clientes",
+    orderShort: "ord",
+    ordersShort: "ords",
+    noTopCustomers: "Sin órdenes en este periodo",
     salesInsightsSub: "Sigue los patrones de pedidos de tus clientes en todo el historial",
     salesInsightsTeamSub: "Patrones de pedidos del equipo completo",
     weeklyReport: "Reporte Semanal",
@@ -9056,6 +9082,426 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
   );
 }
 
+// ============================================
+// VENDOR ANALYTICS VIEW (vendor-only — personal analytics dashboard)
+// ============================================
+// Same SVG-based chart approach as the manager AnalyticsView, but scoped to
+// THIS vendor's customers and interactions only.
+//
+// Charts:
+//   1. My sales trend (line)            — orders per day in selected period
+//   2. My outcomes donut                — distribution of MY call outcomes
+//   3. My top customers (bars)          — best customers by order count
+//   4. My activity by day-of-week (bars)— which days I sell most
+//   + Conversion funnel scoped to my assigned customers
+function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, loadInteractionsForDays, onBack }) {
+  const [period, setPeriod] = useState("week"); // "today" | "week" | "month"
+  const [periodInts, setPeriodInts] = useState(interactions || []);
+  const [loadingPeriod, setLoadingPeriod] = useState(false);
+
+  // Load interactions for the selected period. "today" uses what's already loaded;
+  // "week" = 7 days, "month" = 30 days. Always scoped to MY vendor id when computing stats.
+  useEffect(() => {
+    if (period === "today") {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const tsToday = startOfToday.getTime();
+      setPeriodInts((interactions || []).filter((i) => (i.timestamp || 0) >= tsToday));
+      return;
+    }
+    const days = period === "week" ? 7 : 30;
+    setLoadingPeriod(true);
+    loadInteractionsForDays(days, false).then((data) => {
+      setPeriodInts(data || []);
+      setLoadingPeriod(false);
+    }).catch((err) => {
+      console.error("VendorAnalyticsView: failed to load period:", err);
+      setLoadingPeriod(false);
+    });
+  }, [period]);
+
+  // All stats derived once per render. Scoped to my vendor id.
+  const stats = useMemo(() => {
+    // Filter interactions to MINE
+    const myInts = periodInts.filter((i) => i.vendorId === vendorId);
+    const callInts = myInts.filter((i) => (i.channel || "call") === "call");
+    const allOrders = callInts.filter((i) => i.status === "ordered");
+    const allCallbacks = callInts.filter((i) => i.status === "callback");
+    const allNoAnswers = callInts.filter((i) => i.status === "no_answer");
+    const allPriceIssues = callInts.filter((i) => i.status === "price_issue");
+    const allNotInterested = callInts.filter((i) => i.status === "not_interested");
+    const allOther = callInts.filter((i) => i.status === "other");
+
+    // Per-day orders (last 7 days for line chart) — regardless of period selector
+    const last7Days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const tsStart = d.getTime();
+      const tsEnd = tsStart + 86400000;
+      const dayOrders = allOrders.filter((o) => (o.timestamp || 0) >= tsStart && (o.timestamp || 0) < tsEnd).length;
+      last7Days.push({
+        date: d,
+        orders: dayOrders,
+        label: [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][d.getDay()],
+        isToday: i === 0,
+      });
+    }
+
+    // Top customers (by order count in period) — limit to top 10
+    const ordersByClient = {};
+    allOrders.forEach((o) => {
+      ordersByClient[o.clientId] = (ordersByClient[o.clientId] || 0) + 1;
+    });
+    const topCustomers = Object.entries(ordersByClient)
+      .map(([id, count]) => ({
+        client: clients.find((c) => c.id === id),
+        count,
+      }))
+      .filter((x) => x.client) // drop orphaned client refs (deleted customers)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Orders by day of week (Mon-Sat — Sunday excluded since produce business doesn't run)
+    const ordersByDow = [0, 0, 0, 0, 0, 0, 0]; // Sun..Sat
+    allOrders.forEach((o) => {
+      const d = new Date(o.timestamp || 0);
+      ordersByDow[d.getDay()]++;
+    });
+
+    // Customer funnel — MY assigned, non-archived customers
+    const myClients = clients.filter((c) => c.vendorId === vendorId && !c.archived);
+    const calledIds = new Set(callInts.map((i) => i.clientId));
+    const outcomeIds = new Set(callInts.filter((i) => i.status === "ordered" || i.status === "callback").map((i) => i.clientId));
+    const orderedIds = new Set(allOrders.map((i) => i.clientId));
+    const funnel = {
+      total: myClients.length,
+      contacted: myClients.filter((c) => calledIds.has(c.id)).length,
+      gotOutcome: myClients.filter((c) => outcomeIds.has(c.id)).length,
+      ordered: myClients.filter((c) => orderedIds.has(c.id)).length,
+    };
+
+    return {
+      totalOrders: allOrders.length,
+      totalCallbacks: allCallbacks.length,
+      totalNoAnswers: allNoAnswers.length,
+      totalPriceIssues: allPriceIssues.length,
+      totalNotInterested: allNotInterested.length,
+      totalOther: allOther.length,
+      last7Days,
+      topCustomers,
+      ordersByDow,
+      funnel,
+    };
+  }, [periodInts, clients, vendorId, t]);
+
+  // ============================================
+  // CHART HELPERS — same approach as manager AnalyticsView but scoped to "my" data
+  // ============================================
+
+  function LineChart({ data }) {
+    if (!data || data.length === 0) return <div className="text-xs text-stone-400 italic text-center py-8">{t.noData || "No data yet"}</div>;
+    const maxOrders = Math.max(1, ...data.map((d) => d.orders));
+    const W = 600, H = 140, PAD_L = 30, PAD_R = 30, PAD_TOP = 20, PAD_BOT = 30;
+    const innerW = W - PAD_L - PAD_R;
+    const innerH = H - PAD_TOP - PAD_BOT;
+    const xStep = innerW / (data.length - 1 || 1);
+    const yScale = (v) => PAD_TOP + innerH - (v / maxOrders) * innerH;
+    const xPos = (i) => PAD_L + i * xStep;
+    const pathD = data.map((d, i) => `${i === 0 ? "M" : "L"} ${xPos(i)} ${yScale(d.orders)}`).join(" ");
+    const areaD = pathD + ` L ${xPos(data.length - 1)} ${H - PAD_BOT} L ${PAD_L} ${H - PAD_BOT} Z`;
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: "180px" }}>
+        <defs>
+          <linearGradient id="vendorPurpleGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#5F2F9D" stopOpacity="0.35"/>
+            <stop offset="100%" stopColor="#5F2F9D" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((p, idx) => (
+          <line key={idx} x1={PAD_L} y1={PAD_TOP + innerH * p} x2={W - PAD_R} y2={PAD_TOP + innerH * p} stroke="#F0EDE7" strokeWidth="1" strokeDasharray="2,3"/>
+        ))}
+        <path d={areaD} fill="url(#vendorPurpleGrad)"/>
+        <path d={pathD} fill="none" stroke="#5F2F9D" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+        {data.map((d, i) => (
+          <g key={i}>
+            <circle cx={xPos(i)} cy={yScale(d.orders)} r={d.isToday ? 5 : 3.5} fill={d.isToday ? "#FFED13" : "#5F2F9D"} stroke={d.isToday ? "#5F2F9D" : "none"} strokeWidth={d.isToday ? 2 : 0}/>
+            <text x={xPos(i)} y={yScale(d.orders) - 8} textAnchor="middle" fontSize="10" fill="#5F2F9D" fontWeight="700">{d.orders > 0 ? d.orders : ""}</text>
+            <text x={xPos(i)} y={H - 8} textAnchor="middle" fontSize="10" fill={d.isToday ? "#5F2F9D" : "#8B847E"} fontWeight={d.isToday ? "700" : "400"}>
+              {d.label}{d.isToday ? " ★" : ""}
+            </text>
+          </g>
+        ))}
+      </svg>
+    );
+  }
+
+  function OutcomesDonut() {
+    const slices = [
+      { key: "order", label: t.statusOrdered || "Order", value: stats.totalOrders, color: "#73A626" },
+      { key: "callback", label: t.statusCallback || "Callback", value: stats.totalCallbacks, color: "#5A6B85" },
+      { key: "no_ans", label: t.statusNoAnswer || "No answer", value: stats.totalNoAnswers, color: "#8B7355" },
+      { key: "price", label: t.statusPriceIssue || "Price issue", value: stats.totalPriceIssues, color: "#B8860B" },
+      { key: "not_int", label: t.statusNotInterested || "Not interested", value: stats.totalNotInterested, color: "#9C5757" },
+      { key: "other", label: t.statusOther || "Other", value: stats.totalOther, color: "#5A4A6B" },
+    ].filter((s) => s.value > 0);
+    const total = slices.reduce((s, x) => s + x.value, 0);
+    if (total === 0) return <div className="text-xs text-stone-400 italic text-center py-8">{t.noData || "No data"}</div>;
+    const R = 15.9;
+    let offset = 25;
+    const arcs = slices.map((s) => {
+      const pct = s.value / total;
+      const arc = pct * 100;
+      const arcEl = (
+        <circle
+          key={s.key}
+          cx="21" cy="21" r={R}
+          fill="transparent"
+          stroke={s.color}
+          strokeWidth="6"
+          strokeDasharray={`${arc} ${100 - arc}`}
+          strokeDashoffset={offset}
+        />
+      );
+      offset -= arc;
+      return arcEl;
+    });
+    return (
+      <div className="flex items-center gap-5">
+        <svg width="120" height="120" viewBox="0 0 42 42" className="flex-shrink-0">
+          <circle cx="21" cy="21" r={R} fill="transparent" stroke="#F0EDE7" strokeWidth="6"/>
+          {arcs}
+          <text x="21" y="22" textAnchor="middle" fontSize="6" fill="#1C1B1A" fontWeight="700">{total}</text>
+          <text x="21" y="27" textAnchor="middle" fontSize="3" fill="#8B847E">{t.calls || "calls"}</text>
+        </svg>
+        <div className="flex-1 space-y-1.5">
+          {slices.map((s) => (
+            <div key={s.key} className="flex items-center gap-2 text-xs">
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }}/>
+              <span className="flex-1 text-stone-700">{s.label}</span>
+              <span className="font-bold" style={{ color: s.color }}>{Math.round((s.value / total) * 100)}%</span>
+              <span className="text-[10px] text-stone-400 w-6 text-right">({s.value})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Top customers — bars showing # of orders per customer in the period.
+  function TopCustomersBars() {
+    if (!stats.topCustomers || stats.topCustomers.length === 0) {
+      return <div className="text-xs text-stone-400 italic text-center py-6">{t.noTopCustomers || "No orders yet in this period"}</div>;
+    }
+    const maxCount = Math.max(1, ...stats.topCustomers.map((x) => x.count));
+    return (
+      <div className="space-y-2">
+        {stats.topCustomers.map((row, idx) => {
+          const pct = (row.count / maxCount) * 100;
+          // Trophy emoji for #1, medals for #2 and #3
+          const rank = idx === 0 ? "🏆" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
+          return (
+            <div key={row.client.id} className="flex items-center gap-3">
+              <div className="text-xs font-medium text-stone-700 flex items-center gap-1" style={{ width: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {rank && <span style={{ fontSize: "12px" }}>{rank}</span>}
+                <span>{row.client.name}</span>
+              </div>
+              <div className="flex-1 h-5 rounded" style={{ background: "#FAF8F4" }}>
+                <div
+                  className="h-full rounded transition-all"
+                  style={{
+                    width: `${pct}%`,
+                    background: "linear-gradient(90deg, #5F2F9D, #844ECA)",
+                  }}
+                />
+              </div>
+              <div className="text-xs font-bold text-right" style={{ width: "42px", color: "#5F2F9D" }}>
+                {row.count} {row.count === 1 ? (t.orderShort || "ord") : (t.ordersShort || "ords")}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // My activity by day-of-week — simple bars Mon-Sat.
+  function DayOfWeekBars() {
+    const DOWS = [1, 2, 3, 4, 5, 6]; // Mon-Sat
+    const dayLabels = [null, t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"];
+    const counts = DOWS.map((d) => stats.ordersByDow[d]);
+    const maxCount = Math.max(1, ...counts);
+    if (maxCount === 0) {
+      return <div className="text-xs text-stone-400 italic text-center py-6">{t.noData || "No data yet"}</div>;
+    }
+    return (
+      <div className="flex items-end justify-around gap-2 h-32 pt-4 px-2">
+        {DOWS.map((dow, idx) => {
+          const count = counts[idx];
+          const heightPct = (count / maxCount) * 100;
+          return (
+            <div key={dow} className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full">
+              <div className="text-[11px] font-bold" style={{ color: count > 0 ? "#5F2F9D" : "#B5ADA5" }}>
+                {count > 0 ? count : ""}
+              </div>
+              <div
+                className="w-full rounded-t-md transition-all"
+                style={{
+                  height: count > 0 ? `${heightPct}%` : "4px",
+                  minHeight: count > 0 ? "8px" : "4px",
+                  background: count > 0
+                    ? "linear-gradient(180deg, #844ECA 0%, #5F2F9D 100%)"
+                    : "#F0EDE7",
+                }}
+              />
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: "#6B6560", fontWeight: 600 }}>
+                {dayLabels[dow]}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function Funnel() {
+    const { total, contacted, gotOutcome, ordered } = stats.funnel;
+    if (total === 0) return <div className="text-xs text-stone-400 italic text-center py-6">{t.noData || "No data"}</div>;
+    const rows = [
+      { label: t.funnelMyTotal || "My customers", value: total, pct: 100, color: "#5F2F9D" },
+      { label: t.funnelContacted || "Contacted", value: contacted, pct: Math.round((contacted / total) * 100), color: "#844ECA" },
+      { label: t.funnelOutcome || "Got outcome", value: gotOutcome, pct: Math.round((gotOutcome / total) * 100), color: "#9F6FD9" },
+      { label: t.funnelOrdered || "Ordered", value: ordered, pct: Math.round((ordered / total) * 100), color: "#73A626" },
+    ];
+    return (
+      <div className="space-y-2">
+        {rows.map((r, idx) => (
+          <div key={idx}>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-stone-700">{r.label}</span>
+              <span className="font-bold" style={{ color: r.color }}>{r.value}</span>
+            </div>
+            <div className="h-6 rounded-md overflow-hidden" style={{ background: "#FAF8F4" }}>
+              <div
+                className="h-full rounded-md flex items-center px-3 text-[11px] font-bold text-white transition-all"
+                style={{ width: `${r.pct}%`, background: r.color }}
+              >
+                {r.pct >= 8 ? `${r.pct}%` : ""}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const myVendor = vendors.find((v) => v.id === vendorId);
+  const periodLabel = period === "today" ? (t.today || "Today") : period === "week" ? (t.thisWeek || "This week") : (t.thisMonth || "This month");
+
+  return (
+    <div className="max-w-3xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={14} />
+        <span>{t.back || "Back"}</span>
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">
+          {myVendor?.name || t.myAnalytics || "My Analytics"}
+        </div>
+        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+          📊 {t.myAnalytics || "My Analytics"}
+        </h1>
+        <p className="text-stone-600 text-sm mt-1">
+          {t.myAnalyticsSubtitle || "Your performance over time"}
+        </p>
+      </div>
+
+      {/* Period selector */}
+      <div className="inline-flex p-1 rounded-xl mb-6 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        {[
+          { key: "today", label: t.today || "Today" },
+          { key: "week", label: t.thisWeek || "This week" },
+          { key: "month", label: t.thisMonth || "This month" },
+        ].map((p) => (
+          <button
+            key={p.key}
+            onClick={() => setPeriod(p.key)}
+            className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
+            style={{
+              background: period === p.key ? BRAND_PURPLE : "transparent",
+              color: period === p.key ? "white" : "#6B6560",
+            }}
+          >
+            {p.label}
+          </button>
+        ))}
+        {loadingPeriod && (
+          <span className="text-[10px] flex items-center px-3" style={{ color: "#8B847E" }}>
+            {t.loadingDots || "loading…"}
+          </span>
+        )}
+      </div>
+
+      {/* CHART 1: My sales trend */}
+      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: "#6B6560" }}>
+              📈 {t.chartMySales || "My sales trend · last 7 days"}
+            </div>
+            <div className="text-2xl font-bold" style={{ color: "#1C1B1A" }}>
+              {stats.last7Days.reduce((s, d) => s + d.orders, 0)} {t.orders || "orders"}
+            </div>
+            <div className="text-[11px]" style={{ color: "#8B847E" }}>
+              {t.includingToday || "Including today"}
+            </div>
+          </div>
+        </div>
+        <LineChart data={stats.last7Days} />
+      </div>
+
+      {/* CHART 2 + Funnel side-by-side on desktop, stacked on mobile */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+            🥧 {t.chartMyOutcomes || "My outcomes"}
+          </div>
+          <OutcomesDonut />
+        </div>
+
+        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+            🎯 {t.chartMyFunnel || "My conversion funnel"}
+          </div>
+          <Funnel />
+        </div>
+      </div>
+
+      {/* CHART 3: Top customers */}
+      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+          🏆 {t.chartMyTopCustomers || "My top customers"} · {periodLabel}
+        </div>
+        <TopCustomersBars />
+      </div>
+
+      {/* CHART 4: Activity by day of week */}
+      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        <div className="text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color: "#6B6560" }}>
+          🗓️ {t.chartMyDow || "My activity by day of week"}
+        </div>
+        <p className="text-[11px] text-stone-500 mb-4">
+          {t.chartMyDowSub || "When you sell most"}
+        </p>
+        <DayOfWeekBars />
+      </div>
+    </div>
+  );
+}
+
 
 // ============================================
 // SALES INSIGHTS VIEW (analyze ordering patterns by day)
@@ -9762,7 +10208,7 @@ function TrendsTab({ t, dowLabels, dowLabelsLong, trends, totalOrders }) {
 
 // ---------- VENDOR VIEW (main vendor home screen) ----------
 function VendorView({ t, vendorId, vendors, clients, leads, interactions, templates, tasks, quotas, tags, myPhone, onUpdatePhone, onLog, onUndo, onUpdate, onCloseCallback, onRequestLead, onCreateTask, onUpdateTask, onDeleteTask, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, onConvertLead, isManagerMode, onCreateClientDirect, onCreateLeadDirect, onBack, editRequests, onCreateEditRequest, onCancelEditRequest }) {
-  const [view, setView] = useState("home"); // "home" | "insights"
+  const [view, setView] = useState("home"); // "home" | "insights" | "analytics"
   const [searchQuery, setSearchQuery] = useState("");
   // Active tab for client status sections. Default to "to_contact" — the most actionable group today.
   const [activeTab, setActiveTab] = useState("to_contact");
@@ -10037,6 +10483,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
   const [showSMS, setShowSMS] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  // Same pattern as Insights but for the personal Analytics dashboard
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [rankingPeriod, setRankingPeriod] = useState("week");
   const [rankingInts, setRankingInts] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(true);
@@ -10050,9 +10498,12 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   useEffect(() => {
     if (typeof window === "undefined") return;
     function handlePopState(event) {
-      // If the new history state is NOT the insights view, close insights
+      // If the new history state is NOT one of our sub-views, close them all
       if (event.state?.vendorView !== "insights") {
         setShowInsights(false);
+      }
+      if (event.state?.vendorView !== "analytics") {
+        setShowAnalytics(false);
       }
     }
     window.addEventListener("popstate", handlePopState);
@@ -10072,6 +10523,22 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       window.history.back();
     } else {
       setShowInsights(false);
+    }
+  }
+
+  // Analytics open/close — same pattern as Insights
+  function openAnalytics() {
+    setShowAnalytics(true);
+    if (typeof window !== "undefined") {
+      window.history.pushState({ vendorView: "analytics" }, "");
+    }
+  }
+
+  function closeAnalytics() {
+    if (typeof window !== "undefined" && window.history.state?.vendorView === "analytics") {
+      window.history.back();
+    } else {
+      setShowAnalytics(false);
     }
   }
 
@@ -10125,6 +10592,21 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         clients={clients}
         vendorInteractions={insightsInts}
         onBack={closeInsights}
+      />
+    );
+  }
+
+  // Show My Analytics as a full-screen sub-view (vendor's personal dashboard)
+  if (showAnalytics) {
+    return (
+      <VendorAnalyticsView
+        t={t}
+        vendorId={vendorId}
+        vendors={vendors}
+        clients={clients}
+        interactions={interactions}
+        loadInteractionsForDays={loadInteractionsForDays}
+        onBack={closeAnalytics}
       />
     );
   }
@@ -10471,6 +10953,25 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           <div className="min-w-0">
             <div className="font-semibold text-sm">{t.salesInsights || "Sales Insights"}</div>
             <div className="text-xs opacity-80 truncate">{t.salesInsightsTagline || "See who orders on which days"}</div>
+          </div>
+        </div>
+        <ChevronRight size={18} className="flex-shrink-0 opacity-90" />
+      </button>
+
+      {/* My Analytics — personal performance dashboard with 4 charts.
+          Darker purple gradient to visually distinguish from Sales Insights. */}
+      <button
+        onClick={openAnalytics}
+        className="w-full text-left rounded-2xl p-4 mb-4 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+        style={{ background: "linear-gradient(135deg, #3D2A6B 0%, #5F2F9D 100%)", color: "white" }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.18)" }}>
+            <span style={{ fontSize: "20px" }}>📊</span>
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-sm">{t.myAnalytics || "My Analytics"}</div>
+            <div className="text-xs opacity-80 truncate">{t.myAnalyticsTagline || "Charts & trends of your sales"}</div>
           </div>
         </div>
         <ChevronRight size={18} className="flex-shrink-0 opacity-90" />
