@@ -243,6 +243,51 @@ const T = {
     myManagerSalesMode: "My Sales (Manager mode)",
     salesInsightsTagline: "See who orders on which days",
     myAnalytics: "My Analytics",
+    csvImportTitle: "Import from CSV",
+    csvImportSubtitle: "Bulk upload customers and leads",
+    bulkImport: "Bulk import",
+    downloadTemplate: "Download CSV template",
+    csvStep1: "Download our template",
+    csvStep1Sub: "The template has the correct column names and example rows.",
+    csvStep2: "Fill it in",
+    csvStep2Sub: "Open the template in Excel or Google Sheets and fill in your customers/leads.",
+    csvStep3: "Upload your CSV",
+    csvColumnHelp: "Column reference:",
+    vendorAssignNote: "Vendor assignment is done after import (in the customers list).",
+    dropFile: "Click to choose a CSV file",
+    acceptCsv: "Accepts .csv files",
+    preview: "Preview",
+    readyToImport: "Ready",
+    duplicates: "Duplicates",
+    errors: "Errors",
+    errorsWillBeSkipped: "Errors (will be skipped):",
+    duplicatesFound: "Duplicates found",
+    duplicateExplain: "You'll review each duplicate before import to decide whether to skip or overwrite.",
+    reviewAndImport: "Review duplicates & import",
+    importRows: "Import",
+    row: "row",
+    rows: "rows",
+    previewTable: "Preview",
+    of: "of",
+    type: "Type",
+    nameCol: "Name",
+    phoneCol: "Phone",
+    daysCol: "Days",
+    duplicate: "Duplicate",
+    duplicateFound: "Duplicate found",
+    existingInDb: "Existing record",
+    fromCsv: "From your CSV",
+    skipKeep: "Skip (keep existing)",
+    overwrite: "Overwrite with CSV",
+    importing: "Importing...",
+    pleaseWait: "Please wait, this may take a moment.",
+    importComplete: "Import complete",
+    created: "Created",
+    overwritten: "Overwritten",
+    skipped: "Skipped",
+    errorsDuringImport: "error(s) during import:",
+    importMore: "Import more",
+    done: "Done",
     myAnalyticsTagline: "Charts & trends of your sales",
     myAnalyticsSubtitle: "Your performance over time",
     chartMySales: "My sales trend · last 7 days",
@@ -1020,6 +1065,51 @@ const T = {
     myManagerSalesMode: "Mis Ventas (Modo Manager)",
     salesInsightsTagline: "Ver quién ordena qué días",
     myAnalytics: "Mi Analítica",
+    csvImportTitle: "Importar desde CSV",
+    csvImportSubtitle: "Carga masiva de clientes y leads",
+    bulkImport: "Importación masiva",
+    downloadTemplate: "Descargar plantilla CSV",
+    csvStep1: "Descarga nuestra plantilla",
+    csvStep1Sub: "La plantilla tiene los nombres correctos de columnas y filas de ejemplo.",
+    csvStep2: "Llena la plantilla",
+    csvStep2Sub: "Abre la plantilla en Excel o Google Sheets y completa tus clientes/leads.",
+    csvStep3: "Sube tu CSV",
+    csvColumnHelp: "Referencia de columnas:",
+    vendorAssignNote: "La asignación a vendedor se hace después de importar (en la lista de clientes).",
+    dropFile: "Click para elegir un archivo CSV",
+    acceptCsv: "Acepta archivos .csv",
+    preview: "Vista previa",
+    readyToImport: "Listos",
+    duplicates: "Duplicados",
+    errors: "Errores",
+    errorsWillBeSkipped: "Errores (se saltarán):",
+    duplicatesFound: "Duplicados encontrados",
+    duplicateExplain: "Revisarás cada duplicado antes de importar para decidir si saltar o sobrescribir.",
+    reviewAndImport: "Revisar duplicados e importar",
+    importRows: "Importar",
+    row: "fila",
+    rows: "filas",
+    previewTable: "Vista previa",
+    of: "de",
+    type: "Tipo",
+    nameCol: "Nombre",
+    phoneCol: "Teléfono",
+    daysCol: "Días",
+    duplicate: "Duplicado",
+    duplicateFound: "Duplicado encontrado",
+    existingInDb: "Registro existente",
+    fromCsv: "Desde tu CSV",
+    skipKeep: "Saltar (mantener existente)",
+    overwrite: "Sobrescribir con CSV",
+    importing: "Importando...",
+    pleaseWait: "Espera un momento por favor.",
+    importComplete: "Importación completa",
+    created: "Creados",
+    overwritten: "Sobrescritos",
+    skipped: "Saltados",
+    errorsDuringImport: "error(es) durante la importación:",
+    importMore: "Importar más",
+    done: "Listo",
     myAnalyticsTagline: "Gráficos y tendencias de tus ventas",
     myAnalyticsSubtitle: "Tu desempeño en el tiempo",
     chartMySales: "Mi tendencia de ventas · últimos 7 días",
@@ -4756,6 +4846,69 @@ export default function App() {
         />
       )}
 
+      {/* CSV bulk import view — manager only for now (vendor flow comes in phase 2) */}
+      {currentUser?.role === "admin" && adminView === "csv-import" && (
+        <CsvImportView
+          t={t}
+          currentUser={currentUser}
+          clients={clients}
+          leads={leads}
+          onCreateClient={async (data) => {
+            // Build a client object matching the local Client shape, then push through updateClients
+            const newClient = {
+              id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              name: data.name,
+              phone: data.phone,
+              contactName: data.contactName || "",
+              email: data.email || "",
+              longNote: data.longNote || "",
+              purchaseDays: data.purchaseDays || [],
+              frequency: data.frequency || "biweekly",
+              vendorId: data.vendorId || null,
+              tags: [],
+              createdAt: Date.now(),
+            };
+            await updateClients([...clients, newClient]);
+          }}
+          onUpdateClient={async (id, updates) => {
+            await updateClients(clients.map((c) => c.id === id ? { ...c, ...updates } : c));
+          }}
+          onCreateLead={async (data) => {
+            // Leads schema is leaner: name + phone + note (combine extra fields into note)
+            const noteLines = [];
+            if (data.contactName) noteLines.push(`Contact: ${data.contactName}`);
+            if (data.email) noteLines.push(`Email: ${data.email}`);
+            if (data.longNote) noteLines.push(data.longNote);
+            const note = noteLines.join("\n");
+            await createLead({
+              name: data.name,
+              phone: data.phone,
+              note,
+              status: "active", // manager-created leads bypass approval
+              assignedVendorId: null,
+              approvedAt: Date.now(),
+            });
+          }}
+          onUpdateLead={async (id, updates) => {
+            // Lead updates only support a subset of fields — we'll just update name/phone/note
+            const lead = leads.find((l) => l.id === id);
+            if (!lead) return;
+            const noteLines = [];
+            if (updates.contactName) noteLines.push(`Contact: ${updates.contactName}`);
+            if (updates.email) noteLines.push(`Email: ${updates.email}`);
+            if (updates.longNote) noteLines.push(updates.longNote);
+            const note = noteLines.join("\n");
+            await supabase.from("leads").update({
+              name: updates.name,
+              phone: updates.phone,
+              note,
+            }).eq("id", id);
+            setLeads(leads.map((l) => l.id === id ? { ...l, name: updates.name, phone: updates.phone, note } : l));
+          }}
+          onBack={() => window.history.back()}
+        />
+      )}
+
       {/* My Sales: manager uses the same VendorView with their own ID as vendorId.
           All RLS-respected data is loaded — clients assigned to the manager will show.
           The Back button on VendorView triggers window.history.back() → returns to admin home. */}
@@ -6113,6 +6266,25 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             </div>
           </div>
           <ChevronRight size={18} className="text-stone-400" />
+        </button>
+
+        {/* CSV bulk import — manager-only quick entry to import many customers/leads at once.
+            Uses a teal/blue color so it visually differs from the other admin buttons.  */}
+        <button
+          onClick={() => onPick("csv-import")}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "linear-gradient(135deg, #0E7C7B 0%, #2BA39A 100%)", color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <span style={{ fontSize: "20px" }}>📥</span>
+            </div>
+            <div>
+              <div className="font-semibold">{t.csvImportTitle || "Import from CSV"}</div>
+              <div className="text-xs opacity-80">{t.csvImportSubtitle || "Bulk upload customers and leads"}</div>
+            </div>
+          </div>
+          <ChevronRight size={18} className="opacity-80" />
         </button>
 
         {/* External link — opens Produce Dock in a new tab. Sits at the end of the
@@ -9498,6 +9670,647 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
         </p>
         <DayOfWeekBars />
       </div>
+    </div>
+  );
+}
+
+
+// ============================================
+// CSV IMPORT VIEW (manager-only — bulk customer/lead import from CSV)
+// ============================================
+//
+// Workflow:
+//   1. Download template
+//   2. Upload filled CSV
+//   3. Parse + validate rows (show errors)
+//   4. For each duplicate, ask "overwrite or skip" (one-by-one prompt)
+//   5. Bulk insert valid rows + report results
+//
+// CSV columns:
+//   type, name, phone, contact_name, email, purchase_days, frequency, notes
+//   - type: "customer" or "lead" (default "customer")
+//   - purchase_days: comma-sep list like "M,W,F" (only for customers)
+//   - frequency: "daily" or "biweekly" (only for customers)
+//   - All rows imported UNASSIGNED — manager assigns vendor later
+function CsvImportView({ t, currentUser, clients, leads, onCreateClient, onCreateLead, onUpdateClient, onUpdateLead, onBack }) {
+  // STAGE: "upload" | "preview" | "duplicates" | "importing" | "done"
+  const [stage, setStage] = useState("upload");
+  const [fileName, setFileName] = useState("");
+  const [parsedRows, setParsedRows] = useState([]); // { row, type, data, errors, duplicate }
+  const [currentDuplicateIdx, setCurrentDuplicateIdx] = useState(0);
+  const [importResult, setImportResult] = useState({ created: 0, overwritten: 0, skipped: 0, errors: [] });
+  const [importing, setImporting] = useState(false);
+
+  // ============================================
+  // CSV TEMPLATE — what the user downloads
+  // ============================================
+  function downloadTemplate() {
+    const headers = "type,name,phone,contact_name,email,purchase_days,frequency,notes";
+    const examples = [
+      `customer,Mary's Bistro,(305) 555-1234,Mary Smith,mary@example.com,"M,W,F",biweekly,VIP customer`,
+      `customer,Joe's Market,(305) 555-2222,Joe,joe@market.com,"T,Th",biweekly,`,
+      `lead,Sunrise Foods,(305) 555-3333,,info@sunrise.com,,,Interested in tomatoes`,
+    ].join("\n");
+    const csv = headers + "\n" + examples + "\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "icon_produce_import_template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ============================================
+  // CSV PARSER — a minimal RFC 4180-ish parser
+  // ============================================
+  // Handles quoted fields with embedded commas. Doesn't handle escaped quotes (`""`)
+  // perfectly, but good enough for a basic spreadsheet export.
+  function parseCsv(text) {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length < 2) return { headers: [], rows: [] };
+    function splitLine(line) {
+      const out = [];
+      let cur = "";
+      let inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQ = !inQ; continue; }
+        if (c === "," && !inQ) { out.push(cur); cur = ""; continue; }
+        cur += c;
+      }
+      out.push(cur);
+      return out.map((s) => s.trim());
+    }
+    const headers = splitLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, "_"));
+    const rows = lines.slice(1).map((line) => {
+      const cells = splitLine(line);
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = cells[i] || ""; });
+      return obj;
+    });
+    return { headers, rows };
+  }
+
+  // ============================================
+  // VALIDATOR — checks one row, returns { data, errors }
+  // ============================================
+  function validateRow(raw, rowNumber) {
+    const errors = [];
+    const data = {};
+
+    // type: customer | lead (default customer)
+    const type = (raw.type || "customer").toLowerCase();
+    if (type !== "customer" && type !== "lead") {
+      errors.push(`type must be "customer" or "lead" (got "${raw.type}")`);
+    }
+    data.type = type;
+
+    // name: required
+    if (!raw.name || !raw.name.trim()) errors.push("name is required");
+    data.name = (raw.name || "").trim();
+
+    // phone: required for both customers and leads
+    if (!raw.phone || !raw.phone.trim()) {
+      errors.push("phone is required");
+    }
+    data.phone = (raw.phone || "").trim();
+
+    // contact_name + email: optional
+    data.contactName = (raw.contact_name || "").trim();
+    data.email = (raw.email || "").trim();
+
+    // notes: optional, becomes longNote
+    data.longNote = (raw.notes || "").trim();
+
+    if (type === "customer") {
+      // purchase_days: required for customers, must be at least one of M,T,W,Th,F,S
+      const dayMap = { m: 1, t: 2, w: 3, th: 4, f: 5, s: 6, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+      const dayStr = (raw.purchase_days || "").trim();
+      if (!dayStr) {
+        errors.push("purchase_days is required for customers (e.g. \"M,W,F\")");
+        data.purchaseDays = [];
+      } else {
+        const parts = dayStr.split(/[,;\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+        const days = [];
+        const invalid = [];
+        parts.forEach((p) => {
+          if (dayMap[p] !== undefined) {
+            if (!days.includes(dayMap[p])) days.push(dayMap[p]);
+          } else {
+            invalid.push(p);
+          }
+        });
+        if (invalid.length > 0) errors.push(`invalid days: ${invalid.join(", ")} (use M,T,W,Th,F,S)`);
+        if (days.length === 0) errors.push("at least one valid purchase_day required");
+        data.purchaseDays = days.sort((a, b) => a - b);
+      }
+      // frequency: optional, default biweekly
+      const freq = (raw.frequency || "biweekly").toLowerCase();
+      if (freq !== "daily" && freq !== "biweekly") {
+        errors.push(`frequency must be "daily" or "biweekly" (got "${raw.frequency}")`);
+      }
+      data.frequency = freq;
+    }
+
+    return { row: rowNumber, type, data, errors, duplicate: null, resolution: null };
+  }
+
+  // ============================================
+  // DUPLICATE DETECTOR
+  // ============================================
+  // Considers a row a duplicate if (phone matches OR name matches case-insensitive)
+  // an existing client/lead OF THE SAME TYPE.
+  function findDuplicate(parsed) {
+    const list = parsed.type === "customer" ? clients : leads;
+    if (!list) return null;
+    const normPhone = (parsed.data.phone || "").replace(/\D/g, "");
+    const lname = (parsed.data.name || "").toLowerCase().trim();
+    for (const it of list) {
+      const itPhone = (it.phone || "").replace(/\D/g, "");
+      const itName = (it.name || "").toLowerCase().trim();
+      if (normPhone && itPhone === normPhone) return it;
+      if (lname && itName === lname) return it;
+    }
+    return null;
+  }
+
+  // ============================================
+  // FILE UPLOAD HANDLER
+  // ============================================
+  function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result || "";
+      const { rows } = parseCsv(String(text));
+      const validated = rows.map((r, idx) => validateRow(r, idx + 2)); // +2 because row 1 is header, indexes start at 0
+      // Attach duplicate info
+      validated.forEach((v) => {
+        if (v.errors.length === 0) {
+          v.duplicate = findDuplicate(v);
+        }
+      });
+      setParsedRows(validated);
+      setStage("preview");
+    };
+    reader.readAsText(file);
+  }
+
+  // ============================================
+  // PREVIEW STAGE — show counts + errors + start
+  // ============================================
+  const validRows = parsedRows.filter((p) => p.errors.length === 0);
+  const errorRows = parsedRows.filter((p) => p.errors.length > 0);
+  const duplicateRows = validRows.filter((p) => p.duplicate);
+  const cleanRows = validRows.filter((p) => !p.duplicate);
+
+  function startImport() {
+    // If duplicates exist, go to per-row resolution stage
+    if (duplicateRows.length > 0) {
+      setCurrentDuplicateIdx(0);
+      setStage("duplicates");
+    } else {
+      doImport();
+    }
+  }
+
+  function resolveDuplicate(action) {
+    // action: "skip" | "overwrite"
+    const updated = [...parsedRows];
+    const dups = updated.filter((p) => p.errors.length === 0 && p.duplicate);
+    if (dups[currentDuplicateIdx]) {
+      // Find the actual index in parsedRows so we modify the right object
+      const target = dups[currentDuplicateIdx];
+      const idxInParsed = updated.indexOf(target);
+      updated[idxInParsed] = { ...target, resolution: action };
+      setParsedRows(updated);
+    }
+    if (currentDuplicateIdx + 1 < dups.length) {
+      setCurrentDuplicateIdx(currentDuplicateIdx + 1);
+    } else {
+      // All resolved — proceed to import
+      doImportWith(updated);
+    }
+  }
+
+  // ============================================
+  // BULK IMPORT — calls onCreateClient/Lead/onUpdate for each valid row
+  // ============================================
+  async function doImport() {
+    return doImportWith(parsedRows);
+  }
+
+  async function doImportWith(rows) {
+    setStage("importing");
+    setImporting(true);
+    const result = { created: 0, overwritten: 0, skipped: 0, errors: [] };
+
+    for (const r of rows) {
+      // Skip rows with errors
+      if (r.errors.length > 0) continue;
+
+      try {
+        if (r.duplicate && r.resolution === "skip") {
+          result.skipped++;
+          continue;
+        }
+
+        if (r.duplicate && r.resolution === "overwrite") {
+          // Update existing record
+          const updates = {
+            name: r.data.name,
+            phone: r.data.phone,
+            contactName: r.data.contactName,
+            email: r.data.email,
+            longNote: r.data.longNote,
+          };
+          if (r.type === "customer") {
+            updates.purchaseDays = r.data.purchaseDays;
+            updates.frequency = r.data.frequency;
+            await onUpdateClient(r.duplicate.id, updates);
+          } else {
+            if (onUpdateLead) await onUpdateLead(r.duplicate.id, updates);
+          }
+          result.overwritten++;
+          continue;
+        }
+
+        if (r.duplicate && !r.resolution) {
+          // Should not happen, but treat as skip
+          result.skipped++;
+          continue;
+        }
+
+        // Fresh insert (no duplicate)
+        if (r.type === "customer") {
+          await onCreateClient({
+            name: r.data.name,
+            phone: r.data.phone,
+            contactName: r.data.contactName,
+            email: r.data.email,
+            longNote: r.data.longNote,
+            purchaseDays: r.data.purchaseDays,
+            frequency: r.data.frequency,
+            vendorId: null, // unassigned — manager assigns later
+          });
+        } else {
+          await onCreateLead({
+            name: r.data.name,
+            phone: r.data.phone,
+            contactName: r.data.contactName,
+            email: r.data.email,
+            longNote: r.data.longNote,
+            assignedVendorId: null,
+          });
+        }
+        result.created++;
+      } catch (err) {
+        console.error("CSV import row failed:", r.row, err);
+        result.errors.push({ row: r.row, name: r.data.name, message: err?.message || "Unknown error" });
+      }
+    }
+
+    setImportResult(result);
+    setImporting(false);
+    setStage("done");
+  }
+
+  function reset() {
+    setStage("upload");
+    setFileName("");
+    setParsedRows([]);
+    setCurrentDuplicateIdx(0);
+    setImportResult({ created: 0, overwritten: 0, skipped: 0, errors: [] });
+  }
+
+  // ============================================
+  // RENDER
+  // ============================================
+  return (
+    <div className="max-w-3xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={14} />
+        <span>{t.back || "Back"}</span>
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">
+          {t.bulkImport || "Bulk import"}
+        </div>
+        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+          📥 {t.csvImportTitle || "Import from CSV"}
+        </h1>
+        <p className="text-stone-600 text-sm mt-1">
+          {t.csvImportSubtitle || "Bulk upload customers and leads from a spreadsheet"}
+        </p>
+      </div>
+
+      {/* ===== STAGE 1: UPLOAD ===== */}
+      {stage === "upload" && (
+        <div className="space-y-5">
+          {/* Step 1: download template */}
+          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: BRAND_PURPLE, color: "white" }}>1</div>
+              <div className="flex-1">
+                <div className="font-semibold mb-1">{t.csvStep1 || "Download our template"}</div>
+                <p className="text-xs text-stone-600 mb-3">
+                  {t.csvStep1Sub || "The template has the correct column names and example rows."}
+                </p>
+                <button
+                  onClick={downloadTemplate}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors hover:opacity-90"
+                  style={{ background: BRAND_PURPLE, color: "white" }}
+                >
+                  ⬇ {t.downloadTemplate || "Download CSV template"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Step 2: fill it */}
+          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: BRAND_PURPLE, color: "white" }}>2</div>
+              <div className="flex-1">
+                <div className="font-semibold mb-1">{t.csvStep2 || "Fill it in"}</div>
+                <p className="text-xs text-stone-600 mb-2">
+                  {t.csvStep2Sub || "Open the template in Excel or Google Sheets and fill in your customers/leads."}
+                </p>
+                <div className="text-[11px] bg-stone-50 rounded p-3 space-y-1.5">
+                  <div className="font-semibold text-stone-700">{t.csvColumnHelp || "Column reference:"}</div>
+                  <div><span className="font-mono font-semibold">type</span> — "customer" or "lead" (default: customer)</div>
+                  <div><span className="font-mono font-semibold">name</span> — Business name (required)</div>
+                  <div><span className="font-mono font-semibold">phone</span> — Phone number (required)</div>
+                  <div><span className="font-mono font-semibold">contact_name</span> — Person to ask for</div>
+                  <div><span className="font-mono font-semibold">email</span> — Contact email</div>
+                  <div><span className="font-mono font-semibold">purchase_days</span> — Days like "M,W,F" (customers only)</div>
+                  <div><span className="font-mono font-semibold">frequency</span> — "daily" or "biweekly" (default: biweekly)</div>
+                  <div><span className="font-mono font-semibold">notes</span> — Free-form notes</div>
+                </div>
+                <div className="text-[11px] text-stone-500 mt-2 italic">
+                  {t.vendorAssignNote || "Vendor assignment is done after import (in the customers list)."}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Step 3: upload */}
+          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: BRAND_PURPLE, color: "white" }}>3</div>
+              <div className="flex-1">
+                <div className="font-semibold mb-2">{t.csvStep3 || "Upload your CSV"}</div>
+                <label className="block w-full cursor-pointer">
+                  <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+                  <div className="border-2 border-dashed rounded-lg p-8 text-center transition-colors hover:border-purple-400" style={{ borderColor: "#E5E0DA" }}>
+                    <div className="text-3xl mb-2">📄</div>
+                    <div className="text-sm font-semibold text-stone-700">{t.dropFile || "Click to choose a CSV file"}</div>
+                    <div className="text-[11px] text-stone-500 mt-1">{t.acceptCsv || "Accepts .csv files"}</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== STAGE 2: PREVIEW ===== */}
+      {stage === "preview" && (
+        <div className="space-y-4">
+          <div className="rounded-2xl p-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+            <div className="text-[11px] text-stone-500 mb-1">{fileName}</div>
+            <div className="font-semibold text-lg mb-3">{t.preview || "Preview"}</div>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="rounded-lg p-3" style={{ background: "#F0F8E8", border: "1px solid #C5E0A3" }}>
+                <div className="text-2xl font-bold" style={{ color: "#5A7A22" }}>{cleanRows.length}</div>
+                <div className="text-[11px] text-stone-700">{t.readyToImport || "Ready"}</div>
+              </div>
+              <div className="rounded-lg p-3" style={{ background: "#FFF5D6", border: "1px solid #E8C97A" }}>
+                <div className="text-2xl font-bold" style={{ color: "#8B6F1A" }}>{duplicateRows.length}</div>
+                <div className="text-[11px] text-stone-700">{t.duplicates || "Duplicates"}</div>
+              </div>
+              <div className="rounded-lg p-3" style={{ background: "#FEF2EE", border: "1px solid #F5C5B7" }}>
+                <div className="text-2xl font-bold" style={{ color: "#9C5757" }}>{errorRows.length}</div>
+                <div className="text-[11px] text-stone-700">{t.errors || "Errors"}</div>
+              </div>
+            </div>
+
+            {errorRows.length > 0 && (
+              <div className="rounded-lg p-3 mb-3" style={{ background: "#FEF8F6", border: "1px solid #F5C5B7" }}>
+                <div className="text-xs font-bold mb-2" style={{ color: "#9C5757" }}>❌ {t.errorsWillBeSkipped || "Errors (will be skipped):"}</div>
+                <div className="max-h-32 overflow-y-auto text-[11px] space-y-1">
+                  {errorRows.map((er, idx) => (
+                    <div key={idx} className="text-stone-700">
+                      <span className="font-semibold">Row {er.row}{er.data.name ? ` (${er.data.name})` : ""}:</span>{" "}
+                      <span className="text-stone-600">{er.errors.join("; ")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {duplicateRows.length > 0 && (
+              <div className="rounded-lg p-3 mb-3" style={{ background: "#FFFBED", border: "1px solid #FFE599" }}>
+                <div className="text-xs font-bold mb-1" style={{ color: "#8B6F1A" }}>⚠️ {t.duplicatesFound || "Duplicates found"}</div>
+                <div className="text-[11px] text-stone-700">
+                  {t.duplicateExplain || "You'll review each duplicate before import to decide whether to skip or overwrite."}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={startImport}
+                disabled={validRows.length === 0}
+                className="flex-1 py-3 rounded-lg font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: BRAND_PURPLE, color: "white" }}
+              >
+                {duplicateRows.length > 0
+                  ? `${t.reviewAndImport || "Review duplicates & import"} (${validRows.length})`
+                  : `${t.importRows || "Import"} ${validRows.length} ${validRows.length === 1 ? (t.row || "row") : (t.rows || "rows")}`}
+              </button>
+              <button
+                onClick={reset}
+                className="px-4 py-3 rounded-lg font-semibold text-sm border transition-colors"
+                style={{ background: "white", color: "#5F2F9D", borderColor: "#E5E0DA" }}
+              >
+                {t.cancel || "Cancel"}
+              </button>
+            </div>
+          </div>
+
+          {/* Preview table (first 10 valid rows) */}
+          {cleanRows.length > 0 && (
+            <div className="rounded-2xl p-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+              <div className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: "#6B6560" }}>
+                {t.previewTable || "Preview"} ({Math.min(10, cleanRows.length)} {t.of || "of"} {cleanRows.length})
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: "#FAF8F4" }}>
+                      <th className="text-left p-2 font-semibold">{t.type || "Type"}</th>
+                      <th className="text-left p-2 font-semibold">{t.nameCol || "Name"}</th>
+                      <th className="text-left p-2 font-semibold">{t.phoneCol || "Phone"}</th>
+                      <th className="text-left p-2 font-semibold">{t.daysCol || "Days"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cleanRows.slice(0, 10).map((r, idx) => (
+                      <tr key={idx} className="border-t border-stone-100">
+                        <td className="p-2">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{
+                            background: r.type === "customer" ? "#F0E8FA" : "#FFF5D6",
+                            color: r.type === "customer" ? "#5F2F9D" : "#8B6F1A",
+                          }}>{r.type}</span>
+                        </td>
+                        <td className="p-2 font-medium">{r.data.name}</td>
+                        <td className="p-2 text-stone-600">{r.data.phone}</td>
+                        <td className="p-2 text-stone-600">
+                          {r.type === "customer" && r.data.purchaseDays.length > 0
+                            ? r.data.purchaseDays.map((d) => ["S","M","T","W","Th","F","St"][d]).join(",")
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== STAGE 3: DUPLICATE RESOLUTION ===== */}
+      {stage === "duplicates" && (() => {
+        const dups = parsedRows.filter((p) => p.errors.length === 0 && p.duplicate);
+        const current = dups[currentDuplicateIdx];
+        if (!current) return null;
+        const existing = current.duplicate;
+        return (
+          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+            <div className="text-[11px] text-stone-500 mb-1">
+              {t.duplicate || "Duplicate"} {currentDuplicateIdx + 1} {t.of || "of"} {dups.length}
+            </div>
+            <div className="font-bold text-lg mb-4" style={{ color: "#8B6F1A" }}>
+              ⚠️ {t.duplicateFound || "Duplicate found"}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+              {/* Existing record */}
+              <div className="rounded-lg p-3" style={{ background: "#FAF8F4", border: "1px solid #E5E0DA" }}>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500 mb-2">
+                  {t.existingInDb || "Existing record"}
+                </div>
+                <div className="font-semibold text-sm">{existing.name}</div>
+                <div className="text-xs text-stone-600 mt-1">{existing.phone}</div>
+                {existing.contactName && <div className="text-xs text-stone-600">👤 {existing.contactName}</div>}
+                {existing.email && <div className="text-xs text-stone-600">✉️ {existing.email}</div>}
+              </div>
+
+              {/* New row from CSV */}
+              <div className="rounded-lg p-3" style={{ background: "#F0E8FA", border: "1px solid #C8B0E7" }}>
+                <div className="text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: "#5F2F9D" }}>
+                  {t.fromCsv || "From your CSV"}
+                </div>
+                <div className="font-semibold text-sm">{current.data.name}</div>
+                <div className="text-xs text-stone-600 mt-1">{current.data.phone}</div>
+                {current.data.contactName && <div className="text-xs text-stone-600">👤 {current.data.contactName}</div>}
+                {current.data.email && <div className="text-xs text-stone-600">✉️ {current.data.email}</div>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => resolveDuplicate("skip")}
+                className="py-3 rounded-lg font-semibold text-sm border transition-colors"
+                style={{ background: "white", color: "#6B6560", borderColor: "#E5E0DA" }}
+              >
+                ⏭ {t.skipKeep || "Skip (keep existing)"}
+              </button>
+              <button
+                onClick={() => resolveDuplicate("overwrite")}
+                className="py-3 rounded-lg font-semibold text-sm transition-colors"
+                style={{ background: BRAND_PURPLE, color: "white" }}
+              >
+                ↻ {t.overwrite || "Overwrite with CSV"}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===== STAGE 4: IMPORTING ===== */}
+      {stage === "importing" && (
+        <div className="rounded-2xl p-8 card-shadow text-center" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="text-4xl mb-3">⏳</div>
+          <div className="font-semibold text-lg mb-1">{t.importing || "Importing..."}</div>
+          <div className="text-xs text-stone-500">{t.pleaseWait || "Please wait, this may take a moment."}</div>
+        </div>
+      )}
+
+      {/* ===== STAGE 5: DONE ===== */}
+      {stage === "done" && (
+        <div className="space-y-4">
+          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+            <div className="text-3xl mb-2">✅</div>
+            <div className="font-bold text-xl mb-4">{t.importComplete || "Import complete"}</div>
+
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="rounded-lg p-3" style={{ background: "#F0F8E8", border: "1px solid #C5E0A3" }}>
+                <div className="text-2xl font-bold" style={{ color: "#5A7A22" }}>{importResult.created}</div>
+                <div className="text-[11px] text-stone-700">{t.created || "Created"}</div>
+              </div>
+              <div className="rounded-lg p-3" style={{ background: "#F0E8FA", border: "1px solid #C8B0E7" }}>
+                <div className="text-2xl font-bold" style={{ color: "#5F2F9D" }}>{importResult.overwritten}</div>
+                <div className="text-[11px] text-stone-700">{t.overwritten || "Overwritten"}</div>
+              </div>
+              <div className="rounded-lg p-3" style={{ background: "#FFF5D6", border: "1px solid #E8C97A" }}>
+                <div className="text-2xl font-bold" style={{ color: "#8B6F1A" }}>{importResult.skipped}</div>
+                <div className="text-[11px] text-stone-700">{t.skipped || "Skipped"}</div>
+              </div>
+            </div>
+
+            {importResult.errors.length > 0 && (
+              <div className="rounded-lg p-3 mb-4" style={{ background: "#FEF2EE", border: "1px solid #F5C5B7" }}>
+                <div className="text-xs font-bold mb-2" style={{ color: "#9C5757" }}>
+                  ❌ {importResult.errors.length} {t.errorsDuringImport || "error(s) during import:"}
+                </div>
+                <div className="max-h-32 overflow-y-auto text-[11px] space-y-1">
+                  {importResult.errors.map((er, idx) => (
+                    <div key={idx} className="text-stone-700">
+                      <span className="font-semibold">Row {er.row}{er.name ? ` (${er.name})` : ""}:</span> {er.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={reset}
+                className="flex-1 py-3 rounded-lg font-semibold text-sm border transition-colors"
+                style={{ background: "white", color: "#5F2F9D", borderColor: "#E5E0DA" }}
+              >
+                {t.importMore || "Import more"}
+              </button>
+              <button
+                onClick={onBack}
+                className="flex-1 py-3 rounded-lg font-semibold text-sm transition-colors"
+                style={{ background: BRAND_PURPLE, color: "white" }}
+              >
+                {t.done || "Done"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
