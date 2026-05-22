@@ -213,6 +213,23 @@ const T = {
 
     // Sales Insights
     salesInsights: "Sales Insights",
+    salesInsightsTeamSub: "Team-wide ordering patterns",
+    analytics: "Analytics",
+    analyticsSub: "Visual dashboard — charts & trends",
+    analyticsSubtitle: "How your team is performing",
+    chartSalesTrend: "Sales trend · last 7 days",
+    chartOutcomes: "Call outcomes",
+    chartVendorPerf: "Vendor performance",
+    chartHeatmap: "Activity heatmap · vendor × day",
+    chartFunnel: "Conversion funnel",
+    funnelTotal: "Total customers",
+    funnelContacted: "Contacted",
+    funnelOutcome: "Got outcome",
+    funnelOrdered: "Ordered",
+    heatmapLegend: "Darker = more orders that day",
+    calls: "calls",
+    noData: "No data yet",
+    includingToday: "Including today",
     mySales: "My Sales",
     mySalesSub: "Your own assigned customers",
     convertToClient: "Convert to customer",
@@ -961,6 +978,22 @@ const T = {
 
     // Sales Insights
     salesInsights: "Análisis de Ventas",
+    analytics: "Analítica",
+    analyticsSub: "Dashboard visual — gráficos y tendencias",
+    analyticsSubtitle: "Cómo está performando tu equipo",
+    chartSalesTrend: "Tendencia de ventas · últimos 7 días",
+    chartOutcomes: "Resultados de llamadas",
+    chartVendorPerf: "Rendimiento por vendedor",
+    chartHeatmap: "Mapa de actividad · vendedor × día",
+    chartFunnel: "Embudo de conversión",
+    funnelTotal: "Total clientes",
+    funnelContacted: "Contactados",
+    funnelOutcome: "Con resultado",
+    funnelOrdered: "Ordenaron",
+    heatmapLegend: "Más oscuro = más órdenes ese día",
+    calls: "llamadas",
+    noData: "Sin datos aún",
+    includingToday: "Incluyendo hoy",
     mySales: "Mis Ventas",
     mySalesSub: "Tus propios clientes asignados",
     convertToClient: "Convertir a cliente",
@@ -4686,6 +4719,16 @@ export default function App() {
           onBack={() => window.history.back()}
         />
       )}
+      {currentUser?.role === "admin" && adminView === "analytics" && (
+        <AnalyticsView
+          t={t}
+          vendors={vendors}
+          clients={clients}
+          interactions={interactions}
+          loadInteractionsForDays={loadInteractionsForDays}
+          onBack={() => window.history.back()}
+        />
+      )}
 
       {/* My Sales: manager uses the same VendorView with their own ID as vendorId.
           All RLS-respected data is loaded — clients assigned to the manager will show.
@@ -5842,6 +5885,26 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             <div>
               <div className="font-semibold">{t.salesInsights || "Sales Insights"}</div>
               <div className="text-xs opacity-80">{t.salesInsightsTeamSub || "Team-wide ordering patterns"}</div>
+            </div>
+          </div>
+          <ChevronRight size={18} className="opacity-90" />
+        </button>
+
+        {/* Visual analytics dashboard — 5 charts for the manager.
+            Sits between Sales Insights (text-based patterns) and Weekly Report (PDF).
+            Uses a darker purple gradient so it visually distinguishes from Insights. */}
+        <button
+          onClick={() => onPick("analytics")}
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "linear-gradient(135deg, #3D2A6B 0%, #5F2F9D 100%)", color: "white" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
+              <span style={{ fontSize: "22px" }}>📊</span>
+            </div>
+            <div>
+              <div className="font-semibold">{t.analytics || "Analytics"}</div>
+              <div className="text-xs opacity-80">{t.analyticsSub || "Visual dashboard — charts & trends"}</div>
             </div>
           </div>
           <ChevronRight size={18} className="opacity-90" />
@@ -8542,6 +8605,453 @@ function ManagerInsightsView({ t, vendors, clients, interactions, onBack }) {
         vendorInteractions={filteredInts}
         onBack={onBack}
       />
+    </div>
+  );
+}
+
+// ============================================
+// ANALYTICS VIEW (manager-only — visual dashboard with 5 charts)
+// ============================================
+// Lightweight chart implementations using SVG (no external library) so bundle
+// size stays small and rendering is fast. All charts are derived from interactions
+// data, which is loaded for the selected period (today / week / month).
+//
+// Charts included:
+//   1. Sales trend (line)            — orders per day in selected period
+//   2. Outcomes donut                — distribution of call outcomes
+//   3. Vendor performance (bars)     — orders ranking per vendor
+//   4. Heatmap (vendor × day of week)— activity intensity matrix
+//   5. Conversion funnel             — customers → contacted → outcome → ordered
+function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForDays, onBack }) {
+  const [period, setPeriod] = useState("week"); // "today" | "week" | "month"
+  const [periodInts, setPeriodInts] = useState(interactions || []);
+  const [loadingPeriod, setLoadingPeriod] = useState(false);
+
+  // Load interactions matching the selected period whenever it changes.
+  // "today" uses what's already in props; "week" = 7 days, "month" = 30 days.
+  useEffect(() => {
+    if (period === "today") {
+      // Filter today's only from the realtime interactions we already have
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const tsToday = startOfToday.getTime();
+      setPeriodInts((interactions || []).filter((i) => (i.timestamp || 0) >= tsToday));
+      return;
+    }
+    const days = period === "week" ? 7 : 30;
+    setLoadingPeriod(true);
+    loadInteractionsForDays(days, false).then((data) => {
+      setPeriodInts(data || []);
+      setLoadingPeriod(false);
+    }).catch((err) => {
+      console.error("AnalyticsView: failed to load period:", err);
+      setLoadingPeriod(false);
+    });
+  }, [period]);
+
+  // Derive all stats once per render. Memoized cheaply (re-runs only when periodInts changes).
+  const stats = useMemo(() => {
+    const callInts = periodInts.filter((i) => (i.channel || "call") === "call");
+    const allOrders = callInts.filter((i) => i.status === "ordered");
+    const allCallbacks = callInts.filter((i) => i.status === "callback");
+    const allNoAnswers = callInts.filter((i) => i.status === "no_answer");
+    const allPriceIssues = callInts.filter((i) => i.status === "price_issue");
+    const allNotInterested = callInts.filter((i) => i.status === "not_interested");
+    const allOther = callInts.filter((i) => i.status === "other");
+    const totalCalls = callInts.length;
+
+    // Per-day orders (last 7 days for line chart)
+    const last7Days = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const tsStart = d.getTime();
+      const tsEnd = tsStart + 86400000;
+      const dayOrders = allOrders.filter((o) => (o.timestamp || 0) >= tsStart && (o.timestamp || 0) < tsEnd).length;
+      last7Days.push({
+        date: d,
+        orders: dayOrders,
+        label: [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][d.getDay()],
+        isToday: i === 0,
+      });
+    }
+
+    // Per-vendor stats
+    const vendorStats = vendors.map((v) => {
+      const myCallInts = callInts.filter((i) => i.vendorId === v.id);
+      const myOrders = myCallInts.filter((i) => i.status === "ordered");
+      return {
+        vendor: v,
+        orders: myOrders.length,
+        calls: myCallInts.length,
+        // Per day-of-week orders (Mon..Sat — Sun excluded since business doesn't run)
+        byDow: [0, 1, 2, 3, 4, 5, 6].map((dow) => {
+          return myOrders.filter((o) => {
+            const d = new Date(o.timestamp || 0);
+            return d.getDay() === dow;
+          }).length;
+        }),
+      };
+    }).sort((a, b) => b.orders - a.orders); // sort by orders desc
+
+    // Customer funnel (only relevant for today/week — month gets noisy)
+    const activeClients = clients.filter((c) => !c.archived);
+    const calledIds = new Set(callInts.map((i) => i.clientId));
+    const orderedOrCallbackIds = new Set(callInts.filter((i) => i.status === "ordered" || i.status === "callback").map((i) => i.clientId));
+    const orderedIds = new Set(allOrders.map((i) => i.clientId));
+    const funnel = {
+      total: activeClients.length,
+      contacted: activeClients.filter((c) => calledIds.has(c.id)).length,
+      gotOutcome: activeClients.filter((c) => orderedOrCallbackIds.has(c.id)).length,
+      ordered: activeClients.filter((c) => orderedIds.has(c.id)).length,
+    };
+
+    return {
+      totalCalls,
+      totalOrders: allOrders.length,
+      totalCallbacks: allCallbacks.length,
+      totalNoAnswers: allNoAnswers.length,
+      totalPriceIssues: allPriceIssues.length,
+      totalNotInterested: allNotInterested.length,
+      totalOther: allOther.length,
+      last7Days,
+      vendorStats,
+      funnel,
+    };
+  }, [periodInts, clients, vendors, t]);
+
+  // ============================================
+  // CHART HELPERS
+  // ============================================
+
+  // SVG line chart for sales trend (last 7 days).
+  function LineChart({ data }) {
+    if (!data || data.length === 0) return <div className="text-xs text-stone-400 italic text-center py-8">{t.noData || "No data"}</div>;
+    const maxOrders = Math.max(1, ...data.map((d) => d.orders));
+    const W = 600, H = 140, PAD_L = 30, PAD_R = 30, PAD_TOP = 20, PAD_BOT = 30;
+    const innerW = W - PAD_L - PAD_R;
+    const innerH = H - PAD_TOP - PAD_BOT;
+    const xStep = innerW / (data.length - 1 || 1);
+    const yScale = (v) => PAD_TOP + innerH - (v / maxOrders) * innerH;
+    const xPos = (i) => PAD_L + i * xStep;
+    const pathD = data.map((d, i) => `${i === 0 ? "M" : "L"} ${xPos(i)} ${yScale(d.orders)}`).join(" ");
+    const areaD = pathD + ` L ${xPos(data.length - 1)} ${H - PAD_BOT} L ${PAD_L} ${H - PAD_BOT} Z`;
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: "180px" }}>
+        <defs>
+          <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#5F2F9D" stopOpacity="0.35"/>
+            <stop offset="100%" stopColor="#5F2F9D" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {/* horizontal grid lines */}
+        {[0.25, 0.5, 0.75].map((p, idx) => (
+          <line key={idx} x1={PAD_L} y1={PAD_TOP + innerH * p} x2={W - PAD_R} y2={PAD_TOP + innerH * p} stroke="#F0EDE7" strokeWidth="1" strokeDasharray="2,3"/>
+        ))}
+        {/* area */}
+        <path d={areaD} fill="url(#purpleGrad)"/>
+        {/* line */}
+        <path d={pathD} fill="none" stroke="#5F2F9D" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+        {/* points */}
+        {data.map((d, i) => (
+          <g key={i}>
+            <circle cx={xPos(i)} cy={yScale(d.orders)} r={d.isToday ? 5 : 3.5} fill={d.isToday ? "#FFED13" : "#5F2F9D"} stroke={d.isToday ? "#5F2F9D" : "none"} strokeWidth={d.isToday ? 2 : 0}/>
+            <text x={xPos(i)} y={yScale(d.orders) - 8} textAnchor="middle" fontSize="10" fill="#5F2F9D" fontWeight="700">{d.orders > 0 ? d.orders : ""}</text>
+            <text x={xPos(i)} y={H - 8} textAnchor="middle" fontSize="10" fill={d.isToday ? "#5F2F9D" : "#8B847E"} fontWeight={d.isToday ? "700" : "400"}>
+              {d.label}{d.isToday ? " ★" : ""}
+            </text>
+          </g>
+        ))}
+      </svg>
+    );
+  }
+
+  // Donut chart for outcomes.
+  function OutcomesDonut() {
+    const slices = [
+      { key: "order", label: t.statusOrdered || "Order", value: stats.totalOrders, color: "#73A626" },
+      { key: "callback", label: t.statusCallback || "Callback", value: stats.totalCallbacks, color: "#5A6B85" },
+      { key: "no_ans", label: t.statusNoAnswer || "No answer", value: stats.totalNoAnswers, color: "#8B7355" },
+      { key: "price", label: t.statusPriceIssue || "Price issue", value: stats.totalPriceIssues, color: "#B8860B" },
+      { key: "not_int", label: t.statusNotInterested || "Not interested", value: stats.totalNotInterested, color: "#9C5757" },
+      { key: "other", label: t.statusOther || "Other", value: stats.totalOther, color: "#5A4A6B" },
+    ].filter((s) => s.value > 0);
+    const total = slices.reduce((s, x) => s + x.value, 0);
+    if (total === 0) return <div className="text-xs text-stone-400 italic text-center py-8">{t.noData || "No data"}</div>;
+    // Build dash-array offsets for circle-based donut
+    const R = 15.9;
+    const C = 2 * Math.PI * R;
+    let offset = 25; // start at top
+    const arcs = slices.map((s) => {
+      const pct = s.value / total;
+      const arc = pct * 100;
+      const arcEl = (
+        <circle
+          key={s.key}
+          cx="21" cy="21" r={R}
+          fill="transparent"
+          stroke={s.color}
+          strokeWidth="6"
+          strokeDasharray={`${arc} ${100 - arc}`}
+          strokeDashoffset={offset}
+        />
+      );
+      offset -= arc;
+      return arcEl;
+    });
+    return (
+      <div className="flex items-center gap-5">
+        <svg width="120" height="120" viewBox="0 0 42 42" className="flex-shrink-0">
+          <circle cx="21" cy="21" r={R} fill="transparent" stroke="#F0EDE7" strokeWidth="6"/>
+          {arcs}
+          <text x="21" y="22" textAnchor="middle" fontSize="6" fill="#1C1B1A" fontWeight="700">{total}</text>
+          <text x="21" y="27" textAnchor="middle" fontSize="3" fill="#8B847E">{t.calls || "calls"}</text>
+        </svg>
+        <div className="flex-1 space-y-1.5">
+          {slices.map((s) => (
+            <div key={s.key} className="flex items-center gap-2 text-xs">
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: s.color }}/>
+              <span className="flex-1 text-stone-700">{s.label}</span>
+              <span className="font-bold" style={{ color: s.color }}>{Math.round((s.value / total) * 100)}%</span>
+              <span className="text-[10px] text-stone-400 w-6 text-right">({s.value})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Vendor performance bars (horizontal).
+  function VendorBars() {
+    const maxOrders = Math.max(1, ...stats.vendorStats.map((v) => v.orders));
+    if (stats.vendorStats.length === 0 || maxOrders === 0) {
+      return <div className="text-xs text-stone-400 italic text-center py-6">{t.noData || "No data yet"}</div>;
+    }
+    return (
+      <div className="space-y-2">
+        {stats.vendorStats.map((vs) => {
+          const pct = maxOrders > 0 ? (vs.orders / maxOrders) * 100 : 0;
+          return (
+            <div key={vs.vendor.id} className="flex items-center gap-3">
+              <div className="text-xs font-medium text-stone-700" style={{ width: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {vs.vendor.name}
+                {vs.vendor.role === "manager" && <span className="ml-1 text-[9px] text-stone-400">(M)</span>}
+              </div>
+              <div className="flex-1 h-5 rounded" style={{ background: "#FAF8F4" }}>
+                <div
+                  className="h-full rounded transition-all"
+                  style={{
+                    width: `${pct}%`,
+                    background: "linear-gradient(90deg, #5F2F9D, #844ECA)",
+                  }}
+                />
+              </div>
+              <div className="text-xs font-bold text-right" style={{ width: "36px", color: "#5F2F9D" }}>{vs.orders}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Vendor × day-of-week heatmap. Mon-Sat only (Sun excluded since produce business doesn't run).
+  function Heatmap() {
+    const DOWS = [1, 2, 3, 4, 5, 6]; // Mon-Sat
+    const dayLabels = [null, t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"];
+    // Max value across all vendor x dow combos for color scaling
+    let maxVal = 0;
+    stats.vendorStats.forEach((vs) => { DOWS.forEach((d) => { if (vs.byDow[d] > maxVal) maxVal = vs.byDow[d]; }); });
+    if (maxVal === 0 || stats.vendorStats.length === 0) {
+      return <div className="text-xs text-stone-400 italic text-center py-6">{t.noData || "No data yet"}</div>;
+    }
+    function bgFor(val) {
+      if (val === 0) return "#FAF8F4";
+      const intensity = val / maxVal;
+      // Interpolate between light purple and dark brand purple
+      // Light: #F0E8FA -> Dark: #5F2F9D
+      // For simplicity use opacity ramp on purple
+      const opacity = Math.max(0.15, intensity);
+      return `rgba(95, 47, 157, ${opacity})`;
+    }
+    function colorFor(val) {
+      if (val === 0) return "#B5ADA5";
+      const intensity = val / maxVal;
+      return intensity > 0.5 ? "white" : "#5F2F9D";
+    }
+    return (
+      <div className="overflow-x-auto">
+        <div className="grid gap-1 text-[10px]" style={{ gridTemplateColumns: "110px repeat(6, minmax(36px, 1fr))", minWidth: "350px" }}>
+          <div/>
+          {DOWS.map((d) => (
+            <div key={d} className="text-center font-bold uppercase tracking-wide py-1" style={{ color: "#6B6560" }}>
+              {dayLabels[d]}
+            </div>
+          ))}
+          {stats.vendorStats.map((vs) => (
+            <React.Fragment key={vs.vendor.id}>
+              <div className="text-xs font-semibold py-2 px-1 text-stone-800" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {vs.vendor.name}
+              </div>
+              {DOWS.map((dow) => {
+                const val = vs.byDow[dow];
+                return (
+                  <div
+                    key={dow}
+                    className="rounded flex items-center justify-center font-bold"
+                    style={{
+                      background: bgFor(val),
+                      color: colorFor(val),
+                      aspectRatio: "1",
+                      minHeight: "32px",
+                    }}
+                    title={`${vs.vendor.name} · ${dayLabels[dow]}: ${val} orders`}
+                  >
+                    {val > 0 ? val : "—"}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="text-[10px] text-stone-500 mt-3 text-center">
+          {t.heatmapLegend || "Darker = more orders that day"}
+        </div>
+      </div>
+    );
+  }
+
+  // Conversion funnel — visual horizontal bars.
+  function Funnel() {
+    const { total, contacted, gotOutcome, ordered } = stats.funnel;
+    if (total === 0) return <div className="text-xs text-stone-400 italic text-center py-6">{t.noData || "No data"}</div>;
+    const rows = [
+      { label: t.funnelTotal || "Total customers", value: total, pct: 100, color: "#5F2F9D" },
+      { label: t.funnelContacted || "Contacted", value: contacted, pct: Math.round((contacted / total) * 100), color: "#844ECA" },
+      { label: t.funnelOutcome || "Got outcome", value: gotOutcome, pct: Math.round((gotOutcome / total) * 100), color: "#9F6FD9" },
+      { label: t.funnelOrdered || "Ordered", value: ordered, pct: Math.round((ordered / total) * 100), color: "#73A626" },
+    ];
+    return (
+      <div className="space-y-2">
+        {rows.map((r, idx) => (
+          <div key={idx}>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-stone-700">{r.label}</span>
+              <span className="font-bold" style={{ color: r.color }}>{r.value}</span>
+            </div>
+            <div className="h-6 rounded-md overflow-hidden" style={{ background: "#FAF8F4" }}>
+              <div
+                className="h-full rounded-md flex items-center px-3 text-[11px] font-bold text-white transition-all"
+                style={{ width: `${r.pct}%`, background: r.color }}
+              >
+                {r.pct >= 8 ? `${r.pct}%` : ""}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Compute % change vs previous period (only for orders, only when period is week/month)
+  const periodLabel = period === "today" ? (t.today || "Today") : period === "week" ? (t.thisWeek || "This week") : (t.thisMonth || "This month");
+
+  return (
+    <div className="max-w-3xl mx-auto px-5 pt-6 pb-24">
+      <button onClick={onBack} className="flex items-center gap-1 text-stone-600 text-sm mb-6">
+        <ArrowLeft size={14} />
+        <span>{t.back || "Back"}</span>
+      </button>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{t.managerReview || "Manager"}</div>
+        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+          📊 {t.analytics || "Analytics"}
+        </h1>
+        <p className="text-stone-600 text-sm mt-1">
+          {t.analyticsSubtitle || "How your team is performing"}
+        </p>
+      </div>
+
+      {/* Period selector */}
+      <div className="inline-flex p-1 rounded-xl mb-6 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        {[
+          { key: "today", label: t.today || "Today" },
+          { key: "week", label: t.thisWeek || "This week" },
+          { key: "month", label: t.thisMonth || "This month" },
+        ].map((p) => (
+          <button
+            key={p.key}
+            onClick={() => setPeriod(p.key)}
+            className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors"
+            style={{
+              background: period === p.key ? BRAND_PURPLE : "transparent",
+              color: period === p.key ? "white" : "#6B6560",
+            }}
+          >
+            {p.label}
+          </button>
+        ))}
+        {loadingPeriod && (
+          <span className="text-[10px] flex items-center px-3" style={{ color: "#8B847E" }}>
+            {t.loadingDots || "loading…"}
+          </span>
+        )}
+      </div>
+
+      {/* CHART 1: Sales trend */}
+      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: "#6B6560" }}>
+              📈 {t.chartSalesTrend || "Sales trend · last 7 days"}
+            </div>
+            <div className="text-2xl font-bold" style={{ color: "#1C1B1A" }}>
+              {stats.last7Days.reduce((s, d) => s + d.orders, 0)} {t.orders || "orders"}
+            </div>
+            <div className="text-[11px]" style={{ color: "#8B847E" }}>
+              {t.includingToday || "Including today"}
+            </div>
+          </div>
+        </div>
+        <LineChart data={stats.last7Days} />
+      </div>
+
+      {/* CHART 2 + 5 side-by-side on desktop, stacked on mobile */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        {/* OUTCOMES DONUT */}
+        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+            🥧 {t.chartOutcomes || "Call outcomes"}
+          </div>
+          <OutcomesDonut />
+        </div>
+
+        {/* CONVERSION FUNNEL */}
+        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+            🎯 {t.chartFunnel || "Conversion funnel"}
+          </div>
+          <Funnel />
+        </div>
+      </div>
+
+      {/* CHART 3: Vendor performance bars */}
+      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+          📊 {t.chartVendorPerf || "Vendor performance"} · {periodLabel}
+        </div>
+        <VendorBars />
+      </div>
+
+      {/* CHART 4: Heatmap */}
+      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+        <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+          🗓️ {t.chartHeatmap || "Activity heatmap · vendor × day"}
+        </div>
+        <Heatmap />
+      </div>
     </div>
   );
 }
