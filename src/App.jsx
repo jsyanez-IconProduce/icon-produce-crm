@@ -10216,6 +10216,19 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   // 0 = Sun, 1 = Mon, ..., 6 = Sat. Used to filter customers by their purchase days.
   const [selectedDow, setSelectedDow] = useState(() => new Date().getDay());
 
+  // Day offset from today (in days): 0 = today, -1 = yesterday, +1 = tomorrow.
+  // Combined with selectedDow above to compute the actual calendar day being viewed.
+  // Negative = past, 0 = today, positive = future.
+  // When offset !== 0, we load the historical interactions of that specific day so
+  // the customer marks (✓/no answer/etc) reflect what happened on that calendar day.
+  const [dayOffset, setDayOffset] = useState(0);
+
+  // Cached interactions for the currently-viewed historical day.
+  // Empty for offset=0 (today uses the realtime `interactions` prop instead).
+  // Re-fetched when dayOffset changes.
+  const [historicalDayInts, setHistoricalDayInts] = useState([]);
+  const [loadingHistoricalDay, setLoadingHistoricalDay] = useState(false);
+
   // "Show all" mode: when true, the day filter is bypassed and ALL customers
   // assigned to this vendor are shown regardless of their purchase days.
   // Useful for searching/finding any customer in the full list.
@@ -10252,6 +10265,52 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       setLoadingHistorical(false);
     });
   }, [sortBy, historicalLoaded, loadingHistorical]);
+
+  // Day navigator history loader: when vendor navigates to a past or future calendar
+  // day (dayOffset !== 0), we fetch the interactions for that SPECIFIC calendar day.
+  // This way the contact markers (✓ called, ✓ texted, ✓ ordered, etc.) reflect what
+  // actually happened on that day instead of always showing today's marks.
+  //
+  // For offset = 0 (today), we use the realtime `interactions` prop directly — no
+  // extra fetch needed, and changes appear instantly via the realtime subscription.
+  useEffect(() => {
+    if (dayOffset === 0) {
+      setHistoricalDayInts([]);
+      setLoadingHistoricalDay(false);
+      return;
+    }
+    // Compute the [start, end) range for the day we want
+    const targetDay = new Date();
+    targetDay.setHours(0, 0, 0, 0);
+    targetDay.setDate(targetDay.getDate() + dayOffset);
+    const startISO = targetDay.toISOString();
+    const endDay = new Date(targetDay);
+    endDay.setDate(endDay.getDate() + 1);
+    const endISO = endDay.toISOString();
+
+    setLoadingHistoricalDay(true);
+    supabase
+      .from("interactions")
+      .select("*")
+      .gte("created_at", startISO)
+      .lt("created_at", endISO)
+      .order("created_at", { ascending: false })
+      .limit(2000)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Failed to load historical day:", error);
+          setHistoricalDayInts([]);
+          setLoadingHistoricalDay(false);
+          return;
+        }
+        setHistoricalDayInts((data || []).map(interactionFromDb));
+        setLoadingHistoricalDay(false);
+      });
+  }, [dayOffset]);
+
+  // Effective interactions for the currently-viewed day. When viewing today, use
+  // the realtime prop. When viewing a past/future day, use the fetched historical day.
+  const effectiveInteractions = dayOffset === 0 ? interactions : historicalDayInts;
   // Manager-mode only: state for the "Add client" / "Add lead" quick action modals
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
@@ -10354,7 +10413,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     // channel="text" but they're a separate concept — they shouldn't count as
     // "real text contact" for the missing-text filter.
     const hasChannelToday = new Set();
-    (interactions || []).forEach((i) => {
+    (effectiveInteractions || []).forEach((i) => {
       if (i.vendorId !== vendorId) return;
       if (i.subReason === "price_list") return; // skip price-list pings
       if ((i.channel || "call") === channel) hasChannelToday.add(i.clientId);
@@ -10417,7 +10476,9 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     // Show rejections from the last 7 days
     return Date.now() - (l.rejectedAt || l.createdAt || 0) < 7 * 24 * 60 * 60 * 1000;
   });
-  const myInts = interactions.filter((i) => i.vendorId === vendorId);
+  // IMPORTANT: use effectiveInteractions (today or historical day) so tab counts,
+  // contact markers (✓), and filters match the currently-viewed calendar day.
+  const myInts = effectiveInteractions.filter((i) => i.vendorId === vendorId);
 
   const callInts = myInts.filter((i) => chOf(i) === "call");
   // Exclude price-list pings from regular text/email — they're a separate concept and
@@ -10784,7 +10845,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         {/* Header bar with arrows + day name (OR "All customers" indicator when toggled on) */}
         <div className="flex items-center justify-between px-4 py-3" style={{ background: viewAllDays ? "#3D2A6B" : BRAND_PURPLE, color: "white" }}>
           <button
-            onClick={() => { setViewAllDays(false); setSelectedDow((selectedDow + 6) % 7); }}
+            onClick={() => {
+              setViewAllDays(false);
+              setSelectedDow((selectedDow + 6) % 7);
+              setDayOffset(dayOffset - 1);
+            }}
             disabled={viewAllDays}
             className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ background: "rgba(255,255,255,0.15)" }}
@@ -10811,20 +10876,30 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             ) : (
               <>
                 <div className="text-[10px] uppercase tracking-widest opacity-80">
-                  {selectedDow === todayDow
+                  {dayOffset === 0
                     ? (t.today || "Today")
-                    : selectedDow === (todayDow + 1) % 7
+                    : dayOffset === 1
                       ? (t.tomorrow || "Tomorrow")
-                      : selectedDow === (todayDow + 6) % 7
+                      : dayOffset === -1
                         ? (t.yesterday || "Yesterday")
                         : (t.viewing || "Viewing")}
+                  {loadingHistoricalDay && <span className="ml-1 opacity-60">…</span>}
                 </div>
                 <div className="text-lg font-bold">
                   {[t.sunday || "Sunday", t.monday || "Monday", t.tuesday || "Tuesday", t.wednesday || "Wednesday", t.thursday || "Thursday", t.friday || "Friday", t.saturday || "Saturday"][selectedDow]}
+                  {dayOffset !== 0 && (
+                    <div className="text-[10px] font-normal opacity-80 mt-0.5">
+                      {(() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + dayOffset);
+                        return d.toLocaleDateString(t.locale || "en-US", { month: "short", day: "numeric" });
+                      })()}
+                    </div>
+                  )}
                 </div>
-                {selectedDow !== todayDow && (
+                {dayOffset !== 0 && (
                   <button
-                    onClick={() => setSelectedDow(todayDow)}
+                    onClick={() => { setSelectedDow(todayDow); setDayOffset(0); }}
                     className="text-[10px] mt-0.5 underline opacity-90 hover:opacity-100"
                   >
                     ↺ {t.backToToday || "Back to today"}
@@ -10834,7 +10909,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             )}
           </div>
           <button
-            onClick={() => { setViewAllDays(false); setSelectedDow((selectedDow + 1) % 7); }}
+            onClick={() => {
+              setViewAllDays(false);
+              setSelectedDow((selectedDow + 1) % 7);
+              setDayOffset(dayOffset + 1);
+            }}
             disabled={viewAllDays}
             className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ background: "rgba(255,255,255,0.15)" }}
@@ -10848,13 +10927,15 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             LAST chip is "All" — toggles viewAllDays mode (shows every customer regardless of day). */}
         <div className="flex gap-1.5 px-3 py-3 overflow-x-auto" style={{ background: "#FAF8F4" }}>
           {dayNavItems.map((item) => {
-            const isSelected = !viewAllDays && item.dow === selectedDow;
+            // Chip is "selected" when its offset matches dayOffset (so the highlight follows
+            // the actual day being viewed, not just the day-of-week).
+            const isSelected = !viewAllDays && item.offset === dayOffset;
             const count = customersPerDow[item.dow];
             const dayShort = [t.sun || "Sun", t.mon || "Mon", t.tue || "Tue", t.wed || "Wed", t.thu || "Thu", t.fri || "Fri", t.sat || "Sat"][item.dow];
             return (
               <button
                 key={`day-${item.offset}`}
-                onClick={() => { setViewAllDays(false); setSelectedDow(item.dow); }}
+                onClick={() => { setViewAllDays(false); setSelectedDow(item.dow); setDayOffset(item.offset); }}
                 className="flex-shrink-0 px-3 py-2 rounded-lg text-center transition-all"
                 style={{
                   background: isSelected ? BRAND_PURPLE : (item.isToday ? "#F0E8FA" : "white"),
@@ -10938,7 +11019,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       )}
 
       {/* Quota progress (if set) */}
-      <QuotaProgressCard t={t} vendorId={vendorId} quotas={quotas} interactions={interactions} allInts={interactions} />
+      <QuotaProgressCard t={t} vendorId={vendorId} quotas={quotas} interactions={effectiveInteractions} allInts={effectiveInteractions} />
 
       {/* Sales Insights — analyze ordering patterns by day */}
       <button
@@ -11091,7 +11172,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
                 t={t}
                 customers={filteredLeads.map((lead) => ({ id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead", contactName: lead.contactName, longNote: lead.longNote }))}
                 vendorId={vendorId}
-                allInteractions={interactions}
+                allInteractions={effectiveInteractions}
                 templates={templates}
                 tags={tags}
                 onLog={onLog}
@@ -11128,7 +11209,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
                 const asClient = { id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead" };
                 return (
                   <div key={lead.id} style={{ borderLeft: "3px solid #F5D785", borderRadius: "16px" }}>
-                    <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
+                    <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
                     {/* Convert to client — turns a lead into a regular client.
                         Opens modal to choose frequency + purchase days.
                         After conversion, lead disappears from leads list and client appears with
@@ -11295,10 +11376,10 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "to_contact" && (
       <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#5F2F9D" bg="#E8DDF5" lightBg="#F4EDFA" clientList={pending}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
-          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
+          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={effectiveInteractions} templates={templates} tags={tags}
             onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
@@ -11312,7 +11393,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "ordered" && (
       <VendorStatusSection t={t} title={t.statusOrdered} icon={CheckCircle2} color="#73A626" bg="#E8F2D5" lightBg="#F4F9E8" clientList={contactedOrdered}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
@@ -11327,7 +11408,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "callback" && (
       <VendorStatusSection t={t} title={t.statusCallback} icon={Clock} color="#5A6B85" bg="#E5EAF2" lightBg="#F2F5F9" clientList={contactedCallback}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
