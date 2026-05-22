@@ -625,6 +625,10 @@ const T = {
     today: "Today",
     thisWeek: "This week",
     thisMonth: "This month",
+    thisQuarter: "This quarter",
+    exportAllTimePdf: "Export all-time PDF",
+    generatingPdf: "Generating PDF…",
+    pdfGenerationFailed: "Could not generate PDF. Please try again.",
     bestSeller: "Top performer",
     recurrentClients: "Recurrent customers",
     recurrentRanking: "Most recurrent customers",
@@ -1449,6 +1453,10 @@ const T = {
     today: "Hoy",
     thisWeek: "Esta semana",
     thisMonth: "Este mes",
+    thisQuarter: "Este trimestre",
+    exportAllTimePdf: "Exportar PDF de todo el historial",
+    generatingPdf: "Generando PDF…",
+    pdfGenerationFailed: "No se pudo generar el PDF. Intenta de nuevo.",
     bestSeller: "Mejor vendedor",
     recurrentClients: "Clientes recurrentes",
     recurrentRanking: "Más clientes recurrentes",
@@ -1589,6 +1597,10 @@ const T = {
     thisWeek: "Esta semana",
     lastWeek: "Semana pasada",
     thisMonth: "Este mes",
+    thisQuarter: "Este trimestre",
+    exportAllTimePdf: "Exportar PDF de todo el historial",
+    generatingPdf: "Generando PDF…",
+    pdfGenerationFailed: "No se pudo generar el PDF. Intenta de nuevo.",
     lastMonth: "Mes pasado",
     newCustomers: "Clientes nuevos",
     newLeadsLabel: "Leads nuevos",
@@ -2949,6 +2961,262 @@ async function generateWeeklyReportPDF({
   doc.save(fileName);
 
   return { fileName, totalPages };
+}
+
+// ============================================
+// ALL-TIME ANALYTICS PDF
+// ============================================
+// Generates a comprehensive PDF report covering ALL historical interactions.
+// Used by both manager and vendor analytics dashboards.
+//
+// Layout:
+//   Page 1: Cover + summary numbers (total orders, customers, calls, etc.)
+//   Page 2: Top customers table (sorted by orders desc)
+//   Page 3: Per-vendor breakdown (manager only) OR day-of-week breakdown (vendor)
+//   Page 4: Outcome stats + monthly trend table
+//
+// Params:
+//   - vendorIdFilter: null for manager (all data) or vendorId for vendor's own
+//   - scopeName: label shown at the top (e.g. "Icon Produce" or vendor name)
+async function buildAllTimeAnalyticsPDF({ vendors, clients, vendorIdFilter, scopeName, t }) {
+  const { default: jsPDF } = await import("jspdf");
+
+  // Load ALL historical interactions. Capped at 20000 rows by loadAllInteractions.
+  const allInts = await loadAllInteractions();
+  // Scope to vendor if requested
+  const ints = vendorIdFilter ? allInts.filter((i) => i.vendorId === vendorIdFilter) : allInts;
+
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const PAGE_W = doc.internal.pageSize.getWidth();
+  const PAGE_H = doc.internal.pageSize.getHeight();
+  const MARGIN_X = 40;
+  let y = 60;
+
+  // Helper: ensure room on page; if not, add new page
+  function checkPage(minSpace = 60) {
+    if (y > PAGE_H - minSpace) {
+      doc.addPage();
+      y = 60;
+    }
+  }
+
+  // ===== COVER / HEADER =====
+  doc.setFillColor(95, 47, 157); // brand purple
+  doc.rect(0, 0, PAGE_W, 80, "F");
+  doc.setFontSize(20);
+  doc.setTextColor(255, 255, 255);
+  doc.text("Icon Produce — All-time Report", MARGIN_X, 45);
+  doc.setFontSize(11);
+  doc.text(scopeName || "Manager", MARGIN_X, 65);
+  doc.setTextColor(0, 0, 0);
+  y = 110;
+
+  // Report date
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, MARGIN_X, y);
+  y += 30;
+
+  // ===== SECTION 1: SUMMARY NUMBERS =====
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(13);
+  doc.text("📊 Summary", MARGIN_X, y);
+  y += 6;
+  doc.setDrawColor(95, 47, 157);
+  doc.line(MARGIN_X, y, MARGIN_X + 80, y);
+  y += 20;
+
+  const callInts = ints.filter((i) => (i.channel || "call") === "call");
+  const totalOrders = callInts.filter((i) => i.status === "ordered").length;
+  const totalCallbacks = callInts.filter((i) => i.status === "callback").length;
+  const totalNoAnswers = callInts.filter((i) => i.status === "no_answer").length;
+  const totalPriceIssues = callInts.filter((i) => i.status === "price_issue").length;
+  const totalNotInterested = callInts.filter((i) => i.status === "not_interested").length;
+  const totalOther = callInts.filter((i) => i.status === "other").length;
+  const totalCalls = callInts.length;
+  const totalCustomers = (clients || []).filter((c) => vendorIdFilter ? c.vendorId === vendorIdFilter : true).filter((c) => !c.archived).length;
+
+  const summaryRows = [
+    ["Total customers", `${totalCustomers}`],
+    ["Total calls", `${totalCalls}`],
+    ["Orders", `${totalOrders}${totalCalls > 0 ? ` (${Math.round(totalOrders / totalCalls * 100)}%)` : ""}`],
+    ["Callbacks", `${totalCallbacks}`],
+    ["No answers", `${totalNoAnswers}`],
+    ["Price issues", `${totalPriceIssues}`],
+    ["Not interested", `${totalNotInterested}`],
+    ["Other", `${totalOther}`],
+  ];
+
+  doc.setFontSize(10);
+  summaryRows.forEach(([label, val]) => {
+    checkPage();
+    doc.setTextColor(80, 80, 80);
+    doc.text(label, MARGIN_X, y);
+    doc.setTextColor(0, 0, 0);
+    doc.text(val, MARGIN_X + 200, y);
+    y += 16;
+  });
+  y += 16;
+
+  // ===== SECTION 2: TOP CUSTOMERS =====
+  checkPage(120);
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text("🏆 Top customers (by orders)", MARGIN_X, y);
+  y += 6;
+  doc.setDrawColor(95, 47, 157);
+  doc.line(MARGIN_X, y, MARGIN_X + 220, y);
+  y += 20;
+
+  // Count orders per customer
+  const ordersByClient = {};
+  callInts.filter((i) => i.status === "ordered").forEach((o) => {
+    ordersByClient[o.clientId] = (ordersByClient[o.clientId] || 0) + 1;
+  });
+  const topCustomers = Object.entries(ordersByClient)
+    .map(([id, count]) => ({ client: clients.find((c) => c.id === id), count }))
+    .filter((x) => x.client)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 30); // Top 30
+
+  if (topCustomers.length === 0) {
+    doc.setFontSize(10);
+    doc.setTextColor(150, 150, 150);
+    doc.text("No orders yet.", MARGIN_X, y);
+    y += 20;
+  } else {
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text("#", MARGIN_X, y);
+    doc.text("Customer", MARGIN_X + 30, y);
+    doc.text("Phone", MARGIN_X + 280, y);
+    doc.text("Orders", MARGIN_X + 420, y);
+    y += 4;
+    doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
+    y += 12;
+    doc.setFontSize(10);
+    topCustomers.forEach((row, idx) => {
+      checkPage();
+      doc.setTextColor(120, 120, 120);
+      doc.text(`${idx + 1}`, MARGIN_X, y);
+      doc.setTextColor(0, 0, 0);
+      const name = (row.client.name || "").slice(0, 36);
+      doc.text(name, MARGIN_X + 30, y);
+      doc.setTextColor(120, 120, 120);
+      doc.text(row.client.phone || "—", MARGIN_X + 280, y);
+      doc.setTextColor(95, 47, 157);
+      doc.text(`${row.count}`, MARGIN_X + 420, y);
+      y += 15;
+    });
+  }
+  y += 20;
+
+  // ===== SECTION 3: VENDOR BREAKDOWN (manager only) =====
+  if (!vendorIdFilter && vendors && vendors.length > 0) {
+    checkPage(120);
+    doc.setFontSize(13);
+    doc.setTextColor(0, 0, 0);
+    doc.text("👥 Performance by sales rep", MARGIN_X, y);
+    y += 6;
+    doc.setDrawColor(95, 47, 157);
+    doc.line(MARGIN_X, y, MARGIN_X + 220, y);
+    y += 20;
+
+    const vendorStats = vendors.map((v) => {
+      const myInts = callInts.filter((i) => i.vendorId === v.id);
+      const myOrders = myInts.filter((i) => i.status === "ordered");
+      return { vendor: v, calls: myInts.length, orders: myOrders.length };
+    }).sort((a, b) => b.orders - a.orders);
+
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Vendor", MARGIN_X, y);
+    doc.text("Calls", MARGIN_X + 260, y);
+    doc.text("Orders", MARGIN_X + 340, y);
+    doc.text("Convert %", MARGIN_X + 420, y);
+    y += 4;
+    doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
+    y += 12;
+    doc.setFontSize(10);
+    vendorStats.forEach((vs) => {
+      checkPage();
+      doc.setTextColor(0, 0, 0);
+      doc.text(vs.vendor.name || "—", MARGIN_X, y);
+      doc.setTextColor(80, 80, 80);
+      doc.text(`${vs.calls}`, MARGIN_X + 260, y);
+      doc.setTextColor(95, 47, 157);
+      doc.text(`${vs.orders}`, MARGIN_X + 340, y);
+      doc.setTextColor(80, 80, 80);
+      doc.text(vs.calls > 0 ? `${Math.round(vs.orders / vs.calls * 100)}%` : "—", MARGIN_X + 420, y);
+      y += 15;
+    });
+    y += 20;
+  }
+
+  // ===== SECTION 4: MONTHLY TREND =====
+  checkPage(120);
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text("📈 Monthly trend (last 12 months)", MARGIN_X, y);
+  y += 6;
+  doc.setDrawColor(95, 47, 157);
+  doc.line(MARGIN_X, y, MARGIN_X + 220, y);
+  y += 20;
+
+  const monthBuckets = [];
+  const today = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const dEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 1);
+    const monthOrders = callInts.filter((c) =>
+      c.status === "ordered" && c.timestamp && c.timestamp >= d.getTime() && c.timestamp < dEnd.getTime()
+    ).length;
+    const monthCalls = callInts.filter((c) =>
+      c.timestamp && c.timestamp >= d.getTime() && c.timestamp < dEnd.getTime()
+    ).length;
+    monthBuckets.push({
+      label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+      orders: monthOrders,
+      calls: monthCalls,
+    });
+  }
+
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text("Month", MARGIN_X, y);
+  doc.text("Calls", MARGIN_X + 200, y);
+  doc.text("Orders", MARGIN_X + 300, y);
+  doc.text("Convert %", MARGIN_X + 400, y);
+  y += 4;
+  doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
+  y += 12;
+  doc.setFontSize(10);
+  monthBuckets.forEach((m) => {
+    checkPage();
+    doc.setTextColor(0, 0, 0);
+    doc.text(m.label, MARGIN_X, y);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`${m.calls}`, MARGIN_X + 200, y);
+    doc.setTextColor(95, 47, 157);
+    doc.text(`${m.orders}`, MARGIN_X + 300, y);
+    doc.setTextColor(80, 80, 80);
+    doc.text(m.calls > 0 ? `${Math.round(m.orders / m.calls * 100)}%` : "—", MARGIN_X + 400, y);
+    y += 15;
+  });
+
+  // ===== Footer on each page =====
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Icon Produce · ${scopeName || "Manager"}`, MARGIN_X, PAGE_H - 30);
+    doc.text(`${i} / ${pageCount}`, PAGE_W - MARGIN_X - 30, PAGE_H - 30);
+  }
+
+  const fileName = `icon-produce-alltime-${(scopeName || "manager").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.pdf`;
+  doc.save(fileName);
+  return { fileName };
 }
 
 async function seedHistoricalIfNeeded(vendors, clients) {
@@ -8821,9 +9089,32 @@ function ManagerInsightsView({ t, vendors, clients, interactions, onBack }) {
 //   4. Heatmap (vendor × day of week)— activity intensity matrix
 //   5. Conversion funnel             — customers → contacted → outcome → ordered
 function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForDays, onBack }) {
-  const [period, setPeriod] = useState("week"); // "today" | "week" | "month"
+  const [period, setPeriod] = useState("week"); // "today" | "week" | "month" | "quarter"
   const [periodInts, setPeriodInts] = useState(interactions || []);
   const [loadingPeriod, setLoadingPeriod] = useState(false);
+  // PDF generation state — true while building the all-time PDF in the background.
+  // Disables the export button so the user doesn't trigger multiple downloads.
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  // Manager all-time PDF — pulls every historical interaction and builds a multi-section PDF.
+  async function generateAllTimePDF() {
+    if (generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      await buildAllTimeAnalyticsPDF({
+        vendors,
+        clients,
+        vendorIdFilter: null, // null = all data (manager)
+        scopeName: "Icon Produce",
+        t,
+      });
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert(t.pdfGenerationFailed || "Could not generate PDF. Please try again.");
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }
 
   // Load interactions matching the selected period whenever it changes.
   // "today" uses what's already in props; "week" = 7 days, "month" = 30 days.
@@ -8836,7 +9127,20 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
       setPeriodInts((interactions || []).filter((i) => (i.timestamp || 0) >= tsToday));
       return;
     }
-    const days = period === "week" ? 7 : 30;
+    // Compute how many days back to fetch.
+    // "quarter" = current calendar quarter (Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec).
+    // We compute the calendar-quarter start, then number of days since that start.
+    let days;
+    if (period === "quarter") {
+      const today = new Date();
+      const q = Math.floor(today.getMonth() / 3); // 0..3
+      const qStart = new Date(today.getFullYear(), q * 3, 1);
+      qStart.setHours(0, 0, 0, 0);
+      const diffMs = today.getTime() - qStart.getTime();
+      days = Math.ceil(diffMs / 86400000) + 1; // +1 to include today
+    } else {
+      days = period === "week" ? 7 : 30;
+    }
     setLoadingPeriod(true);
     loadInteractionsForDays(days, false).then((data) => {
       setPeriodInts(data || []);
@@ -9173,11 +9477,12 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
       </div>
 
       {/* Period selector */}
-      <div className="inline-flex p-1 rounded-xl mb-6 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+      <div className="inline-flex p-1 rounded-xl mb-6 card-shadow flex-wrap gap-1" style={{ background: "white", border: "1px solid #E5E0DA" }}>
         {[
           { key: "today", label: t.today || "Today" },
           { key: "week", label: t.thisWeek || "This week" },
           { key: "month", label: t.thisMonth || "This month" },
+          { key: "quarter", label: t.thisQuarter || "This quarter" },
         ].map((p) => (
           <button
             key={p.key}
@@ -9198,7 +9503,16 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
         )}
       </div>
 
-      {/* CHART 1: Sales trend */}
+      {/* All-time PDF export button — generates a comprehensive report.
+          Sits below the period selector to keep the segmented control clean. */}
+      <button
+        onClick={() => generateAllTimePDF()}
+        disabled={generatingPdf}
+        className="mb-6 px-4 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-90 disabled:opacity-50"
+        style={{ background: "white", color: "#5F2F9D", border: `1px solid ${BRAND_PURPLE}` }}
+      >
+        {generatingPdf ? "⏳ " + (t.generatingPdf || "Generating PDF…") : "📄 " + (t.exportAllTimePdf || "Export all-time PDF")}
+      </button>
       <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
         <div className="flex items-start justify-between mb-3">
           <div>
@@ -9267,12 +9581,36 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
 //   4. My activity by day-of-week (bars)— which days I sell most
 //   + Conversion funnel scoped to my assigned customers
 function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, loadInteractionsForDays, onBack }) {
-  const [period, setPeriod] = useState("week"); // "today" | "week" | "month"
+  const [period, setPeriod] = useState("week"); // "today" | "week" | "month" | "quarter"
   const [periodInts, setPeriodInts] = useState(interactions || []);
   const [loadingPeriod, setLoadingPeriod] = useState(false);
+  // PDF generation state for vendor's all-time export
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  // Vendor all-time PDF — same helper but scoped to MY vendorId only.
+  async function generateAllTimePDF() {
+    if (generatingPdf) return;
+    setGeneratingPdf(true);
+    try {
+      const myVendor = vendors.find((v) => v.id === vendorId);
+      await buildAllTimeAnalyticsPDF({
+        vendors,
+        clients,
+        vendorIdFilter: vendorId, // scope to me
+        scopeName: myVendor?.name || "Sales rep",
+        t,
+      });
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert(t.pdfGenerationFailed || "Could not generate PDF. Please try again.");
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }
 
   // Load interactions for the selected period. "today" uses what's already loaded;
-  // "week" = 7 days, "month" = 30 days. Always scoped to MY vendor id when computing stats.
+  // "week" = 7 days, "month" = 30 days, "quarter" = current calendar quarter.
+  // Always scoped to MY vendor id when computing stats.
   useEffect(() => {
     if (period === "today") {
       const startOfToday = new Date();
@@ -9281,7 +9619,17 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
       setPeriodInts((interactions || []).filter((i) => (i.timestamp || 0) >= tsToday));
       return;
     }
-    const days = period === "week" ? 7 : 30;
+    let days;
+    if (period === "quarter") {
+      const today = new Date();
+      const q = Math.floor(today.getMonth() / 3);
+      const qStart = new Date(today.getFullYear(), q * 3, 1);
+      qStart.setHours(0, 0, 0, 0);
+      const diffMs = today.getTime() - qStart.getTime();
+      days = Math.ceil(diffMs / 86400000) + 1;
+    } else {
+      days = period === "week" ? 7 : 30;
+    }
     setLoadingPeriod(true);
     loadInteractionsForDays(days, false).then((data) => {
       setPeriodInts(data || []);
@@ -9592,11 +9940,12 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
       </div>
 
       {/* Period selector */}
-      <div className="inline-flex p-1 rounded-xl mb-6 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+      <div className="inline-flex p-1 rounded-xl mb-6 card-shadow flex-wrap gap-1" style={{ background: "white", border: "1px solid #E5E0DA" }}>
         {[
           { key: "today", label: t.today || "Today" },
           { key: "week", label: t.thisWeek || "This week" },
           { key: "month", label: t.thisMonth || "This month" },
+          { key: "quarter", label: t.thisQuarter || "This quarter" },
         ].map((p) => (
           <button
             key={p.key}
@@ -9616,6 +9965,16 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
           </span>
         )}
       </div>
+
+      {/* All-time PDF export button — vendor's personal full report */}
+      <button
+        onClick={() => generateAllTimePDF()}
+        disabled={generatingPdf}
+        className="mb-6 px-4 py-2 rounded-lg text-xs font-semibold transition-colors hover:opacity-90 disabled:opacity-50"
+        style={{ background: "white", color: "#5F2F9D", border: `1px solid ${BRAND_PURPLE}` }}
+      >
+        {generatingPdf ? "⏳ " + (t.generatingPdf || "Generating PDF…") : "📄 " + (t.exportAllTimePdf || "Export all-time PDF")}
+      </button>
 
       {/* CHART 1: My sales trend */}
       <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
