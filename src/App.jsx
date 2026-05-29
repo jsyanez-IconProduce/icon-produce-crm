@@ -13792,26 +13792,6 @@ function CustomerTable({
   // without scrolling all the way down. Refs let us sync the two containers.
   const topScrollRef = useRef(null);    // empty div that hosts the top scrollbar
   const bottomScrollRef = useRef(null); // the table container (scrollable)
-
-  // Ref to the expanded detail panel itself so we can scroll it into view
-  // whenever the user opens a panel or switches to a different customer.
-  const detailPanelRef = useRef(null);
-
-  // Auto-scroll the detail panel into view whenever the user opens it OR
-  // switches to a different customer. We re-run this effect on every change
-  // of expandedDetailClientId — so even if the same panel DOM node is
-  // re-used between customers, we still scroll on each switch.
-  useEffect(() => {
-    if (!expandedDetailClientId) return;
-    // A short delay lets React commit the new content (especially the loading
-    // state vs. loaded state) before we measure and scroll.
-    const tid = setTimeout(() => {
-      if (detailPanelRef.current) {
-        detailPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 80);
-    return () => clearTimeout(tid);
-  }, [expandedDetailClientId]);
   // tableWidth = the actual content width of the table; used to size the
   // invisible inner div inside the top scrollbar so its scrollbar matches.
   const [tableWidth, setTableWidth] = useState(0);
@@ -14551,25 +14531,53 @@ function CustomerTable({
           setDetailEdits({ ...eds, purchaseDays: next });
         }
 
+        // Close handler — used for both the X button and clicking the overlay backdrop.
+        function closeModal() {
+          setExpandedDetailClientId(null);
+          setDetailEdits(null);
+        }
+
         return (
+          // Overlay: dark semi-transparent backdrop covering the screen.
+          // Click anywhere outside the modal card closes the modal.
           <div
-            ref={detailPanelRef}
-            className="mt-4 rounded-lg p-5"
-            style={{ background: "#FAF8F4", borderLeft: "4px solid #5F2F9D", border: "1px solid #E5E0DA", borderLeftWidth: "4px", borderLeftColor: "#5F2F9D" }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: "rgba(0, 0, 0, 0.5)" }}
+            onClick={closeModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-detail-title"
           >
-            {/* Header with customer name + close button */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm font-bold flex items-center gap-2" style={{ color: "#5F2F9D" }}>
-                👁 {client.name}
-              </div>
-              <button
-                onClick={() => { setExpandedDetailClientId(null); setDetailEdits(null); }}
-                className="text-xs px-3 py-1 rounded border"
-                style={{ background: "white", borderColor: "#E5E0DA", color: "#6B6560" }}
+            {/* Modal card: centered, medium width, scrollable vertically if tall.
+                stopPropagation on click prevents the backdrop's click-to-close
+                from firing when the user interacts with the form. */}
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+              style={{ border: "1px solid #E5E0DA" }}
+            >
+              {/* Header — customer name + close X. Sticky top so it stays visible
+                  as the user scrolls within the modal. */}
+              <div
+                className="sticky top-0 z-10 flex items-center justify-between px-6 py-4"
+                style={{ background: "white", borderBottom: "1px solid #E5E0DA" }}
               >
-                {t.close || "Close"}
-              </button>
-            </div>
+                <div id="customer-detail-title" className="text-base font-bold flex items-center gap-2" style={{ color: "#5F2F9D" }}>
+                  👁 {client.name}
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-stone-100"
+                  style={{ color: "#6B6560" }}
+                  title={t.close || "Close"}
+                  aria-label={t.close || "Close"}
+                >
+                  <span style={{ fontSize: "18px", lineHeight: 1 }}>✕</span>
+                </button>
+              </div>
+
+              {/* Body — original two-column layout (info | stats+timeline) */}
+              <div className="p-6">
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* ===== LEFT: editable info form ===== */}
@@ -14715,6 +14723,8 @@ function CustomerTable({
                     )}
                   </>
                 )}
+              </div>
+            </div>
               </div>
             </div>
           </div>
