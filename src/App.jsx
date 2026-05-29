@@ -13792,6 +13792,26 @@ function CustomerTable({
   // without scrolling all the way down. Refs let us sync the two containers.
   const topScrollRef = useRef(null);    // empty div that hosts the top scrollbar
   const bottomScrollRef = useRef(null); // the table container (scrollable)
+
+  // Ref to the expanded detail panel itself so we can scroll it into view
+  // whenever the user opens a panel or switches to a different customer.
+  const detailPanelRef = useRef(null);
+
+  // Auto-scroll the detail panel into view whenever the user opens it OR
+  // switches to a different customer. We re-run this effect on every change
+  // of expandedDetailClientId — so even if the same panel DOM node is
+  // re-used between customers, we still scroll on each switch.
+  useEffect(() => {
+    if (!expandedDetailClientId) return;
+    // A short delay lets React commit the new content (especially the loading
+    // state vs. loaded state) before we measure and scroll.
+    const tid = setTimeout(() => {
+      if (detailPanelRef.current) {
+        detailPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 80);
+    return () => clearTimeout(tid);
+  }, [expandedDetailClientId]);
   // tableWidth = the actual content width of the table; used to size the
   // invisible inner div inside the top scrollbar so its scrollbar matches.
   const [tableWidth, setTableWidth] = useState(0);
@@ -14522,7 +14542,7 @@ function CustomerTable({
 
         return (
           <div
-            ref={(el) => { if (el && !el.dataset.scrolled) { el.dataset.scrolled = "1"; el.scrollIntoView({ behavior: "smooth", block: "start" }); } }}
+            ref={detailPanelRef}
             className="mt-4 rounded-lg p-5"
             style={{ background: "#FAF8F4", borderLeft: "4px solid #5F2F9D", border: "1px solid #E5E0DA", borderLeftWidth: "4px", borderLeftColor: "#5F2F9D" }}
           >
