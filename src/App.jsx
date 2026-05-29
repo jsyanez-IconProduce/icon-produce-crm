@@ -539,6 +539,8 @@ const T = {
     priceListSent: "Mark price list sent",
     undoPriceList: "Click to undo price list",
     priceSentBadge: "Price sent",
+    cancelOrder: "Cancel order",
+    confirmCancelOrder: "Cancel this order? The customer will return to 'to contact' for today.",
     priceListMarked: "Price list sent ✓",
     priceListSendBtn: "Mark price list sent",
     changePending: "Change pending approval",
@@ -1369,6 +1371,8 @@ const T = {
     priceListSent: "Marcar lista de precios enviada",
     undoPriceList: "Click para deshacer lista de precios",
     priceSentBadge: "Lista enviada",
+    cancelOrder: "Cancelar orden",
+    confirmCancelOrder: "¿Cancelar esta orden? El cliente volverá a 'por contactar' por hoy.",
     priceListMarked: "Lista enviada ✓",
     priceListSendBtn: "Marcar lista enviada",
     changePending: "Cambio pendiente de aprobación",
@@ -4749,11 +4753,42 @@ export default function App() {
   }
 
   async function deleteInteraction(id) {
-    const { error } = await supabase.from("interactions").delete().eq("id", id);
-    if (error) {
-      console.error("deleteInteraction failed:", error);
+    // First verify the interaction exists locally so we can detect "already deleted"
+    const local = interactions.find((i) => i.id === id);
+    if (!local) {
+      console.warn("deleteInteraction: id not found locally:", id);
+      // Force a re-fetch in case state is stale
       return;
     }
+
+    const { error, count } = await supabase
+      .from("interactions")
+      .delete({ count: "exact" })
+      .eq("id", id);
+
+    if (error) {
+      console.error("deleteInteraction failed:", error);
+      // Show the user a visible error so they can report what's happening.
+      alert(
+        `Could not undo this interaction.\n\n` +
+        `Error: ${error.message || "Unknown error"}\n\n` +
+        `This usually means a database permission (RLS) is missing.\n` +
+        `Please screenshot this message and send it to support.`
+      );
+      return;
+    }
+
+    if (count === 0) {
+      // Delete returned no error but didn't delete anything — RLS silently blocking.
+      console.warn("deleteInteraction returned count=0 (RLS likely blocked):", id);
+      alert(
+        `The interaction was NOT removed from the database.\n\n` +
+        `This is a permissions issue — your account can't delete this entry.\n` +
+        `Run the FIX_DELETE_INTERACTIONS.sql in Supabase to fix it.`
+      );
+      return;
+    }
+
     setInteractions((prev) => prev.filter((i) => i.id !== id));
   }
 
@@ -13495,15 +13530,44 @@ function CustomerTable({
               >
                 {/* COL 1: Customer */}
                 <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "240px" }}>
-                  <div
-                    className="font-semibold truncate transition-colors"
-                    style={{
-                      // Name color shifts to brand purple on hover for clear "selected" feedback
-                      color: hoveredRowClientId === client.id ? "#5F2F9D" : "#1C1B1A",
-                      fontSize: "13px",
-                    }}
-                  >
-                    {client.name}
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="font-semibold truncate transition-colors"
+                      style={{
+                        // Name color shifts to brand purple on hover for clear "selected" feedback
+                        color: hoveredRowClientId === client.id ? "#5F2F9D" : "#1C1B1A",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {client.name}
+                    </div>
+                    {/* Cancel-order button — only shown when this customer has an "ordered"
+                        call today by the current vendor. Click ✕ to delete the order
+                        interaction; customer returns to "to_contact" state.
+                        Only the vendor who registered the order can cancel it (RLS enforces
+                        this on the server too). */}
+                    {latestStatus === "ordered" && latestCall && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(t.confirmCancelOrder || "Cancel this order? The customer will return to 'to contact' for today.")) {
+                            onUndo && onUndo(latestCall.id);
+                          }
+                        }}
+                        className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-110"
+                        style={{
+                          background: "#FEF2EE",
+                          color: "#9C5757",
+                          border: "1px solid #F5C5B7",
+                          fontSize: "11px",
+                          lineHeight: 1,
+                        }}
+                        title={t.cancelOrder || "Cancel order"}
+                        aria-label={t.cancelOrder || "Cancel order"}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                   {client.contactName && (
                     <div className="text-[11px] truncate" style={{ color: "#8B847E" }}>
@@ -14080,7 +14144,33 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
     <div className="bg-white rounded-2xl p-4 card-shadow">
       <div className="mb-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="font-medium truncate flex-1">{client.name}</div>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <div className="font-medium truncate flex-1">{client.name}</div>
+            {/* Cancel-order button — only when there's an "ordered" call today.
+                Click ✕ to remove the order interaction; customer returns to "to_contact". */}
+            {latestCallStatus === "ordered" && todayCallSorted[0] && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(t.confirmCancelOrder || "Cancel this order? The customer will return to 'to contact' for today.")) {
+                    onUndo && onUndo(todayCallSorted[0].id);
+                  }
+                }}
+                className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all hover:scale-110"
+                style={{
+                  background: "#FEF2EE",
+                  color: "#9C5757",
+                  border: "1px solid #F5C5B7",
+                  fontSize: "11px",
+                  lineHeight: 1,
+                }}
+                title={t.cancelOrder || "Cancel order"}
+                aria-label={t.cancelOrder || "Cancel order"}
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-1 flex-shrink-0">
             {onUpdateClient && tags && tags.length > 0 && (
               <button onClick={() => setShowTagPicker(true)} className="text-stone-400 hover:text-stone-700 p-1" title={t.tags}>
