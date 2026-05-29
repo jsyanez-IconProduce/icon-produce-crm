@@ -14006,16 +14006,27 @@ function CustomerTable({
                 {/* COL 1: Customer */}
                 <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "240px" }}>
                   <div className="flex items-center gap-1.5">
-                    <div
-                      className="font-semibold truncate transition-colors"
+                    {/* Click the name to toggle the View Details panel (same effect as 👁).
+                        Renders as a button for accessibility (keyboard + screen readers),
+                        but visually looks like the original name text. */}
+                    <button
+                      onClick={() => toggleDetailRow(client)}
+                      className="font-semibold truncate transition-colors text-left cursor-pointer hover:underline"
                       style={{
-                        // Name color shifts to brand purple on hover for clear "selected" feedback
-                        color: hoveredRowClientId === client.id ? "#5F2F9D" : "#1C1B1A",
+                        // Name color shifts to brand purple on hover OR when its detail
+                        // row is currently expanded, giving clear "selected" feedback.
+                        color: hoveredRowClientId === client.id || expandedDetailClientId === client.id
+                          ? "#5F2F9D"
+                          : "#1C1B1A",
                         fontSize: "13px",
+                        background: "transparent",
+                        padding: 0,
+                        border: 0,
                       }}
+                      title={t.viewDetails || "View details"}
                     >
                       {client.name}
-                    </div>
+                    </button>
                     {/* Cancel-order button — only shown when this customer has an "ordered"
                         call today by the current vendor. Click ✕ to delete the order
                         interaction; customer returns to "to_contact" state.
