@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   CheckCircle2, PhoneOff, Clock, DollarSign, XCircle, StickyNote,
@@ -10007,12 +10007,98 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
 //   3. My top customers (bars)          — best customers by order count
 //   4. My activity by day-of-week (bars)— which days I sell most
 //   + Conversion funnel scoped to my assigned customers
-function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, loadInteractionsForDays, onBack }) {
+function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, loadInteractionsForDays, onUpdateClient, onBack }) {
   const [period, setPeriod] = useState("week"); // "today" | "week" | "month" | "quarter"
   const [periodInts, setPeriodInts] = useState(interactions || []);
   const [loadingPeriod, setLoadingPeriod] = useState(false);
   // PDF generation state for vendor's all-time export
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  // ===== EXPANDABLE CUSTOMER DETAIL =====
+  // When user clicks a top-customer row, we expand a full detail panel inline with:
+  // editable info + summary stats + order timeline. Same UX as the customer table.
+  const [expandedCustomerId, setExpandedCustomerId] = useState(null);
+  // Historical interactions for the currently expanded customer (90 days back).
+  // Keyed by customer id to avoid refetching when re-opening the same customer.
+  const [detailHistory, setDetailHistory] = useState({ clientId: null, interactions: [], loading: false });
+  // In-progress edits for the expanded customer's info.
+  const [detailEdits, setDetailEdits] = useState(null);
+  const [detailSaving, setDetailSaving] = useState(false);
+
+  // Toggle the detail panel for a given customer: opens, or closes if already open.
+  function toggleCustomerDetail(client) {
+    if (expandedCustomerId === client.id) {
+      setExpandedCustomerId(null);
+      setDetailEdits(null);
+      return;
+    }
+    setExpandedCustomerId(client.id);
+    setDetailEdits({
+      name: client.name || "",
+      phone: client.phone || "",
+      contactName: client.contactName || "",
+      email: client.email || "",
+      longNote: client.longNote || "",
+      purchaseDays: Array.isArray(client.purchaseDays) ? [...client.purchaseDays] : [],
+      frequency: client.frequency || "biweekly",
+    });
+    // Fetch 90-day history only if we don't already have it for this client
+    if (detailHistory.clientId !== client.id) {
+      setDetailHistory({ clientId: client.id, interactions: [], loading: true });
+      (async () => {
+        try {
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - 90);
+          startDate.setHours(0, 0, 0, 0);
+          const { data, error } = await supabase
+            .from("interactions")
+            .select("*")
+            .eq("client_id", client.id)
+            .gte("created_at", startDate.toISOString())
+            .order("created_at", { ascending: false })
+            .limit(500);
+          if (error) {
+            console.error("vendor analytics detail history failed:", error);
+            setDetailHistory({ clientId: client.id, interactions: [], loading: false });
+            return;
+          }
+          setDetailHistory({
+            clientId: client.id,
+            interactions: (data || []).map(interactionFromDb),
+            loading: false,
+          });
+        } catch (err) {
+          console.error("vendor analytics detail history error:", err);
+          setDetailHistory({ clientId: client.id, interactions: [], loading: false });
+        }
+      })();
+    }
+  }
+
+  async function saveCustomerDetailEdits(client) {
+    if (!detailEdits || !onUpdateClient) {
+      // If onUpdateClient isn't wired up, give a clear message rather than failing silently
+      if (!onUpdateClient) alert(t.editsNotAvailable || "Editing is not available here.");
+      return;
+    }
+    setDetailSaving(true);
+    try {
+      await onUpdateClient(client.id, {
+        name: detailEdits.name,
+        phone: detailEdits.phone,
+        contactName: detailEdits.contactName,
+        email: detailEdits.email,
+        longNote: detailEdits.longNote,
+        purchaseDays: detailEdits.purchaseDays,
+        frequency: detailEdits.frequency,
+      });
+    } catch (err) {
+      console.error("saveCustomerDetailEdits failed:", err);
+      alert(t.couldNotSaveChanges || "Could not save changes.");
+    } finally {
+      setDetailSaving(false);
+    }
+  }
 
   // Vendor all-time PDF — same helper but scoped to MY vendorId only.
   async function generateAllTimePDF() {
@@ -10243,30 +10329,226 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
       return <div className="text-xs text-stone-400 italic text-center py-6">{t.noTopCustomers || "No orders yet in this period"}</div>;
     }
     const maxCount = Math.max(1, ...stats.topCustomers.map((x) => x.count));
+
+    // Helper for formatting timestamps in the inline detail panel
+    function fmtDateTime(ts) {
+      if (!ts) return "—";
+      const d = new Date(ts);
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    }
+    function fmtTime(ts) {
+      if (!ts) return "";
+      const d = new Date(ts);
+      return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    const businessDays = [
+      { dow: 1, label: "M" }, { dow: 2, label: "T" },
+      { dow: 3, label: "W" }, { dow: 4, label: "Th" },
+      { dow: 5, label: "F" }, { dow: 6, label: "S" },
+    ];
+
     return (
       <div className="space-y-2">
         {stats.topCustomers.map((row, idx) => {
           const pct = (row.count / maxCount) * 100;
           // Trophy emoji for #1, medals for #2 and #3
           const rank = idx === 0 ? "🏆" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
+          const isExpanded = expandedCustomerId === row.client.id;
           return (
-            <div key={row.client.id} className="flex items-center gap-3">
-              <div className="text-xs font-medium text-stone-700 flex items-center gap-1" style={{ width: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {rank && <span style={{ fontSize: "12px" }}>{rank}</span>}
-                <span>{row.client.name}</span>
-              </div>
-              <div className="flex-1 h-5 rounded" style={{ background: "#FAF8F4" }}>
-                <div
-                  className="h-full rounded transition-all"
-                  style={{
-                    width: `${pct}%`,
-                    background: "linear-gradient(90deg, #5F2F9D, #844ECA)",
-                  }}
-                />
-              </div>
-              <div className="text-xs font-bold text-right" style={{ width: "42px", color: "#5F2F9D" }}>
-                {row.count} {row.count === 1 ? (t.orderShort || "ord") : (t.ordersShort || "ords")}
-              </div>
+            <div key={row.client.id}>
+              {/* Clickable row — click to expand/collapse the detail panel below */}
+              <button
+                onClick={() => toggleCustomerDetail(row.client)}
+                className="w-full flex items-center gap-3 px-1 py-1 rounded transition-colors hover:bg-stone-50"
+                style={{ background: isExpanded ? "#F0E8FA" : "transparent" }}
+              >
+                <div className="text-xs font-medium text-stone-700 flex items-center gap-1 text-left" style={{ width: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {rank && <span style={{ fontSize: "12px" }}>{rank}</span>}
+                  <span>{row.client.name}</span>
+                </div>
+                <div className="flex-1 h-5 rounded" style={{ background: "#FAF8F4" }}>
+                  <div
+                    className="h-full rounded transition-all"
+                    style={{
+                      width: `${pct}%`,
+                      background: "linear-gradient(90deg, #5F2F9D, #844ECA)",
+                    }}
+                  />
+                </div>
+                <div className="text-xs font-bold text-right" style={{ width: "42px", color: "#5F2F9D" }}>
+                  {row.count} {row.count === 1 ? (t.orderShort || "ord") : (t.ordersShort || "ords")}
+                </div>
+                {/* Eye icon — indicates clickable, turns purple when row is expanded */}
+                <span style={{ fontSize: "14px", color: isExpanded ? "#5F2F9D" : "#B5ADA5" }}>👁</span>
+              </button>
+
+              {/* Inline detail panel — same layout as the customer table's expanded row */}
+              {isExpanded && detailEdits && (
+                <div className="mt-2 mb-3 rounded-lg p-4" style={{ background: "#FAF8F4", borderLeft: "3px solid #5F2F9D" }}>
+                  {(() => {
+                    const histInts = detailHistory.clientId === row.client.id ? detailHistory.interactions : [];
+                    const allOrders = histInts.filter((i) => i.status === "ordered");
+                    const totalOrders = allOrders.length;
+                    const lastOrder = allOrders[0];
+                    const avgPerMonth = (totalOrders / 3).toFixed(1);
+                    const eds = detailEdits;
+
+                    function toggleDay(dow) {
+                      const days = eds.purchaseDays || [];
+                      const next = days.includes(dow)
+                        ? days.filter((d) => d !== dow)
+                        : [...days, dow].sort((a, b) => a - b);
+                      setDetailEdits({ ...eds, purchaseDays: next });
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* LEFT: editable info */}
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest font-bold mb-3" style={{ color: "#5F2F9D" }}>
+                            📝 {t.customerInfo || "Customer info"}
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-[10px] uppercase tracking-wide font-semibold text-stone-600">{t.nameCol || "Name"}</label>
+                              <input
+                                type="text"
+                                value={eds.name || ""}
+                                onChange={(e) => setDetailEdits({ ...eds, name: e.target.value })}
+                                className="w-full mt-1 px-2.5 py-1.5 text-sm rounded border border-stone-300 focus:border-purple-500 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] uppercase tracking-wide font-semibold text-stone-600">{t.phoneCol || "Phone"}</label>
+                              <input
+                                type="text"
+                                value={eds.phone || ""}
+                                onChange={(e) => setDetailEdits({ ...eds, phone: e.target.value })}
+                                className="w-full mt-1 px-2.5 py-1.5 text-sm rounded border border-stone-300 focus:border-purple-500 focus:outline-none"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide font-semibold text-stone-600">{t.contact || "Contact"}</label>
+                                <input
+                                  type="text"
+                                  value={eds.contactName || ""}
+                                  onChange={(e) => setDetailEdits({ ...eds, contactName: e.target.value })}
+                                  className="w-full mt-1 px-2.5 py-1.5 text-sm rounded border border-stone-300 focus:border-purple-500 focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] uppercase tracking-wide font-semibold text-stone-600">{t.email || "Email"}</label>
+                                <input
+                                  type="email"
+                                  value={eds.email || ""}
+                                  onChange={(e) => setDetailEdits({ ...eds, email: e.target.value })}
+                                  className="w-full mt-1 px-2.5 py-1.5 text-sm rounded border border-stone-300 focus:border-purple-500 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] uppercase tracking-wide font-semibold text-stone-600">{t.purchaseDays || "Purchase days"}</label>
+                              <div className="flex gap-1 mt-1">
+                                {businessDays.map((d) => {
+                                  const active = (eds.purchaseDays || []).includes(d.dow);
+                                  return (
+                                    <button
+                                      key={d.dow}
+                                      onClick={() => toggleDay(d.dow)}
+                                      className="w-9 h-9 rounded-md text-xs font-bold transition-colors"
+                                      style={{
+                                        background: active ? "#5F2F9D" : "white",
+                                        color: active ? "white" : "#6B6560",
+                                        border: `1px solid ${active ? "#5F2F9D" : "#E5E0DA"}`,
+                                      }}
+                                    >
+                                      {d.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] uppercase tracking-wide font-semibold text-stone-600">{t.notes || "Notes"}</label>
+                              <textarea
+                                value={eds.longNote || ""}
+                                onChange={(e) => setDetailEdits({ ...eds, longNote: e.target.value })}
+                                rows={2}
+                                className="w-full mt-1 px-2.5 py-1.5 text-sm rounded border border-stone-300 focus:border-purple-500 focus:outline-none resize-none"
+                              />
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                onClick={() => saveCustomerDetailEdits(row.client)}
+                                disabled={detailSaving}
+                                className="px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50"
+                                style={{ background: "#5F2F9D", color: "white" }}
+                              >
+                                {detailSaving ? (t.saving || "Saving…") : (t.saveChanges || "Save changes")}
+                              </button>
+                              <button
+                                onClick={() => { setExpandedCustomerId(null); setDetailEdits(null); }}
+                                className="px-4 py-2 rounded-lg text-xs font-semibold border"
+                                style={{ background: "white", borderColor: "#E5E0DA", color: "#6B6560" }}
+                              >
+                                {t.close || "Close"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* RIGHT: stats + timeline */}
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest font-bold mb-3" style={{ color: "#5F2F9D" }}>
+                            📊 {t.orderHistory || "Order history"} <span className="text-stone-500 font-normal">({t.last90Days || "last 90 days"})</span>
+                          </div>
+                          {detailHistory.loading ? (
+                            <div className="text-xs text-stone-500 italic">{t.loadingDots || "loading…"}</div>
+                          ) : (
+                            <>
+                              <div className="grid grid-cols-3 gap-2 mb-4">
+                                <div className="rounded p-2 text-center" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+                                  <div className="text-[9px] uppercase tracking-wide text-stone-500 font-semibold">{t.totalOrdersStat || "Total orders"}</div>
+                                  <div className="text-2xl font-bold" style={{ color: "#5F2F9D" }}>{totalOrders}</div>
+                                </div>
+                                <div className="rounded p-2 text-center" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+                                  <div className="text-[9px] uppercase tracking-wide text-stone-500 font-semibold">{t.avgPerMonth || "Avg / month"}</div>
+                                  <div className="text-2xl font-bold" style={{ color: "#73A626" }}>{avgPerMonth}</div>
+                                </div>
+                                <div className="rounded p-2 text-center" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+                                  <div className="text-[9px] uppercase tracking-wide text-stone-500 font-semibold">{t.lastOrder || "Last order"}</div>
+                                  <div className="text-[11px] font-bold mt-1.5" style={{ color: "#1C1B1A" }}>{lastOrder ? fmtDateTime(lastOrder.timestamp) : "—"}</div>
+                                </div>
+                              </div>
+                              <div className="text-[10px] uppercase tracking-wide font-semibold text-stone-600 mb-2">
+                                {t.timeline || "Timeline"}
+                              </div>
+                              {allOrders.length === 0 ? (
+                                <div className="text-xs text-stone-500 italic py-3">{t.noOrdersIn90 || "No orders in the last 90 days."}</div>
+                              ) : (
+                                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-2">
+                                  {allOrders.map((o) => (
+                                    <div key={o.id} className="flex items-center gap-3 p-2 rounded" style={{ background: "white", border: "1px solid #F0EDE7" }}>
+                                      <span style={{ fontSize: "10px" }}>🛒</span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-semibold">{fmtDateTime(o.timestamp)}</div>
+                                        <div className="text-[10px] text-stone-500">{fmtTime(o.timestamp)} · {o.channel || "call"}</div>
+                                        {o.note && <div className="text-[10px] text-stone-600 italic mt-0.5 truncate">"{o.note}"</div>}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           );
         })}
@@ -12266,6 +12548,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         clients={clients}
         interactions={interactions}
         loadInteractionsForDays={loadInteractionsForDays}
+        onUpdateClient={onUpdateClient}
         onBack={closeAnalytics}
       />
     );
@@ -13503,6 +13786,50 @@ function CustomerTable({
     }
   }
 
+  // ===== TABLE HORIZONTAL SCROLLBAR — TOP MIRROR =====
+  // The customer table is wide and only had a scrollbar at the bottom.
+  // We add a synced scrollbar ABOVE the table so users can scroll horizontally
+  // without scrolling all the way down. Refs let us sync the two containers.
+  const topScrollRef = useRef(null);    // empty div that hosts the top scrollbar
+  const bottomScrollRef = useRef(null); // the table container (scrollable)
+  // tableWidth = the actual content width of the table; used to size the
+  // invisible inner div inside the top scrollbar so its scrollbar matches.
+  const [tableWidth, setTableWidth] = useState(0);
+
+  // Measure the table width on mount/resize so the top scrollbar reflects
+  // the same scrollable distance. Re-measure when customers list changes
+  // (table can grow or shrink with the data).
+  useEffect(() => {
+    function measure() {
+      const el = bottomScrollRef.current?.querySelector("table");
+      if (el) setTableWidth(el.scrollWidth);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    // Re-measure on next tick to catch React's render
+    const tid = setTimeout(measure, 50);
+    return () => {
+      window.removeEventListener("resize", measure);
+      clearTimeout(tid);
+    };
+  }, [customers]);
+
+  // Sync handlers: when one scrolls, the other follows. The `isSyncing` flag
+  // prevents an infinite ping-pong loop between the two.
+  const syncingRef = useRef(false);
+  function onTopScroll(e) {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    if (bottomScrollRef.current) bottomScrollRef.current.scrollLeft = e.target.scrollLeft;
+    requestAnimationFrame(() => { syncingRef.current = false; });
+  }
+  function onBottomScroll(e) {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    if (topScrollRef.current) topScrollRef.current.scrollLeft = e.target.scrollLeft;
+    requestAnimationFrame(() => { syncingRef.current = false; });
+  }
+
   // Delete request prompt: when user clicks 🗑, show a modal with optional reason input.
   // Shape: { client } | null
   const [deletePrompt, setDeletePrompt] = useState(null);
@@ -13590,11 +13917,23 @@ function CustomerTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ background: "#5F2F9D" }}>
-            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
+    <div>
+      {/* Top mirror scrollbar — syncs with the table's own bottom scrollbar so users
+          can pan the table horizontally without scrolling all the way down. */}
+      <div
+        ref={topScrollRef}
+        onScroll={onTopScroll}
+        className="overflow-x-auto"
+        style={{ height: "14px" }}
+        aria-hidden="true"
+      >
+        <div style={{ width: tableWidth || "100%", height: "1px" }} />
+      </div>
+      <div ref={bottomScrollRef} onScroll={onBottomScroll} className="overflow-x-auto">
+        <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#5F2F9D" }}>
+              <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
             <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
             <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
             <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
@@ -14137,10 +14476,23 @@ function CustomerTable({
 
               {/* ===== EXPANDED DETAIL ROW =====
                   Shown below the customer row when 👁 is clicked.
-                  Contains: editable fields, summary stats, and orders timeline. */}
+                  Contains: editable fields, summary stats, and orders timeline.
+                  The inner content uses position:sticky so it stays within the
+                  viewport when the table is horizontally scrolled — the user
+                  doesn't have to scroll right to see the form. */}
               {expandedDetailClientId === client.id && (
                 <tr style={{ background: "#FAF8F4" }}>
                   <td colSpan="6" className="px-4 py-5" style={{ borderTop: "2px solid #5F2F9D" }}>
+                    <div style={{
+                      // Keep the detail content visible regardless of horizontal scroll.
+                      // It stays anchored to the left edge of the visible viewport.
+                      position: "sticky",
+                      left: "1rem",
+                      // Constrain to the viewport width minus a little gutter for padding
+                      // so it doesn't bleed into the table's wider columns.
+                      maxWidth: "calc(100vw - 4rem)",
+                      width: "100%",
+                    }}>
                     {(() => {
                       // === Compute stats from history (90-day window) ===
                       const histInts = detailHistory.clientId === client.id ? detailHistory.interactions : [];
@@ -14333,6 +14685,7 @@ function CustomerTable({
                         </div>
                       );
                     })()}
+                    </div>
                   </td>
                 </tr>
               )}
@@ -14341,6 +14694,7 @@ function CustomerTable({
           })}
         </tbody>
       </table>
+      </div>
 
       {/* Delete-request prompt — vendor clicks 🗑, this modal asks for optional reason
           and submits a delete edit_request that the manager must approve. */}
