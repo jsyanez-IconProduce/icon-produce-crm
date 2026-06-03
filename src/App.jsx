@@ -6997,44 +6997,44 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
         </button>
 
         {/* External link — opens Produce Dock in a new tab. Sits at the end of the
-            manager's main button stack as a "switch app" entry point. Uses brand yellow
-            accent so it visually stands apart from the other navigation buttons. */}
+            manager's main button stack as a "switch app" entry point. Purple background
+            with yellow text/icon mirrors the Icon Produce brand mark exactly. */}
         <a
           href="https://producedock.vercel.app"
           target="_blank"
           rel="noopener noreferrer"
           className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
-          style={{ background: "linear-gradient(135deg, #FFD700 0%, #FFED13 100%)", color: "#3D2E00" }}
+          style={{ background: "linear-gradient(135deg, #5F2F9D 0%, #844ECA 100%)", color: "#FFED13" }}
         >
           <div className="flex items-center gap-3">
-            {/* Branded truck icon: purple truck body + yellow "i" badge on the cargo box.
-                The "i" represents Icon Produce — same mark used in the main logo.
-                Inline SVG so we control exact brand colors (purple #5F2F9D + yellow #FFED13). */}
-            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(60,46,0,0.12)" }}>
+            {/* Branded truck icon — colors inverted to read on the purple background:
+                truck body in brand yellow, "i" badge in purple, paying off the same
+                color pairing used in the Icon Produce logo. */}
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,237,19,0.18)" }}>
               <svg width="26" height="26" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
                 {/* Cargo box (back of truck) */}
-                <rect x="2" y="11" width="16" height="11" rx="1.5" fill="#5F2F9D" />
+                <rect x="2" y="11" width="16" height="11" rx="1.5" fill="#FFED13" />
                 {/* Cab (front of truck) */}
-                <path d="M18 14 L24 14 L28 18 L28 22 L18 22 Z" fill="#5F2F9D" />
-                {/* Window on cab */}
-                <path d="M19.5 15.5 L23.3 15.5 L25.8 18 L19.5 18 Z" fill="#C8B0E7" />
-                {/* "i" badge on the cargo box — yellow dot + yellow stem */}
-                <circle cx="10" cy="14.5" r="1.4" fill="#FFED13" />
-                <rect x="9" y="16.5" width="2" height="4" rx="0.4" fill="#FFED13" />
-                {/* Wheels */}
+                <path d="M18 14 L24 14 L28 18 L28 22 L18 22 Z" fill="#FFED13" />
+                {/* Window on cab — soft yellow tint so it reads against the cab */}
+                <path d="M19.5 15.5 L23.3 15.5 L25.8 18 L19.5 18 Z" fill="#FFFABD" />
+                {/* "i" badge on the cargo box — purple to echo the brand mark */}
+                <circle cx="10" cy="14.5" r="1.4" fill="#5F2F9D" />
+                <rect x="9" y="16.5" width="2" height="4" rx="0.4" fill="#5F2F9D" />
+                {/* Wheels — black tires with yellow hubs (matches body color) */}
                 <circle cx="8" cy="23" r="2.4" fill="#1C1B1A" />
-                <circle cx="8" cy="23" r="1" fill="#5F2F9D" />
+                <circle cx="8" cy="23" r="1" fill="#FFED13" />
                 <circle cx="23" cy="23" r="2.4" fill="#1C1B1A" />
-                <circle cx="23" cy="23" r="1" fill="#5F2F9D" />
+                <circle cx="23" cy="23" r="1" fill="#FFED13" />
               </svg>
             </div>
             <div>
               <div className="font-semibold">{t.goToDockApp || "Go to Dock App"}</div>
-              <div className="text-xs opacity-70">{t.goToDockAppSub || "Open Produce Dock"}</div>
+              <div className="text-xs" style={{ color: "#FFED13", opacity: 0.85 }}>{t.goToDockAppSub || "Open Produce Dock"}</div>
             </div>
           </div>
-          {/* External-link icon */}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+          {/* External-link icon — yellow tinted to match text */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFED13" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}>
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
             <polyline points="15 3 21 3 21 9"/>
             <line x1="10" y1="14" x2="21" y2="3"/>
@@ -7042,38 +7042,38 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
         </a>
 
         {/* External link — opens Icon Produce Quality Control app in a new tab.
-            Same visual treatment as the Dock App button but with a clipboard/check
-            icon so the two are easily distinguishable in the button stack. */}
+            Red background with white text — distinct from the purple Dock App button
+            so the two are immediately distinguishable at a glance. */}
         <a
           href="https://icon-produce-qc.vercel.app"
           target="_blank"
           rel="noopener noreferrer"
           className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
-          style={{ background: "linear-gradient(135deg, #FFD700 0%, #FFED13 100%)", color: "#3D2E00" }}
+          style={{ background: "linear-gradient(135deg, #C53030 0%, #E53E3E 100%)", color: "white" }}
         >
           <div className="flex items-center gap-3">
             {/* Clipboard with checkmark — represents Quality Control checks.
-                Purple body + yellow checkmark to echo the brand palette. */}
-            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(60,46,0,0.12)" }}>
+                White clipboard body + red checkmark to echo the button's red theme. */}
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(255,255,255,0.18)" }}>
               <svg width="22" height="22" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
                 {/* Clipboard back */}
-                <rect x="6" y="6" width="20" height="22" rx="2" fill="#5F2F9D" />
+                <rect x="6" y="6" width="20" height="22" rx="2" fill="white" />
                 {/* Clipboard top clip */}
-                <rect x="11" y="3" width="10" height="5" rx="1" fill="#5F2F9D" />
-                <rect x="13" y="4.5" width="6" height="2.5" rx="0.6" fill="#C8B0E7" />
-                {/* Paper area inside clipboard */}
-                <rect x="9" y="10" width="14" height="15" rx="1" fill="#F5F1EA" />
-                {/* Yellow checkmark */}
-                <path d="M11.5 18 L14 20.5 L20 14" stroke="#FFED13" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                <rect x="11" y="3" width="10" height="5" rx="1" fill="white" />
+                <rect x="13" y="4.5" width="6" height="2.5" rx="0.6" fill="#FED7D7" />
+                {/* Paper area inside clipboard — slightly off-white */}
+                <rect x="9" y="10" width="14" height="15" rx="1" fill="#FFF5F5" />
+                {/* Red checkmark to tie the icon back to the button's theme */}
+                <path d="M11.5 18 L14 20.5 L20 14" stroke="#C53030" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </svg>
             </div>
             <div>
               <div className="font-semibold">{t.goToQcApp || "Go to Quality Control App"}</div>
-              <div className="text-xs opacity-70">{t.goToQcAppSub || "Open QC checks"}</div>
+              <div className="text-xs opacity-85">{t.goToQcAppSub || "Open QC checks"}</div>
             </div>
           </div>
           {/* External-link icon */}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}>
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
             <polyline points="15 3 21 3 21 9"/>
             <line x1="10" y1="14" x2="21" y2="3"/>
