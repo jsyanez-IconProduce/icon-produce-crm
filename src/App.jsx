@@ -511,6 +511,8 @@ const T = {
     allCustomersHint: "Show every customer regardless of day",
     goToDockApp: "Go to Dock App",
     goToDockAppSub: "Open Produce Dock",
+    goToQcApp: "Go to Quality Control App",
+    goToQcAppSub: "Open QC checks",
     sunday: "Sunday",
     monday: "Monday",
     tuesday: "Tuesday",
@@ -1359,6 +1361,8 @@ const T = {
     allCustomersHint: "Mostrar todos los clientes sin importar el día",
     goToDockApp: "Ir a Dock App",
     goToDockAppSub: "Abrir Produce Dock",
+    goToQcApp: "Ir a App de Control de Calidad",
+    goToQcAppSub: "Abrir checks de QC",
     sunday: "Domingo",
     monday: "Lunes",
     tuesday: "Martes",
@@ -7003,12 +7007,69 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           style={{ background: "linear-gradient(135deg, #FFD700 0%, #FFED13 100%)", color: "#3D2E00" }}
         >
           <div className="flex items-center gap-3">
+            {/* Branded truck icon: purple truck body + yellow "i" badge on the cargo box.
+                The "i" represents Icon Produce — same mark used in the main logo.
+                Inline SVG so we control exact brand colors (purple #5F2F9D + yellow #FFED13). */}
             <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(60,46,0,0.12)" }}>
-              <span style={{ fontSize: "20px" }}>⚓</span>
+              <svg width="26" height="26" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                {/* Cargo box (back of truck) */}
+                <rect x="2" y="11" width="16" height="11" rx="1.5" fill="#5F2F9D" />
+                {/* Cab (front of truck) */}
+                <path d="M18 14 L24 14 L28 18 L28 22 L18 22 Z" fill="#5F2F9D" />
+                {/* Window on cab */}
+                <path d="M19.5 15.5 L23.3 15.5 L25.8 18 L19.5 18 Z" fill="#C8B0E7" />
+                {/* "i" badge on the cargo box — yellow dot + yellow stem */}
+                <circle cx="10" cy="14.5" r="1.4" fill="#FFED13" />
+                <rect x="9" y="16.5" width="2" height="4" rx="0.4" fill="#FFED13" />
+                {/* Wheels */}
+                <circle cx="8" cy="23" r="2.4" fill="#1C1B1A" />
+                <circle cx="8" cy="23" r="1" fill="#5F2F9D" />
+                <circle cx="23" cy="23" r="2.4" fill="#1C1B1A" />
+                <circle cx="23" cy="23" r="1" fill="#5F2F9D" />
+              </svg>
             </div>
             <div>
               <div className="font-semibold">{t.goToDockApp || "Go to Dock App"}</div>
               <div className="text-xs opacity-70">{t.goToDockAppSub || "Open Produce Dock"}</div>
+            </div>
+          </div>
+          {/* External-link icon */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.7 }}>
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </a>
+
+        {/* External link — opens Icon Produce Quality Control app in a new tab.
+            Same visual treatment as the Dock App button but with a clipboard/check
+            icon so the two are easily distinguishable in the button stack. */}
+        <a
+          href="https://icon-produce-qc.vercel.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          style={{ background: "linear-gradient(135deg, #FFD700 0%, #FFED13 100%)", color: "#3D2E00" }}
+        >
+          <div className="flex items-center gap-3">
+            {/* Clipboard with checkmark — represents Quality Control checks.
+                Purple body + yellow checkmark to echo the brand palette. */}
+            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "rgba(60,46,0,0.12)" }}>
+              <svg width="22" height="22" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                {/* Clipboard back */}
+                <rect x="6" y="6" width="20" height="22" rx="2" fill="#5F2F9D" />
+                {/* Clipboard top clip */}
+                <rect x="11" y="3" width="10" height="5" rx="1" fill="#5F2F9D" />
+                <rect x="13" y="4.5" width="6" height="2.5" rx="0.6" fill="#C8B0E7" />
+                {/* Paper area inside clipboard */}
+                <rect x="9" y="10" width="14" height="15" rx="1" fill="#F5F1EA" />
+                {/* Yellow checkmark */}
+                <path d="M11.5 18 L14 20.5 L20 14" stroke="#FFED13" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+            </div>
+            <div>
+              <div className="font-semibold">{t.goToQcApp || "Go to Quality Control App"}</div>
+              <div className="text-xs opacity-70">{t.goToQcAppSub || "Open QC checks"}</div>
             </div>
           </div>
           {/* External-link icon */}
