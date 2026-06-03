@@ -502,6 +502,9 @@ const T = {
     previousDay: "Previous day",
     nextDay: "Next day",
     backToToday: "Back to today",
+    editingPastDay: "Editing a past day",
+    editingFutureDay: "Editing a future day",
+    backdateNote: "— anything you log will be saved with that day's date.",
     viewingAll: "Viewing",
     allCustomers: "All customers",
     allShort: "All",
@@ -1347,6 +1350,9 @@ const T = {
     previousDay: "Día anterior",
     nextDay: "Día siguiente",
     backToToday: "Volver a hoy",
+    editingPastDay: "Editando un día pasado",
+    editingFutureDay: "Editando un día futuro",
+    backdateNote: "— lo que registres se guardará con la fecha de ese día.",
     viewingAll: "Viendo",
     allCustomers: "Todos los clientes",
     allShort: "Todos",
@@ -2021,6 +2027,10 @@ function interactionToDb(i) {
   if (i.note !== undefined) out.note = i.note;
   if (i.subReason !== undefined) out.sub_reason = i.subReason;
   if (i.scheduledTime !== undefined) out.scheduled_time = i.scheduledTime;
+  // Optional: backdate this interaction to a specific timestamp. Used when the
+  // vendor is logging on behalf of a previous day (forgot to log it that day).
+  // When omitted, Supabase stamps it with NOW() automatically.
+  if (i.timestamp !== undefined) out.created_at = new Date(i.timestamp).toISOString();
   return out;
 }
 
@@ -12192,6 +12202,32 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   // Effective interactions for the currently-viewed day. When viewing today, use
   // the realtime prop. When viewing a past/future day, use the fetched historical day.
   const effectiveInteractions = dayOffset === 0 ? interactions : historicalDayInts;
+
+  // ===== HISTORICAL DAY LOGGING =====
+  // When the vendor is viewing a past day (dayOffset < 0) and clicks a contact
+  // button (e.g. "ordered"), we want the new interaction to be SAVED as if it
+  // happened that day — not today. This lets vendors fill in entries they
+  // forgot to mark during the original day.
+  //
+  // We wrap onLog with a helper that injects a `timestamp` when on a non-today
+  // view. The backdated time uses NOON (12:00 PM) of the target day, which is
+  // a sensible placeholder when the vendor doesn't remember the exact time.
+  // The original onLog (logInteraction) reads this `timestamp` and persists it
+  // as the row's `created_at` in Supabase.
+  function computeBackdatedTimestamp() {
+    if (dayOffset === 0) return undefined;
+    const target = new Date();
+    target.setHours(12, 0, 0, 0); // noon, neutral default
+    target.setDate(target.getDate() + dayOffset);
+    return target.getTime();
+  }
+  const effectiveOnLog = (payload) => {
+    const ts = computeBackdatedTimestamp();
+    if (ts && payload && payload.timestamp === undefined) {
+      return onLog({ ...payload, timestamp: ts });
+    }
+    return onLog(payload);
+  };
   // Manager-mode only: state for the "Add client" / "Add lead" quick action modals
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
@@ -12863,6 +12899,37 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       </div>
 
+      {/* Past-day editing banner — appears when the vendor is on a past or future
+          calendar day. Makes it clear that any new logs will be backdated to that
+          day (helpful for filling in entries the vendor forgot during the day). */}
+      {dayOffset !== 0 && !viewAllDays && (
+        <div
+          className="mb-3 px-3 py-2 rounded-lg flex items-center justify-between gap-2"
+          style={{ background: "#FFFBED", border: "1px solid #E8C97A" }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span style={{ fontSize: "14px" }}>{dayOffset < 0 ? "⏪" : "⏩"}</span>
+            <div className="text-[11px] leading-tight" style={{ color: "#8B6F1A" }}>
+              <span className="font-bold">
+                {dayOffset < 0
+                  ? (t.editingPastDay || "Editing a past day")
+                  : (t.editingFutureDay || "Editing a future day")}
+              </span>{" "}
+              <span className="opacity-90">
+                {t.backdateNote || "— anything you log will be saved with that day's date."}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => { setSelectedDow(todayDow); setDayOffset(0); }}
+            className="text-[10px] font-bold underline whitespace-nowrap flex-shrink-0"
+            style={{ color: "#8B6F1A" }}
+          >
+            ↺ {t.backToToday || "Back to today"}
+          </button>
+        </div>
+      )}
+
       {/* Quick action row — only visible in manager mode.
           Manager can add clients/leads directly from My Sales without going back to dashboard.
           These are auto-approved (no pending state) and default-assigned to the manager themselves. */}
@@ -13057,7 +13124,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
                 allInteractions={effectiveInteractions}
                 templates={templates}
                 tags={tags}
-                onLog={onLog}
+                onLog={effectiveOnLog}
                 onUndo={onUndo}
                 onCloseCallback={onCloseCallback}
                 isLead={true}
@@ -13091,7 +13158,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
                 const asClient = { id: lead.id, name: lead.name, phone: lead.phone, frequency: "lead" };
                 return (
                   <div key={lead.id} style={{ borderLeft: "3px solid #F5D785", borderRadius: "16px" }}>
-                    <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
+                    <ClientCard t={t} client={asClient} vendorId={vendorId} interactions={intsForClient(lead.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
                     {/* Convert to client — turns a lead into a regular client.
                         Opens modal to choose frequency + purchase days.
                         After conversion, lead disappears from leads list and client appears with
@@ -13258,11 +13325,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "to_contact" && (
       <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#5F2F9D" bg="#E8DDF5" lightBg="#F4EDFA" clientList={pending}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={effectiveInteractions} templates={templates} tags={tags}
-            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
@@ -13275,11 +13342,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "ordered" && (
       <VendorStatusSection t={t} title={t.statusOrdered} icon={CheckCircle2} color="#73A626" bg="#E8F2D5" lightBg="#F4F9E8" clientList={contactedOrdered}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
@@ -13290,11 +13357,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "callback" && (
       <VendorStatusSection t={t} title={t.statusCallback} icon={Clock} color="#5A6B85" bg="#E5EAF2" lightBg="#F2F5F9" clientList={contactedCallback}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
@@ -13305,11 +13372,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "no_answer" && (
       <VendorStatusSection t={t} title={t.statusNoAnswer} icon={PhoneOff} color="#8B7355" bg="#F0EAE0" lightBg="#FAF6EE" clientList={contactedNoAnswer}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
@@ -13320,11 +13387,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "price_issue" && (
       <VendorStatusSection t={t} title={t.statusPriceIssue} icon={DollarSign} color="#B8860B" bg="#FFF5D6" lightBg="#FFFBEC" clientList={contactedPriceIssue}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
@@ -13335,11 +13402,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "not_interested" && (
       <VendorStatusSection t={t} title={t.statusNotInterested} icon={XCircle} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={contactedNotInterested}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
@@ -13350,11 +13417,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "other" && (
       <VendorStatusSection t={t} title={t.statusOther || "Other"} icon={X} color="#5A4A6B" bg="#EAE3F0" lightBg="#F4EFF7" clientList={contactedOther}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
+            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
