@@ -528,6 +528,15 @@ const T = {
     viewMissingCall: "Missing call",
     viewMissingText: "Missing text",
     viewMissingEmail: "Missing email",
+    viewOrdersForLater: "Orders for later",
+    confirmOrder: "Confirm order",
+    deliveryDate: "Delivery date",
+    tomorrow: "Tomorrow",
+    daysShort: "days",
+    orderScheduledNote: "This order will be scheduled for the selected day. The customer will appear as ordered on both today and that day.",
+    confirmOrderBtn: "Confirm order",
+    scheduleOrderBtn: "Schedule order",
+    scheduledFor: "for",
     sortAlpha: "Name (A-Z)",
     sortMostOrders: "Most orders (90 days)",
     sortLeastContacted: "Needs attention",
@@ -1378,6 +1387,15 @@ const T = {
     viewMissingCall: "Falta llamada",
     viewMissingText: "Falta texto",
     viewMissingEmail: "Falta email",
+    viewOrdersForLater: "Órdenes para después",
+    confirmOrder: "Confirmar orden",
+    deliveryDate: "Fecha de entrega",
+    tomorrow: "Mañana",
+    daysShort: "días",
+    orderScheduledNote: "Esta orden se agendará para el día seleccionado. El cliente aparecerá como ordenado tanto hoy como ese día.",
+    confirmOrderBtn: "Confirmar orden",
+    scheduleOrderBtn: "Agendar orden",
+    scheduledFor: "para",
     sortAlpha: "Nombre (A-Z)",
     sortMostOrders: "Más órdenes (90 días)",
     sortLeastContacted: "Necesita atención",
@@ -3986,12 +4004,18 @@ export default function App() {
         if (leadsData) setLeads(leadsData.map(leadFromDb));
 
         // Today's interactions (RLS auto-filters)
+        // Includes:
+        //   • interactions placed today (created_at >= startOfToday)
+        //   • orders scheduled for delivery today (scheduled_time = today's ISO date)
+        //     so customers placed on a previous day with scheduled_time=today still
+        //     show as ordered when viewing today.
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
+        const todayIso = `${startOfToday.getFullYear()}-${String(startOfToday.getMonth() + 1).padStart(2, "0")}-${String(startOfToday.getDate()).padStart(2, "0")}`;
         const { data: intsData } = await supabase
           .from("interactions")
           .select("*")
-          .gte("created_at", startOfToday.toISOString())
+          .or(`created_at.gte.${startOfToday.toISOString()},scheduled_time.eq.${todayIso}`)
           .order("created_at", { ascending: false });
         if (intsData) setInteractions(intsData.map(interactionFromDb));
 
@@ -7686,6 +7710,142 @@ function AddLeadModal({ t, onSave, onCancel }) {
     </div>
   );
 }
+
+// ============================================
+// OrderForLaterModal — date picker shown after vendor clicks "Order"
+// ============================================
+// Lets the vendor pick the delivery date for an order. Default = today.
+// If today is picked, the order is treated as a normal "ordered" call.
+// If a future date is picked, the order is scheduled for that date so it
+// surfaces in both the order-placement day and the scheduled delivery day.
+function OrderForLaterModal({ t, client, onConfirm, onCancel }) {
+  // Default delivery date = today (ISO YYYY-MM-DD)
+  function todayIso() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  const [date, setDate] = useState(todayIso());
+
+  function handleConfirm() {
+    if (!date) return;
+    onConfirm(date);
+  }
+
+  // Quick-pick chips for tomorrow / day after
+  function quickPick(offsetDays) {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    setDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+  const isToday = date === todayIso();
+  // Friendly label of the picked date
+  const friendlyDate = (() => {
+    if (!date) return "";
+    const [y, m, dd] = date.split("-").map(Number);
+    const dt = new Date(y, m - 1, dd);
+    return dt.toLocaleDateString(t.locale || "en-US", { weekday: "long", month: "short", day: "numeric" });
+  })();
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.5)" }}
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white w-full max-w-md rounded-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4" style={{ background: "#F0E8FA", borderBottom: "1px solid #E5E0DA" }}>
+          <div className="text-[10px] uppercase tracking-widest font-bold" style={{ color: "#5F2F9D" }}>
+            🛒 {t.confirmOrder || "Confirm order"}
+          </div>
+          <div className="text-base font-bold mt-0.5">{client.name}</div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-stone-700 block mb-2">
+              {t.deliveryDate || "Delivery date"}
+            </label>
+
+            {/* Quick chips */}
+            <div className="flex gap-2 mb-2 flex-wrap">
+              <button
+                onClick={() => quickPick(0)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                style={{
+                  background: isToday ? "#5F2F9D" : "white",
+                  color: isToday ? "white" : "#5F2F9D",
+                  border: "1px solid #5F2F9D",
+                }}
+              >
+                {t.today || "Today"}
+              </button>
+              <button
+                onClick={() => quickPick(1)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                style={{
+                  background: !isToday && date === (() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() ? "#5F2F9D" : "white",
+                  color: !isToday && date === (() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() ? "white" : "#5F2F9D",
+                  border: "1px solid #5F2F9D",
+                }}
+              >
+                {t.tomorrow || "Tomorrow"}
+              </button>
+              <button
+                onClick={() => quickPick(2)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                style={{
+                  background: "white",
+                  color: "#5F2F9D",
+                  border: "1px solid #5F2F9D",
+                }}
+              >
+                +2 {t.daysShort || "days"}
+              </button>
+            </div>
+
+            {/* Date input — full date picker */}
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              min={todayIso()}
+              className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
+              style={{ borderColor: "#E5E0DA" }}
+            />
+            <div className="text-[11px] text-stone-500 mt-1">{friendlyDate}</div>
+          </div>
+
+          {!isToday && (
+            <div className="rounded-lg p-3 text-[11px]" style={{ background: "#FFFBED", border: "1px solid #E8C97A", color: "#8B6F1A" }}>
+              📅 {t.orderScheduledNote || "This order will be scheduled for the selected day. The customer will appear as ordered on both today and that day."}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onCancel}
+              className="flex-1 py-2.5 rounded-lg text-xs font-semibold border"
+              style={{ background: "white", borderColor: "#E5E0DA", color: "#6B6560" }}
+            >
+              {t.cancel || "Cancel"}
+            </button>
+            <button
+              onClick={handleConfirm}
+              className="flex-1 py-2.5 rounded-lg text-xs font-bold"
+              style={{ background: "#5F2F9D", color: "white" }}
+            >
+              {isToday ? (t.confirmOrderBtn || "Confirm order") : (t.scheduleOrderBtn || "Schedule order")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ============================================
 // ConvertLeadModal — converts a lead into a regular client
@@ -12239,13 +12399,15 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     const endDay = new Date(targetDay);
     endDay.setDate(endDay.getDate() + 1);
     const endISO = endDay.toISOString();
+    // ISO YYYY-MM-DD of the target day — used to match scheduled orders that
+    // were placed on a different day but scheduled for THIS day's delivery.
+    const targetIso = `${targetDay.getFullYear()}-${String(targetDay.getMonth() + 1).padStart(2, "0")}-${String(targetDay.getDate()).padStart(2, "0")}`;
 
     setLoadingHistoricalDay(true);
     supabase
       .from("interactions")
       .select("*")
-      .gte("created_at", startISO)
-      .lt("created_at", endISO)
+      .or(`and(created_at.gte.${startISO},created_at.lt.${endISO}),scheduled_time.eq.${targetIso}`)
       .order("created_at", { ascending: false })
       .limit(2000)
       .then(({ data, error }) => {
@@ -12289,6 +12451,41 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     }
     return onLog(payload);
   };
+
+  // ===== ORDER-FOR-LATER MODAL =====
+  // When the vendor clicks an "Order" outcome button, we open a date picker so
+  // they can specify when the customer wants the order delivered. Default = today
+  // (no behavioral change in that case). If a future date is picked, we store it
+  // in `scheduled_time` (ISO YYYY-MM-DD) so:
+  //   - On the order-placement day:  customer shows as Ordered (interaction exists)
+  //   - On the scheduled day:        customer also shows as Ordered (we surface it)
+  //   - Analytics:                   the order counts for the SCHEDULED day
+  const [orderingClient, setOrderingClient] = useState(null); // client being ordered (or null)
+  function openOrderModal(client) {
+    setOrderingClient(client);
+  }
+  // Submit the order. If deliveryDateStr === today, behaves like a normal "ordered"
+  // call. Otherwise, includes the scheduled_time so the order is associated with
+  // the future date.
+  function submitOrder(deliveryDateStr) {
+    if (!orderingClient) return;
+    const todayStr = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+    const payload = {
+      clientId: orderingClient.id,
+      vendorId,
+      channel: "call",
+      status: "ordered",
+    };
+    if (deliveryDateStr && deliveryDateStr !== todayStr) {
+      payload.subReason = "ordered_for_later";
+      payload.scheduledTime = deliveryDateStr; // "YYYY-MM-DD"
+    }
+    effectiveOnLog(payload);
+    setOrderingClient(null);
+  }
   // Manager-mode only: state for the "Add client" / "Add lead" quick action modals
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
@@ -12318,7 +12515,12 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
     // Filter by assigned contact day: customer only appears on its configured days.
     // null/undefined purchaseDays = legacy data, always show. Empty array = hide.
     // If viewAllDays mode is on, this filter is bypassed entirely.
-    if (!viewAllDays && Array.isArray(c.purchaseDays)) {
+    // ALSO: when there's an active search query, bypass the day filter so the
+    // vendor can find ANY of their customers (not just those active on the
+    // selected day). Without this, typing in search hides customers configured
+    // for other days, which is rarely what the vendor wants.
+    const hasActiveSearch = searchQuery.trim().length > 0;
+    if (!viewAllDays && !hasActiveSearch && Array.isArray(c.purchaseDays)) {
       if (c.purchaseDays.length === 0) return false;
       if (!c.purchaseDays.includes(selectedDow)) return false;
     }
@@ -12378,8 +12580,31 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   // "all" = no filter. "missing_call/text/email" = hide customers that already received
   // that contact channel today from this vendor. The dropdown lets the vendor focus
   // on remaining work for the selected day.
+  // "orders_for_later" = show ONLY customers with at least one ordered interaction
+  // whose scheduled_time is a future date (i.e. orders the vendor placed for a
+  // later delivery day).
   const unsortedFilteredClients = (() => {
     if (viewFilter === "all") return searchedClients;
+
+    // Special filter: show only customers with scheduled orders for the future
+    if (viewFilter === "orders_for_later") {
+      const todayIso = (() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      })();
+      const scheduledClientIds = new Set();
+      (effectiveInteractions || []).forEach((i) => {
+        if (i.vendorId !== vendorId) return;
+        if (i.status !== "ordered") return;
+        // scheduledTime is "YYYY-MM-DD" for scheduled deliveries. A simple lexical
+        // comparison works since the format is fixed-width.
+        if (i.scheduledTime && typeof i.scheduledTime === "string" && i.scheduledTime.length === 10 && i.scheduledTime > todayIso) {
+          scheduledClientIds.add(i.clientId);
+        }
+      });
+      return searchedClients.filter((c) => scheduledClientIds.has(c.id));
+    }
+
     // Determine which channel to check
     const channel = viewFilter === "missing_call" ? "call"
                   : viewFilter === "missing_text" ? "text"
@@ -13337,6 +13562,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             <option value="missing_call">📞 {t.viewMissingCall || "Missing call"}</option>
             <option value="missing_text">💬 {t.viewMissingText || "Missing text"}</option>
             <option value="missing_email">✉️ {t.viewMissingEmail || "Missing email"}</option>
+            <option value="orders_for_later">📅 {t.viewOrdersForLater || "Orders for later"}</option>
           </select>
           <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: viewFilter === "all" ? "#5F2F9D" : "#7A5A1A" }}>
             <ChevronRight size={12} style={{ transform: "rotate(90deg)" }} />
@@ -13386,7 +13612,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "to_contact" && (
       <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#5F2F9D" bg="#E8DDF5" lightBg="#F4EDFA" clientList={pending}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={effectiveInteractions} templates={templates} tags={tags}
@@ -13394,7 +13620,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
+            onOrderClick={openOrderModal} />
         ) : undefined}
       />
       )}
@@ -13403,7 +13630,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {activeTab === "ordered" && (
       <VendorStatusSection t={t} title={t.statusOrdered} icon={CheckCircle2} color="#73A626" bg="#E8F2D5" lightBg="#F4F9E8" clientList={contactedOrdered}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
@@ -13411,14 +13638,15 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
+            onOrderClick={openOrderModal} />
         ) : undefined}
       />
       )}
       {activeTab === "callback" && (
       <VendorStatusSection t={t} title={t.statusCallback} icon={Clock} color="#5A6B85" bg="#E5EAF2" lightBg="#F2F5F9" clientList={contactedCallback}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
@@ -13426,14 +13654,15 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
+            onOrderClick={openOrderModal} />
         ) : undefined}
       />
       )}
       {activeTab === "no_answer" && (
       <VendorStatusSection t={t} title={t.statusNoAnswer} icon={PhoneOff} color="#8B7355" bg="#F0EAE0" lightBg="#FAF6EE" clientList={contactedNoAnswer}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
@@ -13441,14 +13670,15 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
+            onOrderClick={openOrderModal} />
         ) : undefined}
       />
       )}
       {activeTab === "price_issue" && (
       <VendorStatusSection t={t} title={t.statusPriceIssue} icon={DollarSign} color="#B8860B" bg="#FFF5D6" lightBg="#FFFBEC" clientList={contactedPriceIssue}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
@@ -13456,14 +13686,15 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
+            onOrderClick={openOrderModal} />
         ) : undefined}
       />
       )}
       {activeTab === "not_interested" && (
       <VendorStatusSection t={t} title={t.statusNotInterested} icon={XCircle} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={contactedNotInterested}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
@@ -13471,14 +13702,15 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
+            onOrderClick={openOrderModal} />
         ) : undefined}
       />
       )}
       {activeTab === "other" && (
       <VendorStatusSection t={t} title={t.statusOther || "Other"} icon={X} color="#5A4A6B" bg="#EAE3F0" lightBg="#F4EFF7" clientList={contactedOther}
         renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} />
+          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
         renderTable={isDesktop ? (list) => (
           <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
@@ -13486,7 +13718,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
             onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
             onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest} />
+            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
+            onOrderClick={openOrderModal} />
         ) : undefined}
       />
       )}
@@ -13633,6 +13866,18 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             return result;
           }}
           onCancel={() => setConvertingLead(null)}
+        />
+      )}
+
+      {/* Order-for-later modal — opens when the vendor clicks any "Order" button.
+          Default delivery date = today (Confirm = normal order). Picking a future
+          date schedules the order for that day. */}
+      {orderingClient && (
+        <OrderForLaterModal
+          t={t}
+          client={orderingClient}
+          onConfirm={submitOrder}
+          onCancel={() => setOrderingClient(null)}
         />
       )}
     </div>
@@ -13806,6 +14051,7 @@ function CustomerTable({
   onLog, onUndo, onCloseCallback, onUpdateClient, onOpenEdit, onRequestRemoval,
   onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest,
   editRequests, onCreateEditRequest, onCancelEditRequest,
+  onOrderClick, // optional: when set, "Order" buttons call this instead of onLog directly
   isLead = false,
 }) {
   // Track which row has its callback picker expanded
@@ -14168,6 +14414,30 @@ function CustomerTable({
                       {t.ask || "Ask for"}: <span style={{ color: "#3D3733", fontWeight: 500 }}>{client.contactName}</span>
                     </div>
                   )}
+                  {/* Scheduled-for badge — shows the delivery date when the latest
+                      ordered interaction is for a FUTURE day. Helps the vendor
+                      remember why this customer shows as ordered today. */}
+                  {(() => {
+                    if (latestStatus !== "ordered" || !latestCall) return null;
+                    const sch = latestCall.scheduledTime;
+                    if (!sch || typeof sch !== "string" || sch.length !== 10) return null;
+                    const todayStr = (() => {
+                      const d = new Date();
+                      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                    })();
+                    if (sch <= todayStr) return null;
+                    const [yy, mm, dd] = sch.split("-").map(Number);
+                    const dt = new Date(yy, mm - 1, dd);
+                    const friendly = dt.toLocaleDateString(t.locale || "en-US", { weekday: "short", month: "short", day: "numeric" });
+                    return (
+                      <div
+                        className="text-[10px] font-bold mt-0.5 inline-block px-1.5 py-0.5 rounded"
+                        style={{ background: "#FFFBED", color: "#8B6F1A", border: "1px solid #E8C97A" }}
+                      >
+                        📅 {t.scheduledFor || "for"} {friendly}
+                      </div>
+                    );
+                  })()}
                   {/* Inline badges */}
                   <div className="flex flex-wrap gap-1 mt-1">
                     {client.convertedFromLead && (
@@ -14510,7 +14780,7 @@ function CustomerTable({
                     //   Row 2: Price · Not int. · Other             (less common, require note)
                     <div className="flex flex-col gap-1">
                       <div className="flex flex-wrap gap-1">
-                        <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.order || "Order"}>
+                        <button onClick={() => onOrderClick ? onOrderClick(client) : onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.order || "Order"}>
                           {t.order || "Order"}
                         </button>
                         <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.noAnswer || "No answer"}>
@@ -14924,7 +15194,7 @@ function CustomerTable({
   );
 }
 
-function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest }) {
+function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseCallback, allInteractions, templates, tags, onUpdateClient, onRequestRemoval, onCancelRemovalRequest, onRequestSkipWeek, onCancelSkipRequest, onOrderClick }) {
   const callInt = interactions.find((i) => chOf(i) === "call");
   // Exclude price_list pings from regular text/email — they're a separate concept.
   const textInt = interactions.find((i) => chOf(i) === "text" && i.subReason !== "price_list");
@@ -15150,7 +15420,7 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
         )}
       </div>
 
-      <CallSection t={t} client={client} vendorId={vendorId} interaction={callInt} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} />
+      <CallSection t={t} client={client} vendorId={vendorId} interaction={callInt} onLog={onLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onOrderClick={onOrderClick} />
 
       <div className="grid grid-cols-2 gap-2 mt-3">
         <ChannelToggle
@@ -15266,7 +15536,7 @@ function ClientCard({ t, client, vendorId, interactions, onLog, onUndo, onCloseC
 }
 
 // ---------- CALL SECTION ----------
-function CallSection({ t, client, vendorId, interaction, onLog, onUndo, onCloseCallback }) {
+function CallSection({ t, client, vendorId, interaction, onLog, onUndo, onCloseCallback, onOrderClick }) {
   const [flow, setFlow] = useState(null);
   // flow: null | "callback" | "price_issue" | "other" | "not_interested" | "not_interested_other"
   const [note, setNote] = useState("");
@@ -15299,7 +15569,16 @@ function CallSection({ t, client, vendorId, interaction, onLog, onUndo, onCloseC
           const s = STATUS_META[key];
           const Icon = s.icon;
           const handler = async () => {
-            if (key === "ordered" || key === "no_answer") {
+            // For "ordered": delegate to the parent's modal if available, so the
+            // vendor can pick a delivery date (today vs future). Falls back to
+            // logging immediately when no handler is wired (older callers).
+            if (key === "ordered") {
+              if (onOrderClick) {
+                onOrderClick(client);
+              } else {
+                await onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" });
+              }
+            } else if (key === "no_answer") {
               await onLog({ clientId: client.id, vendorId, channel: "call", status: key });
             } else {
               setFlow(key);
