@@ -529,6 +529,7 @@ const T = {
     viewMissingText: "Missing text",
     viewMissingEmail: "Missing email",
     viewOrdersForLater: "Orders for later",
+    viewedDay: "Viewed day",
     confirmOrder: "Confirm order",
     deliveryDate: "Delivery date",
     tomorrow: "Tomorrow",
@@ -1388,6 +1389,7 @@ const T = {
     viewMissingText: "Falta texto",
     viewMissingEmail: "Falta email",
     viewOrdersForLater: "Órdenes para después",
+    viewedDay: "Día visto",
     confirmOrder: "Confirmar orden",
     deliveryDate: "Fecha de entrega",
     tomorrow: "Mañana",
@@ -7718,26 +7720,35 @@ function AddLeadModal({ t, onSave, onCancel }) {
 // If today is picked, the order is treated as a normal "ordered" call.
 // If a future date is picked, the order is scheduled for that date so it
 // surfaces in both the order-placement day and the scheduled delivery day.
-function OrderForLaterModal({ t, client, onConfirm, onCancel }) {
-  // Default delivery date = today (ISO YYYY-MM-DD)
+function OrderForLaterModal({ t, client, viewedDayIso, onConfirm, onCancel }) {
+  // Default delivery date = today (calendar today, ISO YYYY-MM-DD)
   function todayIso() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
-  const [date, setDate] = useState(todayIso());
+  // If the vendor is viewing a past/future day (passed in as viewedDayIso),
+  // default the date picker to THAT day instead of calendar today. This lets
+  // them log forgotten activity for the viewed day with one click.
+  const initial = viewedDayIso || todayIso();
+  const [date, setDate] = useState(initial);
 
   function handleConfirm() {
     if (!date) return;
     onConfirm(date);
   }
 
-  // Quick-pick chips for tomorrow / day after
+  // Quick-pick chips. The "Today" chip means calendar today; on a viewed past day
+  // we also offer a "Viewed day" chip so the vendor can lock the date to the day
+  // they're currently navigating.
   function quickPick(offsetDays) {
     const d = new Date();
     d.setDate(d.getDate() + offsetDays);
     setDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
   }
-  const isToday = date === todayIso();
+  const calendarToday = todayIso();
+  const isCalendarToday = date === calendarToday;
+  const isViewedDay = viewedDayIso && viewedDayIso !== calendarToday && date === viewedDayIso;
+  const showViewedDayChip = viewedDayIso && viewedDayIso !== calendarToday;
   // Friendly label of the picked date
   const friendlyDate = (() => {
     if (!date) return "";
@@ -7771,12 +7782,27 @@ function OrderForLaterModal({ t, client, onConfirm, onCancel }) {
 
             {/* Quick chips */}
             <div className="flex gap-2 mb-2 flex-wrap">
+              {/* "Viewed day" chip — only shows when the vendor is browsing a
+                  past/future day. Lets them lock the order to that day with one click. */}
+              {showViewedDayChip && (
+                <button
+                  onClick={() => setDate(viewedDayIso)}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                  style={{
+                    background: isViewedDay ? "#5F2F9D" : "white",
+                    color: isViewedDay ? "white" : "#5F2F9D",
+                    border: "1px solid #5F2F9D",
+                  }}
+                >
+                  📍 {t.viewedDay || "Viewed day"}
+                </button>
+              )}
               <button
                 onClick={() => quickPick(0)}
                 className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                 style={{
-                  background: isToday ? "#5F2F9D" : "white",
-                  color: isToday ? "white" : "#5F2F9D",
+                  background: isCalendarToday ? "#5F2F9D" : "white",
+                  color: isCalendarToday ? "white" : "#5F2F9D",
                   border: "1px solid #5F2F9D",
                 }}
               >
@@ -7786,8 +7812,8 @@ function OrderForLaterModal({ t, client, onConfirm, onCancel }) {
                 onClick={() => quickPick(1)}
                 className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                 style={{
-                  background: !isToday && date === (() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() ? "#5F2F9D" : "white",
-                  color: !isToday && date === (() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() ? "white" : "#5F2F9D",
+                  background: !isCalendarToday && date === (() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() ? "#5F2F9D" : "white",
+                  color: !isCalendarToday && date === (() => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() ? "white" : "#5F2F9D",
                   border: "1px solid #5F2F9D",
                 }}
               >
@@ -7806,19 +7832,21 @@ function OrderForLaterModal({ t, client, onConfirm, onCancel }) {
               </button>
             </div>
 
-            {/* Date input — full date picker */}
+            {/* Date input — full date picker. We allow PAST dates too so the vendor
+                can log activity they forgot to mark earlier this week. */}
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              min={todayIso()}
               className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
               style={{ borderColor: "#E5E0DA" }}
             />
             <div className="text-[11px] text-stone-500 mt-1">{friendlyDate}</div>
           </div>
 
-          {!isToday && (
+          {/* Yellow info banner — only show when the picked date is in the FUTURE
+              (a scheduled delivery). Past dates are just backdating, not scheduling. */}
+          {date > calendarToday && (
             <div className="rounded-lg p-3 text-[11px]" style={{ background: "#FFFBED", border: "1px solid #E8C97A", color: "#8B6F1A" }}>
               📅 {t.orderScheduledNote || "This order will be scheduled for the selected day. The customer will appear as ordered on both today and that day."}
             </div>
@@ -7837,7 +7865,7 @@ function OrderForLaterModal({ t, client, onConfirm, onCancel }) {
               className="flex-1 py-2.5 rounded-lg text-xs font-bold"
               style={{ background: "#5F2F9D", color: "white" }}
             >
-              {isToday ? (t.confirmOrderBtn || "Confirm order") : (t.scheduleOrderBtn || "Schedule order")}
+              {date > calendarToday ? (t.scheduleOrderBtn || "Schedule order") : (t.confirmOrderBtn || "Confirm order")}
             </button>
           </div>
         </div>
@@ -12424,7 +12452,40 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
   // Effective interactions for the currently-viewed day. When viewing today, use
   // the realtime prop. When viewing a past/future day, use the fetched historical day.
-  const effectiveInteractions = dayOffset === 0 ? interactions : historicalDayInts;
+  // Effective interactions for the currently-viewed day. When viewing today, use
+  // the realtime prop. When viewing a past/future day, we use the fetched historical
+  // day's interactions PLUS any newly-logged interactions that belong to that day
+  // (matched by created_at OR scheduled_time). This is critical so that when the
+  // vendor logs activity on a past day (forgot to log it), it shows up immediately
+  // in the UI instead of waiting for a page refresh / re-fetch.
+  const effectiveInteractions = (() => {
+    if (dayOffset === 0) return interactions;
+
+    // Compute the [start, end) of the viewed day for matching by created_at
+    const targetDay = new Date();
+    targetDay.setHours(0, 0, 0, 0);
+    targetDay.setDate(targetDay.getDate() + dayOffset);
+    const targetStartMs = targetDay.getTime();
+    const targetEndMs = targetStartMs + 86400000;
+    // Also format YYYY-MM-DD for matching scheduled orders
+    const targetIso = `${targetDay.getFullYear()}-${String(targetDay.getMonth() + 1).padStart(2, "0")}-${String(targetDay.getDate()).padStart(2, "0")}`;
+
+    // Take new interactions (from realtime `interactions` state) that belong to
+    // the viewed day — either by created_at, or by scheduled_time for orders
+    // scheduled to that day.
+    const newOnesForTargetDay = (interactions || []).filter((i) => {
+      const ts = i.timestamp || 0;
+      if (ts >= targetStartMs && ts < targetEndMs) return true;
+      if (i.scheduledTime === targetIso) return true;
+      return false;
+    });
+
+    // Merge with the previously-fetched historical day, dedupe by id.
+    const byId = new Map();
+    (historicalDayInts || []).forEach((i) => { byId.set(i.id, i); });
+    newOnesForTargetDay.forEach((i) => { byId.set(i.id, i); });
+    return Array.from(byId.values());
+  })();
 
   // ===== HISTORICAL DAY LOGGING =====
   // When the vendor is viewing a past day (dayOffset < 0) and clicks a contact
@@ -12464,9 +12525,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   function openOrderModal(client) {
     setOrderingClient(client);
   }
-  // Submit the order. If deliveryDateStr === today, behaves like a normal "ordered"
-  // call. Otherwise, includes the scheduled_time so the order is associated with
-  // the future date.
+  // Submit the order. The picked date can be:
+  //   • TODAY (calendar today): normal "ordered" call, no scheduled_time.
+  //   • PAST day: just backdate (effectiveOnLog already does this via dayOffset).
+  //               We don't set scheduled_time because the order isn't scheduled —
+  //               it actually happened that day; we're just filling it in late.
+  //   • FUTURE day: scheduled order. Set scheduled_time so it surfaces on both
+  //                 the placement day and the scheduled delivery day.
   function submitOrder(deliveryDateStr) {
     if (!orderingClient) return;
     const todayStr = (() => {
@@ -12479,13 +12544,30 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       channel: "call",
       status: "ordered",
     };
-    if (deliveryDateStr && deliveryDateStr !== todayStr) {
+    if (deliveryDateStr && deliveryDateStr > todayStr) {
+      // FUTURE date — scheduled order
       payload.subReason = "ordered_for_later";
-      payload.scheduledTime = deliveryDateStr; // "YYYY-MM-DD"
+      payload.scheduledTime = deliveryDateStr;
+    } else if (deliveryDateStr && deliveryDateStr < todayStr) {
+      // PAST date — backdate this interaction's created_at directly. We do NOT
+      // pass through effectiveOnLog's automatic backdating because we want the
+      // chosen date to win regardless of dayOffset.
+      const [y, m, d] = deliveryDateStr.split("-").map(Number);
+      const backdate = new Date(y, m - 1, d, 12, 0, 0, 0);
+      payload.timestamp = backdate.getTime();
     }
     effectiveOnLog(payload);
     setOrderingClient(null);
   }
+
+  // ISO YYYY-MM-DD of the day currently being viewed in the day strip.
+  // Passed to the OrderForLaterModal so it can default to the viewed day instead
+  // of calendar today (helpful when filling in forgotten activity for past days).
+  const viewedDayIso = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
   // Manager-mode only: state for the "Add client" / "Add lead" quick action modals
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAddLead, setShowAddLead] = useState(false);
@@ -13870,12 +13952,13 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       )}
 
       {/* Order-for-later modal — opens when the vendor clicks any "Order" button.
-          Default delivery date = today (Confirm = normal order). Picking a future
-          date schedules the order for that day. */}
+          Default delivery date = the viewed day (today or whichever day's being
+          browsed in the day strip). Picking a future date schedules the order. */}
       {orderingClient && (
         <OrderForLaterModal
           t={t}
           client={orderingClient}
+          viewedDayIso={viewedDayIso}
           onConfirm={submitOrder}
           onCancel={() => setOrderingClient(null)}
         />
