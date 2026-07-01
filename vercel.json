@@ -1,0 +1,9 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/((?!sms-consent|privacy-policy|terms-and-conditions|assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
