@@ -2,6 +2,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/demo",
+      "destination": "/index.html"
+    },
+    {
       "source": "/((?!sms-consent|privacy-policy|terms-and-conditions|assets/).*)",
       "destination": "/index.html"
     }
