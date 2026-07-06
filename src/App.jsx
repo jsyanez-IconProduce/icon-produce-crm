@@ -3864,8 +3864,15 @@ function useIsDesktop(breakpoint = 1024) {
 // The demo supports a top banner with a Manager ⇄ Vendor toggle so viewers
 // can see both perspectives from the same demo session.
 
+// The demo is activated by visiting the root URL with `?demo=1` (or `?demo`).
+// We use a query string instead of a subpath because it works with the default
+// Vercel routing (root URL always serves index.html) without needing custom
+// rewrites — meaning it's bulletproof across hosting providers.
 const DEMO_MODE = typeof window !== "undefined" &&
-  (window.location.pathname === "/demo" || window.location.pathname === "/demo/");
+  (window.location.search.includes("demo=1") ||
+   window.location.search === "?demo" ||
+   window.location.pathname === "/demo" ||
+   window.location.pathname === "/demo/");
 
 // Stable UUIDs for the demo "profiles" so foreign keys line up.
 const DEMO_MANAGER_ID = "demo-manager-0000-0000-000000000001";
