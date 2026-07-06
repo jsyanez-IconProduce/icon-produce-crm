@@ -3914,11 +3914,11 @@ function generateDemoData() {
 
   // ---------- Profiles ----------
   const profiles = [
-    { id: DEMO_MANAGER_ID, full_name: "Jorge Yanez", email: "manager@demo.com",
+    { id: DEMO_MANAGER_ID, full_name: "Admin", email: "admin@demo.com",
       phone: "+13055551000", role: "admin", status: "active" },
-    { id: DEMO_VENDOR_ID, full_name: "Jose Sanchez", email: "jose@demo.com",
+    { id: DEMO_VENDOR_ID, full_name: "Vendor 1", email: "vendor1@demo.com",
       phone: "+13055551001", role: "vendor", status: "active" },
-    { id: DEMO_VENDOR2_ID, full_name: "Maria Rodriguez", email: "maria@demo.com",
+    { id: DEMO_VENDOR2_ID, full_name: "Vendor 2", email: "vendor2@demo.com",
       phone: "+13055551002", role: "vendor", status: "active" },
   ];
 
@@ -4079,8 +4079,8 @@ export default function App() {
     setCurrentUser({
       role: "admin",
       id: DEMO_MANAGER_ID,
-      name: "Jorge Yanez (Demo)",
-      email: "demo-manager@iconproduce.com",
+      name: "Admin (Demo)",
+      email: "admin@demo.com",
     });
     // Save the raw dataset on window so we can re-seed on Reset without
     // regenerating the whole (deterministic) history.
@@ -5644,8 +5644,8 @@ export default function App() {
                 onClick={() => {
                   setCurrentUser({
                     role: "admin", id: DEMO_MANAGER_ID,
-                    name: "Jorge Yanez (Demo)",
-                    email: "demo-manager@iconproduce.com",
+                    name: "Admin (Demo)",
+                    email: "admin@demo.com",
                   });
                   setAdminView("home");
                 }}
@@ -5661,8 +5661,8 @@ export default function App() {
                 onClick={() => {
                   setCurrentUser({
                     role: "vendor", id: DEMO_VENDOR_ID,
-                    name: "Jose Sanchez (Demo)",
-                    email: "demo-vendor@iconproduce.com",
+                    name: "Vendor 1 (Demo)",
+                    email: "vendor1@demo.com",
                   });
                 }}
                 className="px-3 py-1.5 text-xs font-bold transition-colors"
@@ -6065,8 +6065,45 @@ function FontImport() {
     <style>{`
       @import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800,900&display=swap');
       @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Shadows+Into+Light&display=swap');
-      .display { font-family: 'Cabinet Grotesk', 'Manrope', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.02em; }
-      .script { font-family: 'Shadows Into Light', cursive; font-weight: 400; }
+
+      /* ============================================================
+         BRAND TYPOGRAPHY — matches Icon Produce Brand Manual
+         ============================================================
+         Primary  : Cabinet Grotesk → titles, display, emphasis headings
+                    (medium 500, bold 700, extra bold 800)
+         Secondary: Montserrat → body text, forms, buttons, data
+                    (regular 400, medium 500, bold 700)
+         Support  : Shadows Into Light → tagline / celebratory emphasis
+                    (used sparingly for warmth, never for functional UI)
+
+         Utility classes below expose these consistently across the app. */
+
+      /* Display / titles */
+      .display {
+        font-family: 'Cabinet Grotesk', 'Manrope', system-ui, sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .display-lg {
+        font-family: 'Cabinet Grotesk', 'Manrope', system-ui, sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1.05;
+      }
+      .display-sm {
+        font-family: 'Cabinet Grotesk', 'Manrope', system-ui, sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+      }
+
+      /* Script / handwritten emphasis — for empty states + celebratory moments */
+      .script {
+        font-family: 'Shadows Into Light', cursive;
+        font-weight: 400;
+        letter-spacing: 0.02em;
+      }
+
+      /* Buttons + interactive feedback */
       button:active { transform: scale(0.98); }
       .card-shadow { box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -16px rgba(28,27,26,0.12); }
       input, select { font-family: inherit; }
@@ -6129,8 +6166,11 @@ function Splash() {
         }}
       />
 
-      <div className="absolute bottom-10 left-0 right-0 text-center" style={{ opacity: stage === 2 ? 0.5 : 0, transition: "opacity 500ms ease 400ms" }}>
-        <div className="text-[10px] uppercase tracking-[0.3em]" style={{ color: BRAND_PURPLE }}>
+      <div className="absolute bottom-10 left-0 right-0 text-center" style={{ opacity: stage === 2 ? 0.7 : 0, transition: "opacity 500ms ease 400ms" }}>
+        {/* Script font here (Shadows Into Light) — brand manual recommends it
+            as a support font for warm accents; the splash tagline is the ideal
+            "human touch" moment before the functional UI takes over. */}
+        <div className="script text-xl" style={{ color: BRAND_PURPLE }}>
           Sales Management
         </div>
       </div>
@@ -9317,10 +9357,12 @@ function ApprovalsPanel({ t, editRequests, clients, vendors, onApprove, onReject
       {pending.length === 0 && (
         <div className="text-center py-12 rounded-2xl mb-8" style={{ background: "#F8F4FD" }}>
           <div className="text-4xl mb-2">✨</div>
-          <div className="text-sm font-medium" style={{ color: BRAND_PURPLE }}>
+          {/* Script font (Shadows Into Light) here — brand manual reserves it
+              for warm/celebratory moments. Perfect fit for "all caught up". */}
+          <div className="script text-3xl" style={{ color: BRAND_PURPLE }}>
             {t.allCaughtUp || "All caught up!"}
           </div>
-          <div className="text-xs text-stone-500 mt-1">
+          <div className="text-xs text-stone-500 mt-2">
             {t.noPendingRequestsDetail || "No pending edit or delete requests."}
           </div>
         </div>
