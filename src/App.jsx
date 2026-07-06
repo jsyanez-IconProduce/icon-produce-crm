@@ -3852,6 +3852,176 @@ function useIsDesktop(breakpoint = 1024) {
   return isDesktop;
 }
 
+// ============================================================================
+// DEMO MODE — public showcase without login (accessed at /demo)
+// ============================================================================
+// When the browser URL path is exactly "/demo", the app skips all Supabase
+// integrations and boots with realistic fake data in memory. This lets us
+// show the product to prospects and investors without exposing real customer
+// data or requiring login. All state changes stay local (React state only)
+// and reset on page reload.
+//
+// The demo supports a top banner with a Manager ⇄ Vendor toggle so viewers
+// can see both perspectives from the same demo session.
+
+const DEMO_MODE = typeof window !== "undefined" && window.location.pathname === "/demo";
+
+// Stable UUIDs for the demo "profiles" so foreign keys line up.
+const DEMO_MANAGER_ID = "demo-manager-0000-0000-000000000001";
+const DEMO_VENDOR_ID = "demo-vendor-00000-0000-000000000001";
+const DEMO_VENDOR2_ID = "demo-vendor-00000-0000-000000000002";
+
+// Realistic Miami/Doral-area produce customer names for the fake dataset.
+// Mix of restaurants, delis, markets, and food service — the actual buyer mix
+// for a produce distribution business.
+const DEMO_CUSTOMER_SEEDS = [
+  { name: "Sunrise Cafe",         contact: "Maria",    days: [1, 3, 5] },   // M/W/F
+  { name: "El Pollo Rico",        contact: "Carlos",   days: [2, 4] },      // T/Th
+  { name: "Ocean Seafood",        contact: "Anthony",  days: [1, 4] },      // M/Th
+  { name: "La Rosa Bakery",       contact: "Elena",    days: [1, 2, 3, 4, 5] }, // M-F
+  { name: "Doral Market",         contact: "Ivan",     days: [3, 6] },      // W/Sat
+  { name: "Miami Deli",           contact: "Rita",     days: [2, 5] },      // T/F
+  { name: "Hong Kong Kitchen",    contact: "David",    days: [1, 4] },      // M/Th
+  { name: "Fresh Grocers",        contact: "Sofia",    days: [3, 5] },      // W/F
+  { name: "Little Havana Cafe",   contact: "Jose",     days: [1, 3, 5] },   // M/W/F
+  { name: "Palmetto Bistro",      contact: "Angela",   days: [2, 4] },      // T/Th
+  { name: "Bayside Diner",        contact: "Roberto",  days: [1, 3, 5] },   // M/W/F
+  { name: "Green Leaf Salads",    contact: "Kim",      days: [2, 4, 6] },   // T/Th/Sat
+  { name: "Sushi Palace",         contact: "Yuki",     days: [3, 5] },      // W/F
+  { name: "Corner Grocery",       contact: "Miguel",   days: [1, 4] },      // M/Th
+  { name: "Downtown Deli",        contact: "Sarah",    days: [1, 2, 3, 4, 5] }, // M-F
+  { name: "Wynwood Kitchen",      contact: "Diego",    days: [2, 5] },      // T/F
+  { name: "Coconut Grove Cafe",   contact: "Lila",     days: [1, 3] },      // M/W
+  { name: "Sunset Bistro",        contact: "Marco",    days: [4, 6] },      // Th/Sat
+  { name: "Brickell Market",      contact: "Nora",     days: [2, 3, 5] },   // T/W/F
+  { name: "Kendall Restaurant",   contact: "Pablo",    days: [1, 3, 5] },   // M/W/F
+];
+
+// Generate the full fake dataset. Called once when demo mode boots.
+// Returns everything needed to hydrate the app: profiles, clients, leads,
+// interactions (with a 30-day history), templates, tags, reminders.
+function generateDemoData() {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+
+  // ---------- Profiles ----------
+  const profiles = [
+    { id: DEMO_MANAGER_ID, full_name: "Jorge Yanez", email: "manager@demo.com",
+      phone: "+13055551000", role: "admin", status: "active" },
+    { id: DEMO_VENDOR_ID, full_name: "Jose Sanchez", email: "jose@demo.com",
+      phone: "+13055551001", role: "vendor", status: "active" },
+    { id: DEMO_VENDOR2_ID, full_name: "Maria Rodriguez", email: "maria@demo.com",
+      phone: "+13055551002", role: "vendor", status: "active" },
+  ];
+
+  // ---------- Clients ----------
+  // Split the customer seeds between the two vendors (~10 each) so the
+  // manager view shows real coverage across the team.
+  const clients = DEMO_CUSTOMER_SEEDS.map((seed, idx) => ({
+    id: `demo-client-${String(idx + 1).padStart(4, "0")}`,
+    name: seed.name,
+    phone: `+1305${String(2000000 + idx * 137).padStart(7, "0")}`,
+    contactName: seed.contact,
+    email: `orders@${seed.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+    vendorId: idx < 12 ? DEMO_VENDOR_ID : DEMO_VENDOR2_ID,
+    purchaseDays: seed.days,
+    frequency: "weekly",
+    notes: idx % 4 === 0 ? "Preferred delivery: morning. Loves organic." : "",
+    archived: false,
+    createdAt: now - (60 + idx) * day, // spread creation dates over past 60 days
+  }));
+
+  // ---------- Interactions (30 days of realistic history) ----------
+  // For each active day in each customer's purchase_days, roll a probability
+  // of an interaction with a realistic outcome distribution.
+  const interactions = [];
+  const statuses = [
+    { status: "ordered", weight: 0.55 },
+    { status: "no_answer", weight: 0.15 },
+    { status: "callback", weight: 0.10 },
+    { status: "not_interested", weight: 0.05 },
+    { status: "closed_lost", weight: 0.03 },
+  ];
+  let intId = 0;
+  for (let d = 30; d >= 1; d--) {
+    const dayTs = now - d * day;
+    const dow = new Date(dayTs).getDay();
+    clients.forEach((c) => {
+      if (!c.purchaseDays.includes(dow)) return;
+      // 80% chance the vendor made contact that day
+      if (Math.random() > 0.8) return;
+      // Pick a status by weighted distribution
+      const roll = Math.random();
+      let cum = 0;
+      let chosen = "ordered";
+      for (const s of statuses) {
+        cum += s.weight;
+        if (roll < cum) { chosen = s.status; break; }
+      }
+      const hour = 8 + Math.floor(Math.random() * 8); // between 8am and 4pm
+      const t = new Date(dayTs);
+      t.setHours(hour, Math.floor(Math.random() * 60), 0, 0);
+      interactions.push({
+        id: `demo-int-${String(++intId).padStart(6, "0")}`,
+        clientId: c.id,
+        vendorId: c.vendorId,
+        channel: "call",
+        status: chosen,
+        note: chosen === "callback" ? "Call back after 2pm" : "",
+        subReason: null,
+        scheduledTime: chosen === "callback" ? "14:00" : null,
+        timestamp: t.getTime(),
+      });
+    });
+  }
+
+  // ---------- Leads ----------
+  const leads = [
+    { id: "demo-lead-0001", name: "Sunset Grill", contactName: "Emma",
+      phone: "+13055553001", email: "info@sunsetgrill.com",
+      vendorId: DEMO_VENDOR_ID, status: "new",
+      notes: "Referred by La Rosa Bakery", createdAt: now - 5 * day },
+    { id: "demo-lead-0002", name: "Ocean View Restaurant", contactName: "Tom",
+      phone: "+13055553002", email: "orders@oceanview.com",
+      vendorId: DEMO_VENDOR_ID, status: "contacted",
+      notes: "Interested in weekly organic produce", createdAt: now - 8 * day },
+    { id: "demo-lead-0003", name: "Farm-to-Table Bistro", contactName: "Nina",
+      phone: "+13055553003", email: "chef@farmtotable.com",
+      vendorId: DEMO_VENDOR2_ID, status: "qualified",
+      notes: "Ready to convert — needs price list", createdAt: now - 12 * day },
+  ];
+
+  // ---------- Templates, tags, quotas ----------
+  const templates = [
+    { id: "demo-tmpl-1", type: "text", label: "Morning check-in",
+      body: "Good morning! Do you need anything today?" },
+    { id: "demo-tmpl-2", type: "email", label: "Weekly price list",
+      body: "Please find attached this week's price list." },
+  ];
+  const tags = [
+    { id: "demo-tag-1", label: "Priority", color: "#5F2F9D" },
+    { id: "demo-tag-2", label: "Organic", color: "#73A626" },
+    { id: "demo-tag-3", label: "New account", color: "#FFED13" },
+  ];
+
+  // ---------- Reminders ----------
+  const reminders = [
+    { id: "demo-rem-1", vendorId: DEMO_VENDOR_ID, managerId: DEMO_MANAGER_ID,
+      customMessage: "Don't forget to send the price list to Ocean Seafood",
+      includePendingClients: true, scheduledFor: now + 2 * 60 * 60 * 1000,
+      status: "pending", sentAt: null, errorMessage: null,
+      createdAt: now - 30 * 60 * 1000 },
+    { id: "demo-rem-2", vendorId: DEMO_VENDOR2_ID, managerId: DEMO_MANAGER_ID,
+      customMessage: "Focus on Kendall Restaurant this morning",
+      includePendingClients: true, scheduledFor: now - 60 * 60 * 1000,
+      status: "sent", sentAt: now - 55 * 60 * 1000, errorMessage: null,
+      createdAt: now - 2 * 60 * 60 * 1000 },
+  ];
+
+  return { profiles, clients, leads, interactions, templates, tags, reminders };
+}
+
+
 // ---------- ROOT ----------
 export default function App() {
   const [lang, setLang] = useState("en");
@@ -3873,6 +4043,41 @@ export default function App() {
   const [adminCreds, setAdminCreds] = useState(DEFAULT_ADMIN_CREDS);
   const [currentUser, setCurrentUser] = useState(null);
   // currentUser shape: null | { role: "vendor", id, name, email } | { role: "admin", email }
+
+  // ============================================
+  // DEMO MODE — one-shot initialization
+  // ============================================
+  // When DEMO_MODE is active, we seed every list with fake data on mount and
+  // set the currentUser to the fake manager profile. The user can toggle
+  // between manager and vendor from the demo banner. All subsequent writes
+  // go to React state only (Supabase clients/mutations are guarded elsewhere).
+  const [demoRole, setDemoRole] = useState(DEMO_MODE ? "admin" : null);
+  useEffect(() => {
+    if (!DEMO_MODE) return;
+    const data = generateDemoData();
+    setVendors(data.profiles.filter((p) => p.role === "vendor").map((p) => ({
+      id: p.id, name: p.full_name, email: p.email, phone: p.phone,
+    })));
+    setClients(data.clients);
+    setLeads(data.leads);
+    setInteractions(data.interactions);
+    setTemplates(data.templates);
+    setTags(data.tags);
+    // Note: 'reminders' state is defined further down the component — we seed
+    // it via a separate effect once its setter is available (see below).
+    setLoading(false);
+    setSplashDone(true);
+    // Boot as manager by default; toggle can flip to vendor
+    setCurrentUser({
+      role: "admin",
+      id: DEMO_MANAGER_ID,
+      name: "Jorge Yanez (Demo)",
+      email: "demo-manager@iconproduce.com",
+    });
+    // Save the raw dataset on window so we can re-seed on Reset without
+    // regenerating the whole (deterministic) history.
+    if (typeof window !== "undefined") window.__DEMO_DATA__ = data;
+  }, []);
   const [adminView, setAdminView] = useState("home"); // "home" | "admin" | "setup"
   const [authView, setAuthView] = useState("login"); // "login" | "signup" | "forgot"
   const [loginError, setLoginError] = useState("");
@@ -3928,6 +4133,7 @@ export default function App() {
 
   // Restore session on page load + listen for auth changes
   useEffect(() => {
+    if (DEMO_MODE) return; // Demo mode bootstraps its own fake user; no Supabase auth.
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -3976,6 +4182,7 @@ export default function App() {
 
   // Load Supabase data when user logs in
   useEffect(() => {
+    if (DEMO_MODE) return; // Demo mode uses fake data seeded on mount; skip Supabase reads.
     if (!currentUser || currentUser.role === "pending") {
       setVendors([]); setClients([]); setLeads([]); setInteractions([]);
       return;
@@ -4300,6 +4507,14 @@ export default function App() {
   const [pendingProfiles, setPendingProfiles] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [myPhone, setMyPhone] = useState("");
+  // Seed reminders once in demo mode (setter isn't in scope where the main demo
+  // init effect lives; we seed here as soon as this state exists).
+  useEffect(() => {
+    if (!DEMO_MODE) return;
+    const data = typeof window !== "undefined" && window.__DEMO_DATA__;
+    if (!data) return;
+    setReminders(data.reminders);
+  }, []);
   async function loadPendingProfiles() {
     if (currentUser?.role !== "admin") return;
     const { data, error } = await supabase
@@ -4351,6 +4566,23 @@ export default function App() {
   async function createReminder({ vendorId, scheduledFor, customMessage, includePendingClients }) {
     if (!vendorId || !scheduledFor) return { success: false, error: "Missing required fields" };
 
+    // Demo mode: local state only, mock success.
+    if (DEMO_MODE) {
+      const fake = {
+        id: `demo-rem-${Date.now()}`,
+        managerId: currentUser.id,
+        vendorId,
+        scheduledFor,
+        customMessage: customMessage || null,
+        includePendingClients: includePendingClients !== false,
+        status: "pending",
+        sentAt: null,
+        errorMessage: null,
+        createdAt: Date.now(),
+      };
+      setReminders((prev) => [...prev, fake].sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor)));
+      return { success: true, reminder: fake };
+    }
     const { data, error } = await supabase
       .from("reminders")
       .insert({
@@ -4431,6 +4663,24 @@ export default function App() {
 
 
   async function logInteraction(payload) {
+    // Demo mode: skip Supabase and update local state directly. This preserves
+    // the entire UX (tabs update, timeline shows new activity) without any
+    // network calls. New rows get a synthetic id so undo/delete still work.
+    if (DEMO_MODE) {
+      const fake = {
+        id: `demo-int-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        clientId: payload.clientId,
+        vendorId: payload.vendorId || currentUser?.id,
+        channel: payload.channel || "call",
+        status: payload.status,
+        note: payload.note || "",
+        subReason: payload.subReason || null,
+        scheduledTime: payload.scheduledTime || null,
+        timestamp: payload.timestamp || Date.now(),
+      };
+      setInteractions((prev) => [fake, ...prev]);
+      return;
+    }
     const dbPayload = interactionToDb(payload);
     if (!dbPayload.vendor_id) dbPayload.vendor_id = currentUser?.id;
     if (!dbPayload.channel) dbPayload.channel = "call";
@@ -4819,6 +5069,11 @@ export default function App() {
   }
 
   async function deleteInteraction(id) {
+    // Demo mode: remove from local state, no DB call.
+    if (DEMO_MODE) {
+      setInteractions((prev) => prev.filter((i) => i.id !== id));
+      return;
+    }
     // First verify the interaction exists locally so we can detect "already deleted"
     const local = interactions.find((i) => i.id === id);
     if (!local) {
@@ -4892,6 +5147,11 @@ export default function App() {
 
   // updateClients — receives full new array (legacy interface). Diffs and applies to Supabase.
   async function updateClients(nextClients) {
+    // Demo mode: just replace local state, no Supabase writes.
+    if (DEMO_MODE) {
+      setClients(nextClients);
+      return;
+    }
     const prevById = new Map(clients.map((c) => [c.id, c]));
     const nextById = new Map(nextClients.map((c) => [c.id, c]));
 
@@ -5350,6 +5610,73 @@ export default function App() {
     <div className="min-h-screen relative" style={{ background: "#F5F1EA", fontFamily: "'Montserrat', -apple-system, sans-serif", color: "#1C1B1A" }}>
       <FontImport />
       <TopBar t={t} lang={lang} onChangeLang={changeLang} currentUser={currentUser} onLogout={handleLogout} />
+
+      {/* Demo banner — only in DEMO_MODE. Lets the viewer switch between the
+          manager and vendor experiences from the same demo session, and reset
+          the data to its initial state. */}
+      {DEMO_MODE && currentUser && (
+        <div
+          className="sticky top-0 z-40 flex items-center justify-between gap-3 px-4 py-2 shadow-sm"
+          style={{ background: "linear-gradient(90deg, #5F2F9D 0%, #844ECA 100%)", color: "white" }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-lg">🎬</span>
+            <div className="min-w-0">
+              <div className="text-xs font-bold uppercase tracking-wide">Demo Mode</div>
+              <div className="text-[10px] opacity-85 truncate">
+                Interactive preview — nothing saves. Refresh to reset.
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Role toggle: switches the fake user between manager and vendor
+                so viewers see both perspectives without leaving the page. */}
+            <div className="flex rounded-lg overflow-hidden" style={{ background: "rgba(255,255,255,0.15)" }}>
+              <button
+                onClick={() => {
+                  setCurrentUser({
+                    role: "admin", id: DEMO_MANAGER_ID,
+                    name: "Jorge Yanez (Demo)",
+                    email: "demo-manager@iconproduce.com",
+                  });
+                  setAdminView("home");
+                }}
+                className="px-3 py-1.5 text-xs font-bold transition-colors"
+                style={{
+                  background: currentUser.role === "admin" ? "white" : "transparent",
+                  color: currentUser.role === "admin" ? "#5F2F9D" : "white",
+                }}
+              >
+                Manager
+              </button>
+              <button
+                onClick={() => {
+                  setCurrentUser({
+                    role: "vendor", id: DEMO_VENDOR_ID,
+                    name: "Jose Sanchez (Demo)",
+                    email: "demo-vendor@iconproduce.com",
+                  });
+                }}
+                className="px-3 py-1.5 text-xs font-bold transition-colors"
+                style={{
+                  background: currentUser.role === "vendor" ? "white" : "transparent",
+                  color: currentUser.role === "vendor" ? "#5F2F9D" : "white",
+                }}
+              >
+                Vendor
+              </button>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 py-1.5 text-xs font-bold rounded-lg transition-colors"
+              style={{ background: "rgba(255,255,255,0.15)", color: "white" }}
+              title="Reset demo data"
+            >
+              ⟲ Reset
+            </button>
+          </div>
+        </div>
+      )}
 
       {!currentUser && authView === "login" && (
         <Login
