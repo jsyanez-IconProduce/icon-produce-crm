@@ -3864,7 +3864,8 @@ function useIsDesktop(breakpoint = 1024) {
 // The demo supports a top banner with a Manager ⇄ Vendor toggle so viewers
 // can see both perspectives from the same demo session.
 
-const DEMO_MODE = typeof window !== "undefined" && window.location.pathname === "/demo";
+const DEMO_MODE = typeof window !== "undefined" &&
+  (window.location.pathname === "/demo" || window.location.pathname === "/demo/");
 
 // Stable UUIDs for the demo "profiles" so foreign keys line up.
 const DEMO_MANAGER_ID = "demo-manager-0000-0000-000000000001";
