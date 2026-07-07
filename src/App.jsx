@@ -13404,12 +13404,12 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   }
 
   return (
-    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"}`}>
-      {/* Search bar — sticky at the top of the customer section on ALL screens.
-          Previously hidden on xl+ (≥1280px) because the right sidebar handled search,
-          but the sidebar was removed so this bar is now the sole search entry point. */}
+    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"} xl:pr-72`}>
+      {/* Search bar — small laptop, tablet, and mobile (i.e. <1280px). On larger screens the
+          desktop sidebar takes over with full search + filters. The xl:hidden class hides
+          this whole block on screens ≥1280px so it doesn't double up with the sidebar. */}
       <div
-        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3"
+        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3 xl:hidden"
         style={{ top: 0, background: "#F5F1EA", borderBottom: "1px solid rgba(95,47,157,0.10)" }}
       >
         <div className="relative max-w-md mx-auto">
@@ -13438,11 +13438,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       </div>
 
-      {/* Right sidebar — DISABLED. Previously showed on screens ≥1280px with the
-          Quick Search + filters. Now hidden across all breakpoints; users get the
-          same functionality from the sticky search bar at the top of the page. */}
+      {/* Right sidebar — only on screens ≥1280px (xl). Below that, smaller laptops use the
+          sticky top search bar instead. The parent container adds xl:pr-72 (288px) padding
+          right so the customer table never overlaps with the sidebar on the right edge. */}
       <aside
-        className="hidden"
+        className="hidden xl:flex xl:flex-col fixed right-0 top-14 bottom-0 w-64 px-4 py-4 overflow-y-auto"
         style={{
           background: "white",
           borderLeft: "1px solid #E5E0DA",
@@ -14114,6 +14114,7 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         color="#5F2F9D"
         bg="#E8DDF5"
         lightBg="#F4EDFA"
+        hideHeader={true}
         clientList={[
           ...pending,
           ...contactedOrdered,
@@ -14409,26 +14410,27 @@ function MiniStat({ icon: Icon, label, value, color }) {
 // Renders nothing if clientList is empty so sections collapse cleanly.
 // `renderTable` is optional — when provided AND clientList is non-empty AND we're on
 // desktop, the section uses the table layout instead of the card grid.
-function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientList, renderClient, renderTable }) {
+function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientList, renderClient, renderTable, hideHeader }) {
   if (!clientList || clientList.length === 0) return null;
   return (
     // Cleaner container: less saturated bg (light wash), rounded-xl per brand
     // style guide, softer border. Reduces visual weight so the DATA is the
     // focus, not the section chrome.
     <div className="mb-6 rounded-xl overflow-hidden shadow-card" style={{ background: "white", border: `1px solid ${bg}` }}>
-      {/* Subtle section header — much lower profile than before.
-          Reduced padding (py-2 vs py-2.5), lighter bg, smaller icon,
-          uppercase tracking for eyebrow feel. */}
-      <div className="flex items-center justify-between px-5 py-2" style={{ background: lightBg }}>
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Icon size={12} style={{ color, opacity: 0.7 }} />
-          <div className="text-[11px] uppercase font-bold truncate" style={{ color, letterSpacing: "0.12em" }}>{title}</div>
+      {/* Section header — hidden when hideHeader is true (used for unified customer
+          table since the eyebrow above already labels the section). */}
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-5 py-2" style={{ background: lightBg }}>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Icon size={12} style={{ color, opacity: 0.7 }} />
+            <div className="text-[11px] uppercase font-bold truncate" style={{ color, letterSpacing: "0.12em" }}>{title}</div>
+          </div>
+          {/* Count pill — small and subtle, purple wash instead of saturated fill */}
+          <div className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: bg, color }}>
+            {clientList.length}
+          </div>
         </div>
-        {/* Count pill — small and subtle, purple wash instead of saturated fill */}
-        <div className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: bg, color }}>
-          {clientList.length}
-        </div>
-      </div>
+      )}
       {/* Body: either table (desktop) or card grid (mobile/tablet) */}
       {renderTable ? (
         renderTable(clientList)
