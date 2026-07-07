@@ -6371,9 +6371,13 @@ function Login({ t, onLogin, loginError, clearError, vendors, adminCreds, onGoSi
           <img src={LOGO_DATA_URL} alt="Icon Produce LLC" className="w-56 h-auto" draggable={false} />
         </div>
 
-        <div className="bg-white rounded-3xl p-6 card-shadow">
-          <h1 className="display text-2xl mb-1 text-center">{t.welcomeBack}</h1>
-          <p className="text-stone-500 text-sm mb-6 text-center">{t.signInToContinue}</p>
+        {/* Login card — uses card-yellow-top per brand style guide for the
+            "signature moment" of the auth flow. Big display-lg title and eyebrow
+            match the pattern used in Manager Home and Analytics. */}
+        <div className="bg-white rounded-2xl p-6 shadow-card card-yellow-top">
+          <div className="eyebrow mb-3">Sign In</div>
+          <h1 className="display-lg text-3xl mb-1" style={{ color: "#5F2F9D" }}>{t.welcomeBack}</h1>
+          <p className="text-stone-500 text-sm mb-6">{t.signInToContinue}</p>
 
           <form onSubmit={submit} className="space-y-3">
             <div>
@@ -6434,8 +6438,11 @@ function Login({ t, onLogin, loginError, clearError, vendors, adminCreds, onGoSi
             <button
               type="submit"
               disabled={!email.trim() || !password || submitting}
-              className="w-full py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-40 transition-opacity"
-              style={{ background: BRAND_PURPLE }}
+              className="w-full py-3 rounded-lg text-sm font-bold text-white disabled:opacity-40 transition-all hover:opacity-95"
+              style={{
+                background: `linear-gradient(135deg, ${BRAND_PURPLE} 0%, #844ECA 100%)`,
+                boxShadow: "0 4px 12px -6px rgba(95,47,157,0.5)",
+              }}
             >
               {t.signIn}
             </button>
@@ -6506,7 +6513,8 @@ function SignUp({ t, onSignUp, onBackToLogin }) {
           <img src={LOGO_DATA_URL} alt="Icon Produce LLC" className="w-56 h-auto" draggable={false} />
         </div>
 
-        <div className="bg-white rounded-3xl p-6 card-shadow">
+        {/* SignUp card — mirrors Login styling: yellow-top signature + display-lg. */}
+        <div className="bg-white rounded-2xl p-6 shadow-card card-yellow-top">
           <button
             onClick={onBackToLogin}
             className="flex items-center gap-1 text-stone-500 text-xs mb-4 hover:text-stone-700"
@@ -6514,8 +6522,9 @@ function SignUp({ t, onSignUp, onBackToLogin }) {
             <ArrowLeft size={12} /> {t.backToLogin}
           </button>
 
-          <h1 className="display text-2xl mb-1 text-center">{t.createAccount}</h1>
-          <p className="text-stone-500 text-sm mb-6 text-center">{t.createAccountSubtitle}</p>
+          <div className="eyebrow mb-3">Create Account</div>
+          <h1 className="display-lg text-3xl mb-1" style={{ color: "#5F2F9D" }}>{t.createAccount}</h1>
+          <p className="text-stone-500 text-sm mb-6">{t.createAccountSubtitle}</p>
 
           <form onSubmit={submit} className="space-y-3">
             <div>
@@ -6636,8 +6645,11 @@ function SignUp({ t, onSignUp, onBackToLogin }) {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
-              style={{ background: BRAND_PURPLE }}
+              className="w-full py-3 rounded-lg text-sm font-bold text-white disabled:opacity-40 transition-all hover:opacity-95"
+              style={{
+                background: `linear-gradient(135deg, ${BRAND_PURPLE} 0%, #844ECA 100%)`,
+                boxShadow: "0 4px 12px -6px rgba(95,47,157,0.5)",
+              }}
             >
               {t.createAccountBtn}
             </button>
@@ -6666,7 +6678,8 @@ function Forgot({ t, onResetPassword, onLookupEmail, onBackToLogin }) {
           <img src={LOGO_DATA_URL} alt="Icon Produce LLC" className="w-56 h-auto" draggable={false} />
         </div>
 
-        <div className="bg-white rounded-3xl p-6 card-shadow">
+        {/* Forgot Password card — matches Login/SignUp styling. */}
+        <div className="bg-white rounded-2xl p-6 shadow-card card-yellow-top">
           <button
             onClick={onBackToLogin}
             className="flex items-center gap-1 text-stone-500 text-xs mb-4 hover:text-stone-700"
@@ -6674,8 +6687,9 @@ function Forgot({ t, onResetPassword, onLookupEmail, onBackToLogin }) {
             <ArrowLeft size={12} /> {t.backToLogin}
           </button>
 
-          <h1 className="display text-2xl mb-1 text-center">{t.forgotTitle}</h1>
-          <p className="text-stone-500 text-sm mb-5 text-center">{t.forgotSubtitle}</p>
+          <div className="eyebrow mb-3">Password Recovery</div>
+          <h1 className="display-lg text-3xl mb-1" style={{ color: "#5F2F9D" }}>{t.forgotTitle}</h1>
+          <p className="text-stone-500 text-sm mb-5">{t.forgotSubtitle}</p>
 
           <div className="flex gap-1 mb-5 bg-stone-50 rounded-xl p-1">
             <button
@@ -6828,8 +6842,11 @@ function ResetPasswordPanel({ t, onResetPassword }) {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
-        style={{ background: BRAND_PURPLE }}
+        className="w-full py-3 rounded-lg text-sm font-bold text-white disabled:opacity-40 transition-all hover:opacity-95"
+        style={{
+          background: `linear-gradient(135deg, ${BRAND_PURPLE} 0%, #844ECA 100%)`,
+          boxShadow: "0 4px 12px -6px rgba(95,47,157,0.5)",
+        }}
       >
         {t.resetPwdBtn}
       </button>
@@ -6863,8 +6880,11 @@ function FindEmailPanel({ t, onLookupEmail }) {
       <button
         type="submit"
         disabled={!searchTerm.trim()}
-        className="w-full py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
-        style={{ background: BRAND_PURPLE }}
+        className="w-full py-3 rounded-lg text-sm font-bold text-white disabled:opacity-40 transition-all hover:opacity-95"
+        style={{
+          background: `linear-gradient(135deg, ${BRAND_PURPLE} 0%, #844ECA 100%)`,
+          boxShadow: "0 4px 12px -6px rgba(95,47,157,0.5)",
+        }}
       >
         {t.findEmailBtn}
       </button>
