@@ -14546,16 +14546,20 @@ function MiniStat({ icon: Icon, label, value, color }) {
 function VendorStatusSection({ t, title, icon: Icon, color, bg, lightBg, clientList, renderClient, renderTable }) {
   if (!clientList || clientList.length === 0) return null;
   return (
-    <div className="mb-6 rounded-2xl overflow-hidden" style={{ background: lightBg, border: `1px solid ${bg}` }}>
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2.5" style={{ background: bg }}>
+    // Cleaner container: less saturated bg (light wash), rounded-xl per brand
+    // style guide, softer border. Reduces visual weight so the DATA is the
+    // focus, not the section chrome.
+    <div className="mb-6 rounded-xl overflow-hidden shadow-card" style={{ background: "white", border: `1px solid ${bg}` }}>
+      {/* Subtle section header — much lower profile than before.
+          Reduced padding (py-2 vs py-2.5), lighter bg, smaller icon,
+          uppercase tracking for eyebrow feel. */}
+      <div className="flex items-center justify-between px-5 py-2" style={{ background: lightBg }}>
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "rgba(255,255,255,0.6)" }}>
-            <Icon size={14} style={{ color }} />
-          </div>
-          <div className="font-bold text-sm uppercase tracking-wide truncate" style={{ color }}>{title}</div>
+          <Icon size={12} style={{ color, opacity: 0.7 }} />
+          <div className="text-[11px] uppercase font-bold truncate" style={{ color, letterSpacing: "0.12em" }}>{title}</div>
         </div>
-        <div className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: color, color: "#fff" }}>
+        {/* Count pill — small and subtle, purple wash instead of saturated fill */}
+        <div className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: bg, color }}>
           {clientList.length}
         </div>
       </div>
@@ -14852,12 +14856,12 @@ function CustomerTable({
               "category label" rather than a dark filled bar. Softer, more modern. */}
           <thead>
             <tr style={{ background: "#F0E5FA" }}>
-              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
-              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
-              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
-              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
-              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
-              <th className="text-right px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}></th>
+              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
+              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
+              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
+              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
+              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
+              <th className="text-right px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}></th>
             </tr>
           </thead>
         <tbody>
@@ -14903,7 +14907,7 @@ function CustomerTable({
                 }}
               >
                 {/* COL 1: Customer */}
-                <td className="px-4 py-4 align-middle" style={{ minWidth: "180px", maxWidth: "240px" }}>
+                <td className="px-5 py-5 align-middle" style={{ minWidth: "180px", maxWidth: "240px" }}>
                   <div className="flex items-center gap-1.5">
                     {/* Click the name to toggle the View Details panel (same effect as 👁).
                         Renders as a button for accessibility (keyboard + screen readers),
@@ -15027,13 +15031,13 @@ function CustomerTable({
                 </td>
 
                 {/* COL 2: Phone */}
-                <td className="px-4 py-4 align-middle text-[12px]" style={{ color: "#4A453F", fontFeatureSettings: '"tnum"', minWidth: "110px" }}>
+                <td className="px-5 py-5 align-middle text-[12px]" style={{ color: "#4A453F", fontFeatureSettings: '"tnum"', minWidth: "110px" }}>
                   {client.phone || "—"}
                 </td>
 
                 {/* COL 3: Contact today — toggleable. Click logs the interaction;
                     clicking again on a completed channel removes the most recent one (undo). */}
-                <td className="px-4 py-4 align-middle" style={{ minWidth: "120px" }}>
+                <td className="px-5 py-5 align-middle" style={{ minWidth: "120px" }}>
                   <div className="flex gap-1">
                     <button
                       className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
@@ -15135,7 +15139,7 @@ function CustomerTable({
                 {/* COL 4: Notes — click to edit inline, hover for full text "patch note" overlay.
                     Empty notes show a discreet "+ Add note" trigger so vendor can add without
                     opening the full Edit modal. */}
-                <td className="px-4 py-4 align-middle" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
+                <td className="px-5 py-5 align-middle" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
                   {editingNoteClientId === client.id ? (
                     // Inline editor — appears in-place when user clicks an existing note OR "+ Add note"
                     <div className="flex flex-col gap-1.5">
@@ -15215,7 +15219,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-4 py-4 align-middle" style={{ minWidth: "200px" }}>
+                <td className="px-5 py-5 align-middle" style={{ minWidth: "200px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
@@ -15351,7 +15355,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 6: Actions menu */}
-                <td className="px-4 py-4 align-middle text-right" style={{ minWidth: "110px", position: "relative" }}>
+                <td className="px-5 py-5 align-middle text-right" style={{ minWidth: "110px", position: "relative" }}>
                   <div className="inline-flex gap-0.5" style={{ color: "#B5ADA5" }}>
                     {onOpenEdit && !isLead && (
                       <button
