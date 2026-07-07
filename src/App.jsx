@@ -14717,12 +14717,12 @@ function CustomerTable({
               "category label" rather than a dark filled bar. Softer, more modern. */}
           <thead>
             <tr style={{ background: "#F0E5FA" }}>
-              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.customerColName || "Customer"}</th>
-              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.phone || "Phone"}</th>
-              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.contactToday || "Contact today"}</th>
-              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.notesCol || "Notes"}</th>
-              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.outcomeCol || "Outcome"}</th>
-              <th className="text-right px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}></th>
+              <th className="text-left px-3 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.customerColName || "Customer"}</th>
+              <th className="text-left px-3 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.phone || "Phone"}</th>
+              <th className="text-left px-3 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.contactToday || "Contact today"}</th>
+              <th className="text-left px-3 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.notesCol || "Notes"}</th>
+              <th className="text-left px-3 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.outcomeCol || "Outcome"}</th>
+              <th className="text-right px-3 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}></th>
             </tr>
           </thead>
         <tbody>
@@ -14766,7 +14766,7 @@ function CustomerTable({
                 }}
               >
                 {/* COL 1: Customer */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "160px", maxWidth: "220px" }}>
+                <td className="px-3 py-3 align-middle" style={{ minWidth: "140px", maxWidth: "180px" }}>
                   <div className="flex items-center gap-1.5">
                     {/* Click the name to toggle the View Details panel (same effect as 👁).
                         Renders as a button for accessibility (keyboard + screen readers),
@@ -14889,13 +14889,13 @@ function CustomerTable({
                 </td>
 
                 {/* COL 2: Phone — spec: font-mono text-xs (numeric/code style). */}
-                <td className="px-4 py-3 align-middle font-mono text-xs" style={{ color: "#5F2F9D", minWidth: "110px" }}>
+                <td className="px-3 py-3 align-middle font-mono text-xs" style={{ color: "#5F2F9D", minWidth: "95px" }}>
                   {client.phone || "—"}
                 </td>
 
                 {/* COL 3: Contact today — toggleable. Click logs the interaction;
                     clicking again on a completed channel removes the most recent one (undo). */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "110px" }}>
+                <td className="px-3 py-3 align-middle" style={{ minWidth: "95px" }}>
                   <div className="flex gap-1">
                     <button
                       className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
@@ -14997,7 +14997,7 @@ function CustomerTable({
                 {/* COL 4: Notes — click to edit inline, hover for full text "patch note" overlay.
                     Empty notes show a discreet "+ Add note" trigger so vendor can add without
                     opening the full Edit modal. */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "140px", maxWidth: "180px", position: "relative" }}>
+                <td className="px-3 py-3 align-middle" style={{ minWidth: "110px", maxWidth: "140px", position: "relative" }}>
                   {editingNoteClientId === client.id ? (
                     // Inline editor — appears in-place when user clicks an existing note OR "+ Add note"
                     <div className="flex flex-col gap-1.5">
@@ -15077,7 +15077,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "280px" }}>
+                <td className="px-3 py-3 align-middle" style={{ minWidth: "240px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
@@ -15211,7 +15211,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 6: Actions menu */}
-                <td className="px-4 py-3 align-middle text-right" style={{ minWidth: "80px", position: "relative" }}>
+                <td className="px-3 py-3 align-middle text-right" style={{ minWidth: "70px", position: "relative" }}>
                   <div className="inline-flex gap-0.5" style={{ color: "#B5ADA5" }}>
                     {onOpenEdit && !isLead && (
                       <button
