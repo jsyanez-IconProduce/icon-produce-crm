@@ -14766,7 +14766,7 @@ function CustomerTable({
                 }}
               >
                 {/* COL 1: Customer */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "180px", maxWidth: "240px" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "160px", maxWidth: "220px" }}>
                   <div className="flex items-center gap-1.5">
                     {/* Click the name to toggle the View Details panel (same effect as 👁).
                         Renders as a button for accessibility (keyboard + screen readers),
@@ -14895,7 +14895,7 @@ function CustomerTable({
 
                 {/* COL 3: Contact today — toggleable. Click logs the interaction;
                     clicking again on a completed channel removes the most recent one (undo). */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "120px" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "110px" }}>
                   <div className="flex gap-1">
                     <button
                       className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
@@ -14997,7 +14997,7 @@ function CustomerTable({
                 {/* COL 4: Notes — click to edit inline, hover for full text "patch note" overlay.
                     Empty notes show a discreet "+ Add note" trigger so vendor can add without
                     opening the full Edit modal. */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "140px", maxWidth: "180px", position: "relative" }}>
                   {editingNoteClientId === client.id ? (
                     // Inline editor — appears in-place when user clicks an existing note OR "+ Add note"
                     <div className="flex flex-col gap-1.5">
@@ -15077,7 +15077,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "340px" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "280px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
@@ -15211,7 +15211,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 6: Actions menu */}
-                <td className="px-4 py-3 align-middle text-right" style={{ minWidth: "110px", position: "relative" }}>
+                <td className="px-4 py-3 align-middle text-right" style={{ minWidth: "80px", position: "relative" }}>
                   <div className="inline-flex gap-0.5" style={{ color: "#B5ADA5" }}>
                     {onOpenEdit && !isLead && (
                       <button
