@@ -14024,52 +14024,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
             </div>
           </div>
 
-          {/* Tabs — horizontal scrollable on mobile, full width on desktop.
-              Each tab shows: icon + label + count. Active tab is highlighted.
-              Only the active tab's section renders below. */}
-          <div className="mb-3 -mx-5 xl:mx-0 overflow-x-auto xl:overflow-visible">
-            <div className="px-5 xl:px-0 flex gap-1.5 xl:flex-wrap xl:justify-center min-w-max xl:min-w-0">
-              {[
-                { key: "to_contact",          label: t.toContact,                 count: pending.length,                 color: "#9C5757", bg: "#F2E2E2", icon: Phone },
-                { key: "ordered",             label: t.statusOrdered,             count: contactedOrdered.length,        color: "#73A626", bg: "#E8F2D5", icon: CheckCircle2 },
-                { key: "callback",            label: t.statusCallback,            count: contactedCallback.length,       color: "#5A6B85", bg: "#E5EAF2", icon: Clock },
-                { key: "no_answer",           label: t.statusNoAnswer,            count: contactedNoAnswer.length,       color: "#8B7355", bg: "#F0EAE0", icon: PhoneOff },
-                { key: "price_issue",         label: t.statusPriceIssue,          count: contactedPriceIssue.length,     color: "#B8860B", bg: "#FFF5D6", icon: DollarSign },
-                { key: "not_interested",      label: t.statusNotInterested,       count: contactedNotInterested.length,  color: "#9C5757", bg: "#F2E2E2", icon: XCircle },
-                { key: "other",               label: t.statusOther || "Other",    count: contactedOther.length,          color: "#5A4A6B", bg: "#EAE3F0", icon: X },
-              ].map((tab) => {
-                const isActive = activeTab === tab.key;
-                const TabIcon = tab.icon;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap"
-                    style={{
-                      background: isActive ? tab.color : "white",
-                      color: isActive ? "white" : "#3D3733",
-                      border: `1px solid ${isActive ? tab.color : "rgba(0,0,0,0.08)"}`,
-                      boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                    }}
-                  >
-                    <TabIcon size={11} />
-                    <span>{tab.label}</span>
-                    <span
-                      className="ml-0.5 px-1.5 py-0 rounded-full text-[10px] font-bold"
-                      style={{
-                        background: isActive ? "rgba(255,255,255,0.25)" : tab.bg,
-                        color: isActive ? "white" : tab.color,
-                        minWidth: 18,
-                        textAlign: "center",
-                      }}
-                    >
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Tabs removed — customers are now shown in a single unified table below.
+              Status is visible per row in the Outcome column (badges). */}
         </>
       )}
 
@@ -14144,9 +14100,29 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {/* eslint-disable-next-line */}
       {(() => null)()}
 
-      {/* Pending — clients not yet called today */}
-      {activeTab === "to_contact" && (
-      <VendorStatusSection t={t} title={t.toContact} icon={Phone} color="#5F2F9D" bg="#E8DDF5" lightBg="#F4EDFA" clientList={pending}
+      {/* Unified customer table — replaces the 7 status tabs.
+          Combines pending + all contacted lists so every customer for the day is
+          visible in one place. Status is shown per row via the Outcome column badges.
+          Order preserved: pending first (needs action), then contacted grouped by outcome. */}
+      {(pending.length > 0 || contactedOrdered.length > 0 || contactedCallback.length > 0 ||
+        contactedNoAnswer.length > 0 || contactedPriceIssue.length > 0 ||
+        contactedNotInterested.length > 0 || contactedOther.length > 0) && (
+      <VendorStatusSection
+        t={t}
+        title={t.myCustomers || "My customers"}
+        icon={UserPlus}
+        color="#5F2F9D"
+        bg="#E8DDF5"
+        lightBg="#F4EDFA"
+        clientList={[
+          ...pending,
+          ...contactedOrdered,
+          ...contactedCallback,
+          ...contactedNoAnswer,
+          ...contactedPriceIssue,
+          ...contactedNotInterested,
+          ...contactedOther,
+        ]}
         renderClient={(client) => (
           <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
         )}
@@ -14162,118 +14138,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       />
       )}
 
-      {/* Contacted — grouped by most recent call status, visually distinctive */}
-      {activeTab === "ordered" && (
-      <VendorStatusSection t={t} title={t.statusOrdered} icon={CheckCircle2} color="#73A626" bg="#E8F2D5" lightBg="#F4F9E8" clientList={contactedOrdered}
-        renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
-        )}
-        renderTable={isDesktop ? (list) => (
-          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
-            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
-            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
-            onOrderClick={openOrderModal} />
-        ) : undefined}
-      />
-      )}
-      {activeTab === "callback" && (
-      <VendorStatusSection t={t} title={t.statusCallback} icon={Clock} color="#5A6B85" bg="#E5EAF2" lightBg="#F2F5F9" clientList={contactedCallback}
-        renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={effectiveInteractions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
-        )}
-        renderTable={isDesktop ? (list) => (
-          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
-            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
-            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
-            onOrderClick={openOrderModal} />
-        ) : undefined}
-      />
-      )}
-      {activeTab === "no_answer" && (
-      <VendorStatusSection t={t} title={t.statusNoAnswer} icon={PhoneOff} color="#8B7355" bg="#F0EAE0" lightBg="#FAF6EE" clientList={contactedNoAnswer}
-        renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
-        )}
-        renderTable={isDesktop ? (list) => (
-          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
-            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
-            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
-            onOrderClick={openOrderModal} />
-        ) : undefined}
-      />
-      )}
-      {activeTab === "price_issue" && (
-      <VendorStatusSection t={t} title={t.statusPriceIssue} icon={DollarSign} color="#B8860B" bg="#FFF5D6" lightBg="#FFFBEC" clientList={contactedPriceIssue}
-        renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
-        )}
-        renderTable={isDesktop ? (list) => (
-          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
-            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
-            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
-            onOrderClick={openOrderModal} />
-        ) : undefined}
-      />
-      )}
-      {activeTab === "not_interested" && (
-      <VendorStatusSection t={t} title={t.statusNotInterested} icon={XCircle} color="#9C5757" bg="#F2E2E2" lightBg="#F9EFEF" clientList={contactedNotInterested}
-        renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
-        )}
-        renderTable={isDesktop ? (list) => (
-          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
-            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
-            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
-            onOrderClick={openOrderModal} />
-        ) : undefined}
-      />
-      )}
-      {activeTab === "other" && (
-      <VendorStatusSection t={t} title={t.statusOther || "Other"} icon={X} color="#5A4A6B" bg="#EAE3F0" lightBg="#F4EFF7" clientList={contactedOther}
-        renderClient={(client) => (
-          <ClientCard key={client.id} t={t} client={client} vendorId={vendorId} interactions={intsForClient(client.id)} allInteractions={interactions} templates={templates} tags={tags} onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback} onUpdateClient={onUpdateClient} onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest} onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest} onOrderClick={openOrderModal} />
-        )}
-        renderTable={isDesktop ? (list) => (
-          <CustomerTable t={t} customers={list} vendorId={vendorId} allInteractions={interactions} templates={templates} tags={tags}
-            onLog={effectiveOnLog} onUndo={onUndo} onCloseCallback={onCloseCallback}
-            onUpdateClient={onUpdateClient} onOpenEdit={setEditingClient}
-            onRequestRemoval={onRequestRemoval} onCancelRemovalRequest={onCancelRemovalRequest}
-            onRequestSkipWeek={onRequestSkipWeek} onCancelSkipRequest={onCancelSkipRequest}
-            editRequests={editRequests} onCreateEditRequest={onCreateEditRequest} onCancelEditRequest={onCancelEditRequest}
-            onOrderClick={openOrderModal} />
-        ) : undefined}
-      />
-      )}
-
-      {/* Empty state when active tab has no clients — helps the vendor understand */}
-      {(pending.length > 0 || contacted.length > 0) && (
-        (activeTab === "to_contact" && pending.length === 0) ||
-        (activeTab === "ordered" && contactedOrdered.length === 0) ||
-        (activeTab === "callback" && contactedCallback.length === 0) ||
-        (activeTab === "no_answer" && contactedNoAnswer.length === 0) ||
-        (activeTab === "price_issue" && contactedPriceIssue.length === 0) ||
-        (activeTab === "not_interested" && contactedNotInterested.length === 0) ||
-        (activeTab === "other" && contactedOther.length === 0)
-      ) && (
-        <div className="max-w-md mx-auto text-center py-8 text-stone-400 text-sm italic">
-          {t.noClientsInTab || "No clients in this section"}
-        </div>
-      )}
+      {/* (Empty-state per-tab removed — unified table above handles the empty case
+          by simply not rendering when there are no customers.) */}
 
       {/* Bottom sections (empty state, request lead, growth, ranking) — narrow column */}
       <div className="max-w-md mx-auto">
@@ -15216,7 +15082,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-4 py-3 align-middle" style={{ minWidth: "200px" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "340px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
@@ -15321,32 +15187,30 @@ function CustomerTable({
                       )}
                     </div>
                   ) : (
-                    // Pending — show all 6 outcome buttons in 2 rows for readability:
-                    //   Row 1: Order · No ans. · Callback           (most common, quick)
-                    //   Row 2: Price · Not int. · Other             (less common, require note)
-                    <div className="flex flex-col gap-1">
-                      <div className="flex flex-wrap gap-1">
-                        <button onClick={() => onOrderClick ? onOrderClick(client) : onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.order || "Order"}>
-                          {t.order || "Order"}
-                        </button>
-                        <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.noAnswer || "No answer"}>
-                          {t.noAnswerShort || "No ans."}
-                        </button>
-                        <button onClick={() => openCallback(client.id)} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.callback || "Callback"}>
-                          {t.callbackShort || "Callback"}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        <button onClick={() => openNoteFlow(client.id, "price_issue")} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FFFBED", border: "1px solid #E8D89A", color: "#8B6F1A" }} title={t.statusPriceIssue || "Price issue"}>
-                          $ {t.priceIssueShort || "Price"}
-                        </button>
-                        <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "not_interested" })} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FEF8F6", border: "1px solid #D9B5B5", color: "#9C5757" }} title={t.notInterested || "Not interested"}>
-                          {t.notInterestedShort || "Not int."}
-                        </button>
-                        <button onClick={() => openNoteFlow(client.id, "other")} className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#F4EFF7", border: "1px solid #C9BDD4", color: "#5A4A6B" }} title={t.statusOther || "Other"}>
-                          {t.statusOther || "Other"}
-                        </button>
-                      </div>
+                    // Pending — 6 outcome buttons in a single flex-wrap row.
+                    // Compact pill styling per brand guide: rounded, small padding,
+                    // subtle borders. Order/No ans/Callback are neutral (white);
+                    // Price/Not int/Other use accent color tints so they read as
+                    // "secondary outcomes" without shouting.
+                    <div className="flex flex-wrap gap-1 items-center">
+                      <button onClick={() => onOrderClick ? onOrderClick(client) : onLog({ clientId: client.id, vendorId, channel: "call", status: "ordered" })} className="text-[10px] px-2 py-0.5 rounded font-semibold whitespace-nowrap" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.order || "Order"}>
+                        {t.order || "Order"}
+                      </button>
+                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "no_answer" })} className="text-[10px] px-2 py-0.5 rounded font-semibold whitespace-nowrap" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.noAnswer || "No answer"}>
+                        {t.noAnswerShort || "No ans."}
+                      </button>
+                      <button onClick={() => openCallback(client.id)} className="text-[10px] px-2 py-0.5 rounded font-semibold whitespace-nowrap" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }} title={t.callback || "Callback"}>
+                        {t.callbackShort || "Callback"}
+                      </button>
+                      <button onClick={() => openNoteFlow(client.id, "price_issue")} className="text-[10px] px-2 py-0.5 rounded font-semibold whitespace-nowrap" style={{ background: "#FFFBED", border: "1px solid #E8D89A", color: "#8B6F1A" }} title={t.statusPriceIssue || "Price issue"}>
+                        $ {t.priceIssueShort || "Price"}
+                      </button>
+                      <button onClick={() => onLog({ clientId: client.id, vendorId, channel: "call", status: "not_interested" })} className="text-[10px] px-2 py-0.5 rounded font-semibold whitespace-nowrap" style={{ background: "#FEF8F6", border: "1px solid #D9B5B5", color: "#9C5757" }} title={t.notInterested || "Not interested"}>
+                        {t.notInterestedShort || "Not int."}
+                      </button>
+                      <button onClick={() => openNoteFlow(client.id, "other")} className="text-[10px] px-2 py-0.5 rounded font-semibold whitespace-nowrap" style={{ background: "#F4EFF7", border: "1px solid #C9BDD4", color: "#5A4A6B" }} title={t.statusOther || "Other"}>
+                        {t.statusOther || "Other"}
+                      </button>
                     </div>
                   )}
                 </td>
