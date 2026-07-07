@@ -14852,12 +14852,12 @@ function CustomerTable({
               "category label" rather than a dark filled bar. Softer, more modern. */}
           <thead>
             <tr style={{ background: "#F0E5FA" }}>
-              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
-              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
-              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
-              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
-              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
-              <th className="text-right px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}></th>
+              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
+              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
+              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
+              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
+              <th className="text-left px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
+              <th className="text-right px-4 py-3 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}></th>
             </tr>
           </thead>
         <tbody>
@@ -14889,24 +14889,21 @@ function CustomerTable({
             return (
               <React.Fragment key={client.id}>
               <tr
-                className="border-t transition-colors"
+                className="transition-colors"
                 onMouseEnter={() => setHoveredRowClientId(client.id)}
                 onMouseLeave={() => setHoveredRowClientId(null)}
                 style={{
-                  // Purple-50 border (#F0E5FA) — brand-aligned separator between rows.
-                  // Replaces the stone-gray border with a warmer purple wash so the
-                  // table reads as part of the brand system, not a generic table.
-                  borderColor: "#F0E5FA",
-                  // Zebra stripe: alternate rows get a very light brand-purple background (#F8F4FD)
-                  // for easier scanning when there are many customers.
-                  // On hover, row gets a slightly deeper purple tint to show focus.
+                  // Screenshot style: no borders between rows — instead use
+                  // subtle cream/white alternation. Cleaner, more premium look.
+                  // Cream (#FAF8F4) alternates with white; hover deepens to
+                  // purple wash for clear focus feedback.
                   background: hoveredRowClientId === client.id
-                    ? "#EFE5F8"
-                    : (rowIdx % 2 === 1 ? "#F8F4FD" : "white"),
+                    ? "#F0E5FA"
+                    : (rowIdx % 2 === 1 ? "#FAF8F4" : "white"),
                 }}
               >
                 {/* COL 1: Customer */}
-                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "240px" }}>
+                <td className="px-4 py-4 align-middle" style={{ minWidth: "180px", maxWidth: "240px" }}>
                   <div className="flex items-center gap-1.5">
                     {/* Click the name to toggle the View Details panel (same effect as 👁).
                         Renders as a button for accessibility (keyboard + screen readers),
@@ -15030,13 +15027,13 @@ function CustomerTable({
                 </td>
 
                 {/* COL 2: Phone */}
-                <td className="px-3 py-2.5 align-top text-[12px]" style={{ color: "#4A453F", fontFeatureSettings: '"tnum"', minWidth: "110px" }}>
+                <td className="px-4 py-4 align-middle text-[12px]" style={{ color: "#4A453F", fontFeatureSettings: '"tnum"', minWidth: "110px" }}>
                   {client.phone || "—"}
                 </td>
 
                 {/* COL 3: Contact today — toggleable. Click logs the interaction;
                     clicking again on a completed channel removes the most recent one (undo). */}
-                <td className="px-3 py-2.5 align-top" style={{ minWidth: "120px" }}>
+                <td className="px-4 py-4 align-middle" style={{ minWidth: "120px" }}>
                   <div className="flex gap-1">
                     <button
                       className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
@@ -15138,7 +15135,7 @@ function CustomerTable({
                 {/* COL 4: Notes — click to edit inline, hover for full text "patch note" overlay.
                     Empty notes show a discreet "+ Add note" trigger so vendor can add without
                     opening the full Edit modal. */}
-                <td className="px-3 py-2.5 align-top" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
+                <td className="px-4 py-4 align-middle" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
                   {editingNoteClientId === client.id ? (
                     // Inline editor — appears in-place when user clicks an existing note OR "+ Add note"
                     <div className="flex flex-col gap-1.5">
@@ -15218,7 +15215,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-3 py-2.5 align-top" style={{ minWidth: "200px" }}>
+                <td className="px-4 py-4 align-middle" style={{ minWidth: "200px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
@@ -15271,42 +15268,42 @@ function CustomerTable({
                     </div>
                   ) : latestStatus === "callback" && callbackInt ? (
                     <div className="flex flex-wrap gap-1">
-                      <button onClick={() => onCloseCallback && onCloseCallback(callbackInt.id, "ordered")} className="text-[10px] px-2 py-1 rounded font-semibold text-white" style={{ background: "#73A626" }}>
+                      <button onClick={() => onCloseCallback && onCloseCallback(callbackInt.id, "ordered")} className="text-[10px] px-3 py-1 rounded-full font-bold text-white uppercase tracking-wide" style={{ background: "#73A626", letterSpacing: "0.05em" }}>
                         ✓ {t.closeAsOrdered || "Close as ordered"}
                       </button>
-                      <button onClick={() => onUndo && onUndo(callbackInt.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                      <button onClick={() => onUndo && onUndo(callbackInt.id)} className="text-[10px] px-3 py-1 rounded-full font-medium" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
                         {t.undo || "Undo"}
                       </button>
                     </div>
                   ) : latestStatus === "ordered" ? (
                     <div className="flex flex-wrap gap-1">
-                      <span className="text-[10px] px-2 py-1 rounded font-semibold text-white" style={{ background: "#73A626" }}>
+                      <span className="text-[10px] px-3 py-1 rounded-full font-bold text-white uppercase tracking-wide" style={{ background: "#73A626", letterSpacing: "0.05em" }}>
                         ✓ {t.statusOrdered || "Ordered"}
                       </span>
                       {latestCall && (
-                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-3 py-1 rounded-full font-medium" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
                           {t.undo || "Undo"}
                         </button>
                       )}
                     </div>
                   ) : latestStatus === "not_interested" ? (
                     <div className="flex flex-wrap gap-1">
-                      <span className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FEF2EE", color: "#9C5757", border: "1px solid #D9B5B5" }}>
+                      <span className="text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-wide" style={{ background: "#FEF2EE", color: "#9C5757", border: "1px solid #D9B5B5", letterSpacing: "0.05em" }}>
                         {t.notInterestedShort || "Not int."}
                       </span>
                       {latestCall && (
-                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-3 py-1 rounded-full font-medium" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
                           {t.retry || "Retry"}
                         </button>
                       )}
                     </div>
                   ) : latestStatus === "price_issue" ? (
                     <div className="flex flex-wrap gap-1">
-                      <span className="text-[10px] px-2 py-1 rounded font-semibold" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>
+                      <span className="text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-wide" style={{ background: "#FFF5D6", color: "#8B6F1A", letterSpacing: "0.05em" }}>
                         $ {t.priceIssueShort || "Price"}
                       </span>
                       {latestCall && (
-                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-3 py-1 rounded-full font-medium" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
                           {t.retry || "Retry"}
                         </button>
                       )}
@@ -15317,7 +15314,7 @@ function CustomerTable({
                         {t.statusOther || "Other"}
                       </span>
                       {latestCall && (
-                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-2 py-1 rounded" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
+                        <button onClick={() => onUndo && onUndo(latestCall.id)} className="text-[10px] px-3 py-1 rounded-full font-medium" style={{ background: "white", border: "1px solid #E5E0DA", color: "#3D3733" }}>
                           {t.retry || "Retry"}
                         </button>
                       )}
@@ -15354,7 +15351,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 6: Actions menu */}
-                <td className="px-3 py-2.5 align-top text-right" style={{ minWidth: "110px", position: "relative" }}>
+                <td className="px-4 py-4 align-middle text-right" style={{ minWidth: "110px", position: "relative" }}>
                   <div className="inline-flex gap-0.5" style={{ color: "#B5ADA5" }}>
                     {onOpenEdit && !isLead && (
                       <button
@@ -15367,16 +15364,21 @@ function CustomerTable({
                     )}
                     {!isLead && (
                       <button
-                        className="w-7 h-7 rounded flex items-center justify-center hover:bg-stone-100 transition-colors"
+                        className="rounded-full flex items-center gap-1.5 transition-all hover:opacity-80"
                         title={t.viewDetails || "View details"}
                         onClick={() => toggleDetailRow(client)}
                         style={{
-                          // Highlight the eye button when this row is currently expanded
-                          background: expandedDetailClientId === client.id ? "#F0E8FA" : "transparent",
-                          color: expandedDetailClientId === client.id ? "#5F2F9D" : undefined,
+                          // Screenshot-style pill: purple wash background with brand purple text.
+                          // Deepens when the row's detail is expanded to show active state.
+                          padding: "5px 12px",
+                          background: expandedDetailClientId === client.id ? "#5F2F9D" : "#F0E5FA",
+                          color: expandedDetailClientId === client.id ? "white" : "#5F2F9D",
+                          fontSize: "11px",
+                          fontWeight: 700,
                         }}
                       >
-                        <span style={{ fontSize: "14px", lineHeight: 1 }}>👁</span>
+                        <span style={{ fontSize: "12px", lineHeight: 1 }}>👁</span>
+                        <span>View</span>
                       </button>
                     )}
                     {/* Delete request: vendor requests removal, manager must approve.
