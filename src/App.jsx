@@ -13404,12 +13404,12 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
   }
 
   return (
-    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"} xl:pr-72`}>
-      {/* Search bar — small laptop, tablet, and mobile (i.e. <1280px). On larger screens the
-          desktop sidebar takes over with full search + filters. The xl:hidden class hides
-          this whole block on screens ≥1280px so it doesn't double up with the sidebar. */}
+    <div className={`max-w-7xl mx-auto px-5 xl:px-8 pb-24 ${isManagerMode ? "pt-14" : "pt-6"}`}>
+      {/* Search bar — sticky at the top of the customer section on ALL screens.
+          Previously hidden on xl+ (≥1280px) because the right sidebar handled search,
+          but the sidebar was removed so this bar is now the sole search entry point. */}
       <div
-        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3 xl:hidden"
+        className="sticky z-40 -mx-5 xl:-mx-8 px-5 xl:px-8 py-2 mb-3"
         style={{ top: 0, background: "#F5F1EA", borderBottom: "1px solid rgba(95,47,157,0.10)" }}
       >
         <div className="relative max-w-md mx-auto">
@@ -13438,11 +13438,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
         </div>
       </div>
 
-      {/* Right sidebar — only on screens ≥1280px (xl). Below that, smaller laptops use the
-          sticky top search bar instead. The parent container adds xl:pr-72 (288px) padding
-          right so the customer table never overlaps with the sidebar on the right edge. */}
+      {/* Right sidebar — DISABLED. Previously showed on screens ≥1280px with the
+          Quick Search + filters. Now hidden across all breakpoints; users get the
+          same functionality from the sticky search bar at the top of the page. */}
       <aside
-        className="hidden xl:flex xl:flex-col fixed right-0 top-14 bottom-0 w-64 px-4 py-4 overflow-y-auto"
+        className="hidden"
         style={{
           background: "white",
           borderLeft: "1px solid #E5E0DA",
