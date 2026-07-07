@@ -14830,7 +14830,10 @@ function CustomerTable({
   }
 
   return (
-    <div>
+    // Brand style guide wrapper: rounded-xl (16px) card with shadow-card
+    // (purple-tinted brand shadow) and overflow-hidden so the rounded corners
+    // clip the internal table cleanly. Cream/white background contrast.
+    <div className="rounded-xl shadow-card overflow-hidden" style={{ background: "white" }}>
       {/* Top mirror scrollbar — syncs with the table's own bottom scrollbar so users
           can pan the table horizontally without scrolling all the way down. */}
       <div
@@ -14844,16 +14847,19 @@ function CustomerTable({
       </div>
       <div ref={bottomScrollRef} onScroll={onBottomScroll} className="overflow-x-auto">
         <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+          {/* Table header — brand style guide uses light purple wash (#F0E5FA)
+              with dark purple text (#5F2F9D) so the header reads as a
+              "category label" rather than a dark filled bar. Softer, more modern. */}
           <thead>
-            <tr style={{ background: "#5F2F9D" }}>
-              <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
-            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
-            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
-            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
-            <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
-            <th className="text-right px-3 py-2.5 text-[11px] uppercase tracking-wider font-bold" style={{ color: "white", letterSpacing: "0.08em" }}></th>
-          </tr>
-        </thead>
+            <tr style={{ background: "#F0E5FA" }}>
+              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
+              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
+              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
+              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
+              <th className="text-left px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
+              <th className="text-right px-3 py-2.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}></th>
+            </tr>
+          </thead>
         <tbody>
           {customers.map((client, rowIdx) => {
             const clientInts = (allInteractions || []).filter((i) => i.clientId === client.id);
@@ -14887,7 +14893,10 @@ function CustomerTable({
                 onMouseEnter={() => setHoveredRowClientId(client.id)}
                 onMouseLeave={() => setHoveredRowClientId(null)}
                 style={{
-                  borderColor: "#F0EDE7",
+                  // Purple-50 border (#F0E5FA) — brand-aligned separator between rows.
+                  // Replaces the stone-gray border with a warmer purple wash so the
+                  // table reads as part of the brand system, not a generic table.
+                  borderColor: "#F0E5FA",
                   // Zebra stripe: alternate rows get a very light brand-purple background (#F8F4FD)
                   // for easier scanning when there are many customers.
                   // On hover, row gets a slightly deeper purple tint to show focus.
