@@ -13556,9 +13556,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           </button>
         </div>
       )}
+      {/* Vendor header — eyebrow (date) + display-lg name, per brand style guide.
+          Manager-mode caption sits below with the crown icon for clarity. */}
       <div className="mb-6">
-        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{prettyDate(t.locale)}</div>
-        <h1 className="display text-3xl leading-tight">{vendor?.name}</h1>
+        <div className="eyebrow mb-2">{prettyDate(t.locale)}</div>
+        <h1 className="display-lg text-4xl" style={{ color: "#5F2F9D" }}>{vendor?.name}</h1>
         {/* Manager mode indicator — small caption below name */}
         {isManagerMode && (
           <div className="text-xs mt-1 font-medium" style={{ color: BRAND_PURPLE }}>
@@ -13567,6 +13569,10 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           </div>
         )}
       </div>
+
+      {/* Day navigator eyebrow — labels the section per brand style guide.
+          Small uppercase label above adds hierarchy without eating vertical space. */}
+      <div className="eyebrow mb-2">Day Navigator</div>
 
       {/* DAY NAVIGATOR — lets vendor see who they need to contact on any given day.
           Arrows navigate ±1 day; chip strip below jumps to any of the 7 surrounding days.
@@ -13921,7 +13927,9 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {filteredLeads.length > 0 && (
         <>
           <div className="flex items-center justify-between mb-3 mt-2">
-            <div className="text-xs uppercase tracking-widest font-bold flex items-center gap-1.5" style={{ color: BRAND_PURPLE }}>
+            {/* Section header uses the .eyebrow utility per brand style guide —
+                small uppercase widetracked purple label with icon. */}
+            <div className="eyebrow flex items-center gap-1.5">
               <ClipboardList size={12} /> {t.myLeads}
             </div>
             <div className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#FFF5D6", color: "#8B6F1A" }}>{filteredLeads.length}</div>
@@ -14007,7 +14015,8 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
       {(pending.length > 0 || contacted.length > 0) && (
         <>
           <div className="flex items-center justify-between mb-3 mt-2">
-            <div className="text-xs uppercase tracking-widest font-bold flex items-center gap-1.5" style={{ color: BRAND_PURPLE }}>
+            {/* Section header uses the .eyebrow utility per brand style guide. */}
+            <div className="eyebrow flex items-center gap-1.5">
               <UserPlus size={12} /> {t.myCustomers}
             </div>
             <div className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#F0E8FA", color: BRAND_PURPLE }}>
@@ -14283,18 +14292,20 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
 
       {/* MY GROWTH */}
       <div className="mt-10 pt-6" style={{ borderTop: "1px solid rgba(28,27,26,0.08)" }}>
+        <div className="eyebrow mb-2">Insights</div>
         <div className="flex items-center gap-2 mb-1">
           <TrendingUp size={18} style={{ color: "#5F2F9D" }} />
-          <h2 className="display text-2xl">{t.growth}</h2>
+          <h2 className="display-sm text-2xl" style={{ color: "#5F2F9D" }}>{t.growth}</h2>
         </div>
         <VendorGrowth t={t} vendorId={vendorId} leads={leads} clients={clients} interactions={interactions} />
       </div>
 
       {/* CLIENT RANKING */}
       <div className="mt-10 pt-6" style={{ borderTop: "1px solid rgba(28,27,26,0.08)" }}>
+        <div className="eyebrow mb-2">Insights</div>
         <div className="flex items-center gap-2 mb-1">
           <Award size={18} style={{ color: "#5F2F9D" }} />
-          <h2 className="display text-2xl">{t.clientRanking}</h2>
+          <h2 className="display-sm text-2xl" style={{ color: "#5F2F9D" }}>{t.clientRanking}</h2>
         </div>
         <p className="text-xs text-stone-500 mb-4">{t.clientRankingSub}</p>
         <PeriodTabs value={rankingPeriod} onChange={setRankingPeriod} t={t} options={[
