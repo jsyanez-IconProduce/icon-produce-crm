@@ -10597,9 +10597,11 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
         <span>{t.back || "Back"}</span>
       </button>
 
+      {/* Analytics header — eyebrow + display-lg per brand style guide.
+          Matches the same hierarchy pattern as Manager Home and Vendor Home. */}
       <div className="mb-6">
-        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">{t.managerReview || "Manager"}</div>
-        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+        <div className="eyebrow mb-2">{t.managerReview || "Manager"}</div>
+        <h1 className="display-lg text-4xl flex items-center gap-2" style={{ color: "#5F2F9D" }}>
           📊 {t.analytics || "Analytics"}
         </h1>
         <p className="text-stone-600 text-sm mt-1">
@@ -10644,13 +10646,15 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
       >
         {generatingPdf ? "⏳ " + (t.generatingPdf || "Generating PDF…") : "📄 " + (t.exportAllTimePdf || "Export all-time PDF")}
       </button>
-      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+      {/* Sales trend card — the "hero" chart of Analytics. Uses card-yellow-top
+          per brand style guide for the primary chart's "signature moment". */}
+      <div className="rounded-xl p-5 mb-4 shadow-card card-yellow-top" style={{ background: "white", border: "1px solid #E5E0DA" }}>
         <div className="flex items-start justify-between mb-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: "#6B6560" }}>
+            <div className="eyebrow mb-2">
               📈 {t.chartSalesTrend || "Sales trend · last 7 days"}
             </div>
-            <div className="text-2xl font-bold" style={{ color: "#1C1B1A" }}>
+            <div className="display-sm text-2xl" style={{ color: "#5F2F9D" }}>
               {stats.last7Days.reduce((s, d) => s + d.orders, 0)} {t.orders || "orders"}
             </div>
             <div className="text-[11px]" style={{ color: "#8B847E" }}>
@@ -10664,16 +10668,16 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
       {/* CHART 2 + 5 side-by-side on desktop, stacked on mobile */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         {/* OUTCOMES DONUT */}
-        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+        <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="eyebrow mb-4">
             🥧 {t.chartOutcomes || "Call outcomes"}
           </div>
           <OutcomesDonut />
         </div>
 
         {/* CONVERSION FUNNEL */}
-        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+        <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="eyebrow mb-4">
             🎯 {t.chartFunnel || "Conversion funnel"}
           </div>
           <Funnel />
@@ -10682,7 +10686,7 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
 
       {/* CHART 3: Vendor performance bars */}
       <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-        <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+        <div className="eyebrow mb-4">
           📊 {t.chartVendorPerf || "Vendor performance"} · {periodLabel}
         </div>
         <VendorBars />
@@ -10690,7 +10694,7 @@ function AnalyticsView({ t, vendors, clients, interactions, loadInteractionsForD
 
       {/* CHART 4: Heatmap */}
       <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-        <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+        <div className="eyebrow mb-4">
           🗓️ {t.chartHeatmap || "Activity heatmap · vendor × day"}
         </div>
         <Heatmap />
@@ -11340,11 +11344,12 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
         <span>{t.back || "Back"}</span>
       </button>
 
+      {/* Vendor Analytics header — matches Manager Analytics pattern. */}
       <div className="mb-6">
-        <div className="text-xs uppercase tracking-widest text-stone-500 mb-1">
+        <div className="eyebrow mb-2">
           {myVendor?.name || t.myAnalytics || "My Analytics"}
         </div>
-        <h1 className="display text-3xl leading-tight flex items-center gap-2">
+        <h1 className="display-lg text-4xl flex items-center gap-2" style={{ color: "#5F2F9D" }}>
           📊 {t.myAnalytics || "My Analytics"}
         </h1>
         <p className="text-stone-600 text-sm mt-1">
@@ -11389,14 +11394,14 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
         {generatingPdf ? "⏳ " + (t.generatingPdf || "Generating PDF…") : "📄 " + (t.exportAllTimePdf || "Export all-time PDF")}
       </button>
 
-      {/* CHART 1: My sales trend */}
-      <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+      {/* CHART 1: My sales trend — hero card with yellow-top brand signature. */}
+      <div className="rounded-xl p-5 mb-4 shadow-card card-yellow-top" style={{ background: "white", border: "1px solid #E5E0DA" }}>
         <div className="flex items-start justify-between mb-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: "#6B6560" }}>
+            <div className="eyebrow mb-2">
               📈 {t.chartMySales || "My sales trend · last 7 days"}
             </div>
-            <div className="text-2xl font-bold" style={{ color: "#1C1B1A" }}>
+            <div className="display-sm text-2xl" style={{ color: "#5F2F9D" }}>
               {stats.last7Days.reduce((s, d) => s + d.orders, 0)} {t.orders || "orders"}
             </div>
             <div className="text-[11px]" style={{ color: "#8B847E" }}>
@@ -11409,15 +11414,15 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
 
       {/* CHART 2 + Funnel side-by-side on desktop, stacked on mobile */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+        <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="eyebrow mb-4">
             🥧 {t.chartMyOutcomes || "My outcomes"}
           </div>
           <OutcomesDonut />
         </div>
 
-        <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-          <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+        <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="eyebrow mb-4">
             🎯 {t.chartMyFunnel || "My conversion funnel"}
           </div>
           <Funnel />
@@ -11426,7 +11431,7 @@ function VendorAnalyticsView({ t, vendorId, vendors, clients, interactions, load
 
       {/* CHART 3: Top customers */}
       <div className="rounded-2xl p-5 mb-4 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
-        <div className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: "#6B6560" }}>
+        <div className="eyebrow mb-4">
           🏆 {t.chartMyTopCustomers || "My top customers"} · {periodLabel}
         </div>
         <TopCustomersBars />
@@ -11786,7 +11791,7 @@ function CsvImportView({ t, currentUser, clients, leads, onCreateClient, onCreat
       {stage === "upload" && (
         <div className="space-y-5">
           {/* Step 1: download template */}
-          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: BRAND_PURPLE, color: "white" }}>1</div>
               <div className="flex-1">
@@ -11806,7 +11811,7 @@ function CsvImportView({ t, currentUser, clients, leads, onCreateClient, onCreat
           </div>
 
           {/* Step 2: fill it */}
-          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: BRAND_PURPLE, color: "white" }}>2</div>
               <div className="flex-1">
@@ -11833,7 +11838,7 @@ function CsvImportView({ t, currentUser, clients, leads, onCreateClient, onCreat
           </div>
 
           {/* Step 3: upload */}
-          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: BRAND_PURPLE, color: "white" }}>3</div>
               <div className="flex-1">
@@ -11966,7 +11971,7 @@ function CsvImportView({ t, currentUser, clients, leads, onCreateClient, onCreat
         if (!current) return null;
         const existing = current.duplicate;
         return (
-          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
             <div className="text-[11px] text-stone-500 mb-1">
               {t.duplicate || "Duplicate"} {currentDuplicateIdx + 1} {t.of || "of"} {dups.length}
             </div>
@@ -12030,7 +12035,7 @@ function CsvImportView({ t, currentUser, clients, leads, onCreateClient, onCreat
       {/* ===== STAGE 5: DONE ===== */}
       {stage === "done" && (
         <div className="space-y-4">
-          <div className="rounded-2xl p-5 card-shadow" style={{ background: "white", border: "1px solid #E5E0DA" }}>
+          <div className="rounded-xl p-5 shadow-card" style={{ background: "white", border: "1px solid #E5E0DA" }}>
             <div className="text-3xl mb-2">✅</div>
             <div className="font-bold text-xl mb-4">{t.importComplete || "Import complete"}</div>
 
