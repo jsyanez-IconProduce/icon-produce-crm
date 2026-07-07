@@ -14012,18 +14012,11 @@ function VendorView({ t, vendorId, vendors, clients, leads, interactions, templa
           Style matches "MY LEADS" above for visual consistency: left-aligned with
           a count badge on the right. Slightly more emphasis on the label so the
           section reads as a clear header (not lost in the page). */}
+      {/* MY CUSTOMERS eyebrow removed — the table below is self-explanatory
+          and the count is visible via the customer rows themselves. This gives
+          more vertical space to the actual data. */}
       {(pending.length > 0 || contacted.length > 0) && (
         <>
-          <div className="flex items-center justify-between mb-3 mt-2">
-            {/* Section header uses the .eyebrow utility per brand style guide. */}
-            <div className="eyebrow flex items-center gap-1.5">
-              <UserPlus size={12} /> {t.myCustomers}
-            </div>
-            <div className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: "#F0E8FA", color: BRAND_PURPLE }}>
-              {pending.length + contacted.length}
-            </div>
-          </div>
-
           {/* Tabs removed — customers are now shown in a single unified table below.
               Status is visible per row in the Outcome column (badges). */}
         </>
