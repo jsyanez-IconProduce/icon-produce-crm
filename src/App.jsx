@@ -14856,12 +14856,12 @@ function CustomerTable({
               "category label" rather than a dark filled bar. Softer, more modern. */}
           <thead>
             <tr style={{ background: "#F0E5FA" }}>
-              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.customerColName || "Customer"}</th>
-              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.phone || "Phone"}</th>
-              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.contactToday || "Contact today"}</th>
-              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.notesCol || "Notes"}</th>
-              <th className="text-left px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}>{t.outcomeCol || "Outcome"}</th>
-              <th className="text-right px-5 py-3.5 text-[11px] uppercase font-bold" style={{ color: "#5F2F9D", letterSpacing: "0.08em" }}></th>
+              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.customerColName || "Customer"}</th>
+              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.phone || "Phone"}</th>
+              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.contactToday || "Contact today"}</th>
+              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.notesCol || "Notes"}</th>
+              <th className="text-left px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}>{t.outcomeCol || "Outcome"}</th>
+              <th className="text-right px-4 py-3 text-xs uppercase font-bold tracking-wider" style={{ color: "#5F2F9D" }}></th>
             </tr>
           </thead>
         <tbody>
@@ -14893,35 +14893,32 @@ function CustomerTable({
             return (
               <React.Fragment key={client.id}>
               <tr
-                className="transition-colors"
+                className="transition-colors border-t"
                 onMouseEnter={() => setHoveredRowClientId(client.id)}
                 onMouseLeave={() => setHoveredRowClientId(null)}
                 style={{
-                  // Screenshot style: no borders between rows — instead use
-                  // subtle cream/white alternation. Cleaner, more premium look.
-                  // Cream (#FAF8F4) alternates with white; hover deepens to
-                  // purple wash for clear focus feedback.
-                  background: hoveredRowClientId === client.id
-                    ? "#F0E5FA"
-                    : (rowIdx % 2 === 1 ? "#FAF8F4" : "white"),
+                  // Spec: divide-y divide-purple-50 with hover:bg-purple-50/50.
+                  // We implement divide-y as border-top per row + purple-50 border color.
+                  // Hover uses purple-50 at 50% opacity (approximated as #F7EFFC).
+                  borderColor: "#F0E5FA",
+                  background: hoveredRowClientId === client.id ? "#F7EFFC" : "white",
                 }}
               >
                 {/* COL 1: Customer */}
-                <td className="px-5 py-5 align-middle" style={{ minWidth: "180px", maxWidth: "240px" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "180px", maxWidth: "240px" }}>
                   <div className="flex items-center gap-1.5">
                     {/* Click the name to toggle the View Details panel (same effect as 👁).
                         Renders as a button for accessibility (keyboard + screen readers),
                         but visually looks like the original name text. */}
                     <button
                       onClick={() => toggleDetailRow(client)}
-                      className="font-semibold truncate transition-colors text-left cursor-pointer hover:underline"
+                      className="text-sm font-semibold truncate transition-colors text-left cursor-pointer hover:underline"
                       style={{
-                        // Name color shifts to brand purple on hover OR when its detail
-                        // row is currently expanded, giving clear "selected" feedback.
+                        // Spec: primary text purple-800 (#4A2378), hover/active shifts
+                        // to purple-700 (#5F2F9D) as focus feedback.
                         color: hoveredRowClientId === client.id || expandedDetailClientId === client.id
                           ? "#5F2F9D"
-                          : "#1C1B1A",
-                        fontSize: "13px",
+                          : "#4A2378",
                         background: "transparent",
                         padding: 0,
                         border: 0,
@@ -15030,14 +15027,14 @@ function CustomerTable({
                   </div>
                 </td>
 
-                {/* COL 2: Phone */}
-                <td className="px-5 py-5 align-middle text-[12px]" style={{ color: "#4A453F", fontFeatureSettings: '"tnum"', minWidth: "110px" }}>
+                {/* COL 2: Phone — spec: font-mono text-xs (numeric/code style). */}
+                <td className="px-4 py-3 align-middle font-mono text-xs" style={{ color: "#5F2F9D", minWidth: "110px" }}>
                   {client.phone || "—"}
                 </td>
 
                 {/* COL 3: Contact today — toggleable. Click logs the interaction;
                     clicking again on a completed channel removes the most recent one (undo). */}
-                <td className="px-5 py-5 align-middle" style={{ minWidth: "120px" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "120px" }}>
                   <div className="flex gap-1">
                     <button
                       className="w-8 h-8 rounded-md border flex items-center justify-center text-base relative transition-colors"
@@ -15139,7 +15136,7 @@ function CustomerTable({
                 {/* COL 4: Notes — click to edit inline, hover for full text "patch note" overlay.
                     Empty notes show a discreet "+ Add note" trigger so vendor can add without
                     opening the full Edit modal. */}
-                <td className="px-5 py-5 align-middle" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "180px", maxWidth: "260px", position: "relative" }}>
                   {editingNoteClientId === client.id ? (
                     // Inline editor — appears in-place when user clicks an existing note OR "+ Add note"
                     <div className="flex flex-col gap-1.5">
@@ -15219,7 +15216,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-5 py-5 align-middle" style={{ minWidth: "200px" }}>
+                <td className="px-4 py-3 align-middle" style={{ minWidth: "200px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
@@ -15355,7 +15352,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 6: Actions menu */}
-                <td className="px-5 py-5 align-middle text-right" style={{ minWidth: "110px", position: "relative" }}>
+                <td className="px-4 py-3 align-middle text-right" style={{ minWidth: "110px", position: "relative" }}>
                   <div className="inline-flex gap-0.5" style={{ color: "#B5ADA5" }}>
                     {onOpenEdit && !isLead && (
                       <button
