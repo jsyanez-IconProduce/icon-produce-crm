@@ -14766,7 +14766,7 @@ function CustomerTable({
                 }}
               >
                 {/* COL 1: Customer */}
-                <td className="px-3 py-3 align-middle" style={{ minWidth: "140px", maxWidth: "180px" }}>
+                <td className="px-3 py-3 align-middle" style={{ minWidth: "130px", maxWidth: "170px" }}>
                   <div className="flex items-center gap-1.5">
                     {/* Click the name to toggle the View Details panel (same effect as 👁).
                         Renders as a button for accessibility (keyboard + screen readers),
@@ -14997,7 +14997,7 @@ function CustomerTable({
                 {/* COL 4: Notes — click to edit inline, hover for full text "patch note" overlay.
                     Empty notes show a discreet "+ Add note" trigger so vendor can add without
                     opening the full Edit modal. */}
-                <td className="px-3 py-3 align-middle" style={{ minWidth: "110px", maxWidth: "140px", position: "relative" }}>
+                <td className="px-3 py-3 align-middle" style={{ minWidth: "100px", maxWidth: "125px", position: "relative" }}>
                   {editingNoteClientId === client.id ? (
                     // Inline editor — appears in-place when user clicks an existing note OR "+ Add note"
                     <div className="flex flex-col gap-1.5">
@@ -15077,7 +15077,7 @@ function CustomerTable({
                 </td>
 
                 {/* COL 5: Outcome buttons (contextual) */}
-                <td className="px-3 py-3 align-middle" style={{ minWidth: "240px" }}>
+                <td className="px-3 py-3 align-middle" style={{ minWidth: "210px" }}>
                   {isCallbackOpenHere ? (
                     // Inline callback flow: date + time picker
                     <div className="flex flex-col gap-1.5">
