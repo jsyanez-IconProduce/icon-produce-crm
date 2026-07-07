@@ -6074,9 +6074,7 @@ function FontImport() {
          Secondary: Montserrat → body text, forms, buttons, data
                     (regular 400, medium 500, bold 700)
          Support  : Shadows Into Light → tagline / celebratory emphasis
-                    (used sparingly for warmth, never for functional UI)
-
-         Utility classes below expose these consistently across the app. */
+                    (used sparingly for warmth, never for functional UI) */
 
       /* Display / titles */
       .display {
@@ -6096,17 +6094,77 @@ function FontImport() {
         letter-spacing: -0.015em;
       }
 
-      /* Script / handwritten emphasis — for empty states + celebratory moments */
+      /* Script / handwritten emphasis */
       .script {
         font-family: 'Shadows Into Light', cursive;
         font-weight: 400;
         letter-spacing: 0.02em;
       }
 
+      /* ============================================================
+         DESIGN SYSTEM UTILITY CLASSES
+         ============================================================
+         Match the Icon Produce dashboard style guide: cream background,
+         yellow accent bars on important cards, eyebrow labels, purple
+         shadow-card, uppercase widetracked micro-copy. */
+
+      /* Eyebrow — small uppercase caption above section titles.
+         Used to add hierarchy/context without eating vertical space. */
+      .eyebrow {
+        font-family: 'Montserrat', -apple-system, sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        color: #844ECA;
+        font-size: 0.75rem;
+      }
+
+      /* Shadow with brand-purple tint — replaces generic gray drop-shadow.
+         Softer, warmer, and reads as "branded" rather than default. */
+      .shadow-card {
+        box-shadow:
+          0 1px 0 rgba(95, 47, 157, 0.04),
+          0 8px 24px -16px rgba(95, 47, 157, 0.12);
+      }
+      .card-shadow { /* legacy alias — same as shadow-card */
+        box-shadow:
+          0 1px 0 rgba(95, 47, 157, 0.04),
+          0 8px 24px -16px rgba(95, 47, 157, 0.12);
+      }
+
+      /* Card with yellow accent bar at the top — the "signature" moment
+         from the brand guide. Use for major sections / CTA cards. */
+      .card-yellow-top {
+        position: relative;
+        overflow: hidden;
+      }
+      .card-yellow-top::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 6px;
+        background: #FFED13;
+      }
+
+      /* Table header pill background — reads as "category" not "text". */
+      .table-header {
+        background: #F0E5FA;
+        color: #5F2F9D;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-size: 0.7rem;
+      }
+
       /* Buttons + interactive feedback */
       button:active { transform: scale(0.98); }
-      .card-shadow { box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -16px rgba(28,27,26,0.12); }
       input, select { font-family: inherit; }
+
+      /* Yellow gradient accent line — used under headers for brand signature */
+      .yellow-gradient-line {
+        background: linear-gradient(90deg, transparent 0%, #FFED13 50%, transparent 100%);
+        opacity: 0.4;
+      }
     `}</style>
   );
 }
@@ -7016,10 +7074,12 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
   const overdueReminders = (reminders || []).filter((r) => r.status === "pending" && new Date(r.scheduledFor) < now).length;
   const upcomingReminders = (reminders || []).filter((r) => r.status === "pending").length;
   return (
-    <div className="max-w-md mx-auto px-5 pt-12 pb-24">
-      <div className="mb-10">
-        <div className="text-xs uppercase tracking-widest text-stone-500 mb-2">{prettyDate(t.locale)}</div>
-        <h1 className="display text-5xl leading-none mb-2">
+    <div className="max-w-md mx-auto px-5 pt-10 pb-24">
+      {/* Header section — eyebrow + big display title (Cabinet Grotesk 800),
+          following the brand guide's hierarchy pattern: EYEBROW / TITLE / body. */}
+      <div className="mb-8">
+        <div className="eyebrow mb-2">{prettyDate(t.locale)}</div>
+        <h1 className="display-lg text-5xl mb-3" style={{ color: "#5F2F9D" }}>
           {t.welcomeUser((currentUser?.name || "").split(" ")[0] || t.roleManager)}
         </h1>
         <p className="text-stone-600 text-sm font-mono">{currentUser.email}</p>
@@ -7145,6 +7205,10 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
       )}
 
       <div className="space-y-3">
+        {/* Main tools section header — eyebrow gives context that these are the
+            primary navigation destinations for the manager role. */}
+        <div className="eyebrow mb-2 mt-2">Main Tools</div>
+
         <button
           onClick={() => onPick("admin")}
           className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
@@ -7184,7 +7248,7 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
             Uses a darker purple gradient so it visually distinguishes from Insights. */}
         <button
           onClick={() => onPick("analytics")}
-          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1"
+          className="w-full text-left rounded-2xl p-5 flex items-center justify-between card-shadow transition-all hover:translate-x-1 card-yellow-top"
           style={{ background: "linear-gradient(135deg, #3D2A6B 0%, #5F2F9D 100%)", color: "white" }}
         >
           <div className="flex items-center gap-3">
@@ -7396,6 +7460,10 @@ function AdminHome({ t, currentUser, leads, tasks, pendingProfiles, reminders, c
           </div>
           <ChevronRight size={18} className="opacity-80" />
         </button>
+
+        {/* Other apps section — visually separates internal CRM navigation
+            from external Icon Produce apps (Dock, QC). Eyebrow gives context. */}
+        <div className="eyebrow mb-2 mt-6">Other Apps</div>
 
         {/* External link — opens Produce Dock in a new tab. Sits at the end of the
             manager's main button stack as a "switch app" entry point. Purple background
