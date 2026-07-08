@@ -6196,7 +6196,10 @@ function Splash() {
     <div
       className="fixed inset-0 z-[200] flex flex-col items-center justify-center transition-colors duration-500"
       style={{
-        background: stage === 1 ? BRAND_PURPLE : "#F5F1EA",
+        // Both stages use cream — the official brand símbolo is purple so it
+        // needs a light background to be visible. The old symbol was yellow-on-purple
+        // which is why the background used to be purple in Stage 1.
+        background: "#F5F1EA",
         fontFamily: "'Montserrat', -apple-system, sans-serif",
       }}
     >
